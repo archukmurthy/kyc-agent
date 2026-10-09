@@ -325,17 +325,11 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const engine = useMemo(() => evaluateCase(inputs, { answers, evidence, recalculations, now: createdAt.current }), [inputs, answers, evidence, recalculations]);
   const currentTrace = useMemo(() => resolutionTrace({ engine, rows, answers, previousTrace: readCurrentTrace(context), recalculations }), [answers, context, engine, recalculations, rows]);
 
-  const durableResolution = (nextAnswers = answers, nextEvidence = evidence, nextRecalculations = recalculations, trace = currentTrace, submittedAnswer = null) => ({
-    createdAt: createdAt.current,
-    requirements: engine.requirements,
-    questions: trace.questions || engine.questions,
-    evidenceRequirements: engine.evidenceRequirements,
-    answers: nextAnswers,
-    evidence: nextEvidence,
-    recalculations: nextRecalculations,
-    trace,
-    ...(submittedAnswer ? { submittedAnswer } : {}),
-  });
+  // What each write sends is only what the server takes from the browser
+  // (caseAssessment.js): the answer being given, and which upload was for which
+  // request. It computes everything else itself. Writes used to carry the
+  // whole resolution - every recalculation's chart analysis, and the research
+  // too - which the server threw away, against a 3 MB request limit.
 
   useEffect(() => { saveSession(context, result, { createdAt: createdAt.current, answers, evidence, recalculations }); }, [answers, context, evidence, recalculations, result]);
   useEffect(() => {
@@ -350,10 +344,9 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       caseId: context.demoCaseId,
       actorType: "SYSTEM",
       idempotencyKey: `resolution:${signature}`,
-      payload: {
-        resolution: durableResolution(),
-        assessment: { assessmentId: currentTrace.verificationAssessment?.assessmentVersionId, trace: currentTrace, evidence },
-      },
+      // The uploads this page knows of: a sync after an upload that failed to
+      // reach the case is sent again here.
+      payload: { resolution: { evidence } },
     }).catch(() => durableSyncs.current.delete(context.demoCaseId));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context?.demoCaseId]);
@@ -418,19 +411,6 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       const changed = previousValue !== value;
       const answeredAt = new Date().toISOString();
       const answer = { value, answeredAt, factRequirementId: question.factRequirementId, comparisonItemId: question.comparisonItemId };
-      const nextAnswers = { ...answers, [question.id]: answer };
-      const nextRecalculations = { ...recalculations };
-      const nextEvidence = { ...evidence };
-      if (changed) {
-        delete nextRecalculations[question.comparisonItemId];
-        engine.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === question.comparisonItemId).forEach(({ id }) => delete nextEvidence[id]);
-      }
-      const nextEngine = evaluateCase(inputs, { answers: nextAnswers, evidence: nextEvidence, recalculations: nextRecalculations, now: createdAt.current });
-      const activeQuestionIds = new Set(nextEngine.questions.map(({ id: questionId }) => questionId));
-      Object.entries(nextAnswers).forEach(([questionId, stored]) => {
-        if (questionId !== question.id && stored.comparisonItemId === question.comparisonItemId && !activeQuestionIds.has(questionId)) delete nextAnswers[questionId];
-      });
-      const nextTrace = resolutionTrace({ engine: nextEngine, rows, answers: nextAnswers, previousTrace: currentTrace, recalculations: nextRecalculations });
       idempotencyKey = `answer:${smallStableHash([question.id, answers[question.id]?.answeredAt || "initial", value])}`;
       if (answerSubmissions.current.has(idempotencyKey)) return;
       answerSubmissions.current.add(idempotencyKey);
@@ -465,10 +445,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         caseId: context.demoCaseId,
         actorType: "CUSTOMER",
         idempotencyKey,
-        payload: {
-          resolution: { ...durableResolution(nextAnswers, nextEvidence, nextRecalculations, nextTrace), submittedAnswer: { question, answer } },
-          assessment: { assessmentId: nextTrace.verificationAssessment?.assessmentVersionId, trace: nextTrace, evidence: nextEvidence },
-        },
+        payload: { resolution: { answers: { [question.id]: answer }, submittedAnswer: { question: { id: question.id } } } },
       }).then(() => {
         setSaving((current) => { const next = new Set(current); next.delete(question.id); return next; });
       }).catch((caught) => {
@@ -619,11 +596,8 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         caseId: context.demoCaseId,
         actorType: "CUSTOMER",
         idempotencyKey: `assessment:${finalTrace.verificationAssessment?.assessmentVersionId}`,
-        payload: {
-          resolution: durableResolution(answers, evidence, recalculations, finalTrace),
-          assessment: { assessmentId: finalTrace.verificationAssessment?.assessmentVersionId, trace: finalTrace, evidence },
-          researchResult: { ...researchResult, ownershipResolutionTrace: finalTrace },
-        },
+        // The server finalises from what it holds.
+        payload: {},
       });
       window.location.assign(CUSTOMER_IDV_PATH);
     } catch (cause) {
