@@ -32,6 +32,7 @@ const ACCEPTED_TYPES = new Set(["application/pdf", "image/png", "image/jpeg"]);
 const MAX_BYTES = 3 * 1024 * 1024;
 export const RUNNING_POLL_MS = 4000;
 export const PROGRESS_POLL_MS = 3000;
+const TRANSIENT_LOOKS = 5;
 
 function fileAsBase64(file) {
   return new Promise((resolve, reject) => {
@@ -342,11 +343,21 @@ export default function CustomerOwnershipChartPage() {
   };
 
   const postJob = async (body) => {
-    const response = await fetch("/api/ubo-demo-customer-ownership-chart", {
-      method: "POST", headers: { "Content-Type": "application/json", ...(await clerkAuthHeaders()) }, body: JSON.stringify(body),
-    });
-    const payload = await response.json();
-    if (!response.ok || !payload.success) throw new Error(analysisFailureMessage(payload, response.status));
+    let response;
+    try {
+      response = await fetch("/api/ubo-demo-customer-ownership-chart", {
+        method: "POST", headers: { "Content-Type": "application/json", ...(await clerkAuthHeaders()) }, body: JSON.stringify(body),
+      });
+    } catch (_) {
+      // The connection dropped (a long reading, a network blip): the server
+      // may well have carried on. Transient, so the job is looked at again.
+      throw Object.assign(new Error(analysisFailureMessage({ code: "connection_lost" }, 0)), { transient: true });
+    }
+    // A platform error page (a timeout, an overload) is not JSON.
+    const payload = await response.json().catch(() => ({ code: `server_${response.status}` }));
+    if (!response.ok || !payload.success) {
+      throw Object.assign(new Error(analysisFailureMessage(payload, response.status)), { status: response.status, transient: response.status >= 500 || response.status === 429 });
+    }
     return payload.job || (payload.result ? {
       jobId: `legacy-response:${payload.result.artifact?.artifactId || "result"}`,
       artifactId: payload.result.artifact?.artifactId,
@@ -370,6 +381,17 @@ export default function CustomerOwnershipChartPage() {
     timer = window.setTimeout(look, PROGRESS_POLL_MS);
     return () => { stopped = true; window.clearTimeout(timer); };
   };
+  // What the job is after a call to it failed in transit. A few looks, spaced
+  // out; the error is shown only if the job cannot be seen at all.
+  const jobAfterTransientError = async (job, caught) => {
+    for (let look = 0; look < TRANSIENT_LOOKS; look += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, RUNNING_POLL_MS));
+      try { return await postJob({ operation: "GET_EXTRACTION_JOB", jobId: job.jobId }); }
+      catch (again) { if (!again.transient) throw again; }
+    }
+    throw caught;
+  };
+
   const continueJob = async (initialJob, nextPreview = null) => {
     let job = initialJob;
     // A reading running elsewhere (this page was left and opened again) is
@@ -396,6 +418,14 @@ export default function CustomerOwnershipChartPage() {
       // asked for separately (a free status check).
       const stopWatching = watchProgress(job.jobId);
       try { job = await postJob({ operation: "PROCESS_EXTRACTION_JOB", jobId: job.jobId }); }
+      catch (caught) {
+        // A server error on this call is not the reading failing: the reading
+        // runs on, and finishes, on the server (live end-to-end check,
+        // 2026-10-08: an error was shown for a reading that had completed).
+        // Ask what the job really is; only a real failure is shown.
+        if (!caught.transient) throw caught;
+        job = await jobAfterTransientError(job, caught);
+      }
       finally { stopWatching(); }
     }
     throw new Error("Analysis is still safely queued. Refresh this page to continue checking it.");

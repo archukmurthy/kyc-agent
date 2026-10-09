@@ -264,6 +264,27 @@ test("a queued upload polls the durable job and ignores a rapid duplicate click"
   expect(uboStore.getItem(CUSTOMER_OWNERSHIP_JOB_KEY)).toBeNull();
 });
 
+// Live end-to-end check (2026-10-08): the page said the analysis failed for a
+// reading that had completed on the server.
+test("a server error while the reading runs is checked against the job before any error is shown", async () => {
+  seed();
+  const calls = [];
+  window.fetch = jest.fn(async (_url, request) => {
+    const body = JSON.parse(request.body);
+    calls.push(body.operation || "UPLOAD");
+    if (body.operation === "PROCESS_EXTRACTION_JOB") return { ok: false, status: 504, json: async () => { throw new SyntaxError("Unexpected token"); } };
+    if (body.operation === "GET_EXTRACTION_JOB") return { ok: true, json: async () => ({ success: true, job: { jobId: "job-1", artifactId: "artifact-1", correlationId: "corr-1", state: "PARTIAL", result: analysis } }) };
+    return { ok: true, json: async () => ({ success: true, job: { jobId: "job-1", artifactId: "artifact-1", correlationId: "corr-1", state: "QUEUED" } }) };
+  });
+  const { container } = render(<CustomerOwnershipChartPage />);
+  const file = new File([Uint8Array.from([137, 80, 78, 71])], "ownership-chart.png", { type: "image/png" });
+  fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [file] } });
+  fireEvent.click(screen.getByRole("button", { name: /Upload and analyse/i }));
+  await screen.findByRole("heading", { name: /Continue to questions/i }, { timeout: 8000 });
+  expect(screen.queryByText(/couldn't complete the analysis/i)).toBeNull();
+  expect(calls.filter((operation) => operation === "UPLOAD")).toHaveLength(1);
+}, 15000);
+
 test("refresh resumes the same persisted extraction job without uploading bytes again", async () => {
   seed();
   writeCustomerOwnershipJob({ jobId: "job-refresh", demoCaseId: demoCase.demoCaseId, artifactId: "artifact-1", correlationId: "corr-refresh" });
