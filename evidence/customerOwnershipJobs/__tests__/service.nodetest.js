@@ -22,12 +22,14 @@ function usableResult(state = "EXTRACTION_SUCCESS_COMPLETE") {
 
 class MemoryJobs {
   constructor(ingestion) { this.ingestion = ingestion; this.jobs = new Map(); this.context = null; this.failCreateOnce = false; }
+  // One context per case, as evidence_contexts is keyed by the case.
   async ensureContext({ tenantId, demoCaseId, company }) {
-    if (!this.context) {
-      this.context = { id: randomUUID(), tenant_id: tenantId, subject_reference_id: randomUUID(), display_name: company.legalName, demoCaseId };
-      this.ingestion.contexts.push(this.context);
+    let context = this.ingestion.contexts.find((item) => item.demoCaseId === demoCaseId);
+    if (!context) {
+      context = { id: randomUUID(), tenant_id: tenantId, subject_reference_id: randomUUID(), display_name: company.legalName, demoCaseId };
+      this.ingestion.contexts.push(context);
     }
-    return this.context;
+    return context;
   }
   async findArtifact({ contextId, sha256 }) {
     const item = [...this.ingestion.operations.values()].find((row) => row.contextId === contextId && row.fingerprintValue === sha256 && row.status === "successful");
@@ -54,6 +56,15 @@ class MemoryJobs {
     const job = Object.assign(existing || { id: randomUUID(), createdAt: now }, { ...structuredClone(record), evidenceHandoff: null, attemptCount: 0, leaseExpiresAt: null, nextAttemptAt: null, completedAt: now, updatedAt: now });
     this.jobs.set(job.id, job); return structuredClone(job);
   }
+  async findFinishedChartReading({ tenantId, artifactSha256, demoCaseId, profileVersion, schemaVersion, instructionVersion, verificationStrategyVersion, provider, modelVersion }) {
+    const same = [...this.jobs.values()].filter((job) => job.tenantId === tenantId && job.artifactSha256 === artifactSha256 && !job.evidenceHandoff && job.state === "COMPLETE" && job.result
+      && job.profileVersion === profileVersion && job.schemaVersion === schemaVersion && job.instructionVersion === instructionVersion
+      && job.verificationStrategyVersion === verificationStrategyVersion && job.provider === provider && job.modelVersion === modelVersion);
+    same.sort((a, b) => (b.demoCaseId === demoCaseId) - (a.demoCaseId === demoCaseId) || String(b.completedAt).localeCompare(String(a.completedAt)));
+    return same[0] ? structuredClone(same[0]) : null;
+  }
+  // The chart each case records (ubo_poc_cases.latest_extraction_job_id).
+  async caseChartDigest({ demoCaseId }) { const job = this.jobs.get(this.caseCharts?.[demoCaseId]); return job?.artifactSha256 || null; }
   async getJob({ id }) { return this.jobs.has(id) ? structuredClone(this.jobs.get(id)) : null; }
   // As repository.js#claimJob: a running job is taken over only once its lease
   // has run out, and one whose lease ran out on its last attempt fails. (A
@@ -381,6 +392,30 @@ test("an unfinished reused copy is never read, and reusing again finishes it", a
   // The copy names the case it was copied to, not the one it was read for.
   assert.equal(mended.result.demoCaseId, "case-2");
   assert.equal(mended.result.referenceCaseId, "REF-2");
+});
+
+// A case started from saved research holds its chart as a copy of another
+// case's reading. Sending that same file again - as the chart, or as evidence
+// - used to store it afresh: paid again as the chart, and accepted as
+// evidence for itself (the "own evidence" check compared artifact ids).
+test("in a case that reused a reading, the same chart again is free, and refused as evidence", async () => {
+  const h = harness([usableResult()]);
+  const started = await h.service.start(input());
+  const source = await h.service.process(started.jobId);
+  const company = input().demoContext.company;
+  const reused = await h.service.reuseReading({ sourceJobId: source.jobId, demoContext: { demoCaseId: "case-2", company } });
+  const caseTwo = (extra = {}) => { const body = { ...input(), ...extra }; body.demoContext = { ...body.demoContext, demoCaseId: "case-2" }; return body; };
+  const again = await h.service.start(caseTwo());
+  assert.equal(again.jobId, reused.jobId); assert.equal(again.reused, true);
+  assert.equal(h.calls(), 1, "nothing read again");
+  assert.equal(h.ingestion.operations.size, 1, "nothing stored again");
+  h.repository.caseCharts = { "case-2": reused.jobId };
+  await assert.rejects(h.service.start(caseTwo({ evidenceHandoff: { contractVersion: "ubo-external-evidence-handoff-v1", requestedConcepts: ["ECONOMIC_OWNERSHIP"] } })), { code: "chart_not_evidence", statusCode: 409 });
+  // Another company's case does not get this reading.
+  const other = input();
+  other.demoContext = { ...other.demoContext, demoCaseId: "case-3", company: { ...company, registrationNumber: "99999999" } };
+  const fresh = await h.service.start(other);
+  assert.equal(fresh.reused, false);
 });
 
 test("a running job inside its lease is left alone", async () => {

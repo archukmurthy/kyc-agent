@@ -129,6 +129,27 @@ class PostgresCustomerExtractionJobRepository {
     return mapJob(rows(existing)[0]);
   }
 
+  /** The newest complete reading of this file as the chart, in this workspace,
+   *  made the same way (profile, provider, model) - this case's first. */
+  async findFinishedChartReading({ tenantId, artifactSha256, demoCaseId, profileVersion, schemaVersion, instructionVersion, verificationStrategyVersion, provider, modelVersion }) {
+    const result = await this.db.query(`SELECT * FROM evidence_customer_extraction_jobs
+      WHERE tenant_id=$1 AND artifact_sha256=$2 AND evidence_handoff IS NULL AND state='COMPLETE' AND result IS NOT NULL
+        AND profile_version=$4 AND schema_version=$5 AND instruction_version=$6 AND verification_strategy_version=$7
+        AND provider=$8 AND model_version=$9
+      ORDER BY (demo_case_id=$3) DESC, completed_at DESC LIMIT 1`,
+    [tenantId, artifactSha256, demoCaseId, profileVersion, schemaVersion, instructionVersion, verificationStrategyVersion, provider, modelVersion]);
+    return mapJob(rows(result)[0]);
+  }
+
+  /** The file digest of the chart a case records, read from the case (read
+   *  only) - so evidence can be told apart from the chart by its bytes. */
+  async caseChartDigest({ tenantId, demoCaseId }) {
+    const result = await this.db.query(`SELECT j.artifact_sha256 FROM ubo_poc_cases c
+      JOIN evidence_customer_extraction_jobs j ON j.id=c.latest_extraction_job_id AND j.tenant_id=c.tenant_id
+      WHERE c.case_id=$1 AND c.tenant_id=$2`, [demoCaseId, tenantId]);
+    return rows(result)[0]?.artifact_sha256 || null;
+  }
+
   async getJob({ id, tenantId }) {
     const result = await this.db.query("SELECT * FROM evidence_customer_extraction_jobs WHERE id=$1 AND tenant_id=$2", [id, tenantId]);
     return mapJob(rows(result)[0]);

@@ -32,7 +32,8 @@ const DETERMINISTIC_CODES = new Set([
 // A copy of a finished reading for another case is never read: it carries this
 // mark, and processing or retrying one never reaches the provider.
 const REUSE_CORRELATION_PREFIX = "customer-chart-reuse:";
-const isReuseCopy = (job) => String(job?.correlationId || "").startsWith(REUSE_CORRELATION_PREFIX);
+const registrationKey = (company) => String(company?.registrationNumber || "").replace(/\s+/g, "").toUpperCase();
+const isReuseCopy =(job) => String(job?.correlationId || "").startsWith(REUSE_CORRELATION_PREFIX);
 
 // ponytail: a fixed bound on fresh readings of one file in one case; each is paid.
 const MAX_FRESH_READINGS = 5;
@@ -202,6 +203,28 @@ class CustomerOwnershipExtractionJobService {
   async start(rawInput) {
     const input = validateRequest(rawInput);
     const digest = sha256(input.file.bytes);
+    const caseId = input.demoContext.demoCaseId;
+    const providerConfiguration = selectSemanticProvider(digest, this.provider).configuration?.() || {};
+    const provider = providerConfiguration.provider || (this.provider ? "injected" : "anthropic");
+    const modelVersion = providerConfiguration.model || this.modelVersion;
+    if (input.evidenceHandoff) {
+      // Compared by the file itself: a case reusing another's reading holds
+      // its chart under that case's artifact, so the same file sent again had a
+      // new artifact id and passed as evidence for itself.
+      if ((await this.repository.caseChartDigest({ tenantId: this.tenantId, demoCaseId: caseId })) === digest) {
+        throw Object.assign(new Error("This is the ownership chart itself, so it cannot be evidence for it. Upload a different document."), { code: "chart_not_evidence", statusCode: 409 });
+      }
+    } else {
+      // The same chart already read completely in this workspace - for this
+      // case, or for another case about the same company (a case started from
+      // saved research) - is reused, free. It used to be stored and paid for
+      // again whenever the case's own upload was not the one first read.
+      const earlier = await this.repository.findFinishedChartReading({ tenantId: this.tenantId, artifactSha256: digest, demoCaseId: caseId, ...this.profile, provider, modelVersion });
+      if (earlier?.demoCaseId === caseId) return publicJob({ ...earlier, reused: true });
+      if (earlier && registrationKey(earlier.company) && registrationKey(earlier.company) === registrationKey(input.demoContext.company)) {
+        return this.reuseReading({ sourceJobId: earlier.id, demoContext: input.demoContext });
+      }
+    }
     const context = await this.repository.ensureContext({ tenantId: this.tenantId, demoCaseId: input.demoContext.demoCaseId, company: input.demoContext.company });
     let stored = await this.repository.findArtifact({ tenantId: this.tenantId, contextId: context.id, sha256: digest });
     let artifactReused = true;
@@ -222,9 +245,6 @@ class CustomerOwnershipExtractionJobService {
       stored = await this.repository.findArtifact({ tenantId: this.tenantId, contextId: context.id, sha256: ingestion.fingerprintValue });
     }
     if (!stored) throw Object.assign(new Error("The saved Evidence Artifact could not be reopened."), { code: "artifact_unavailable", statusCode: 503 });
-    const providerConfiguration = selectSemanticProvider(digest, this.provider).configuration?.() || {};
-    const provider = providerConfiguration.provider || (this.provider ? "injected" : "anthropic");
-    const modelVersion = providerConfiguration.model || this.modelVersion;
     const key = cacheKey({ digest, profile: this.profile, provider, modelVersion, evidenceHandoff: input.evidenceHandoff });
     const correlationId = `customer-chart:${randomUUID()}`;
     const claim = (cacheKey) => this.repository.createOrGetJob({
@@ -264,8 +284,7 @@ class CustomerOwnershipExtractionJobService {
     if (!usable) throw Object.assign(new Error("There is no finished chart reading to reuse."), { code: "job_not_found", statusCode: 404 });
     const caseId = String(demoContext?.demoCaseId || "");
     if (!caseId || caseId === source.demoCaseId) throw Object.assign(new Error("Choose the new case to reuse the reading for."), { code: "case_required", statusCode: 400 });
-    const registration = (company) => String(company?.registrationNumber || "").replace(/\s+/g, "").toUpperCase();
-    if (!registration(source.company) || registration(source.company) !== registration(demoContext.company)) {
+    if (!registrationKey(source.company) || registrationKey(source.company) !== registrationKey(demoContext.company)) {
       throw Object.assign(new Error("That chart was read for a different company."), { code: "chart_company_mismatch", statusCode: 409 });
     }
     // Written finished, in one statement - never a queued copy a later step

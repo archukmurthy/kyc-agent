@@ -93,6 +93,21 @@ test("a reused reading is written finished in one statement, and an unfinished c
   assert.equal(copies.rows[0].n, 1);
 });
 
+test("the chart a case reused is free to send again, and refused as its own evidence", async (t) => {
+  if (skip()) return t.skip(skip());
+  const { service } = services();
+  const source = await service.start(upload(`case-a-${RUN}`, {}, "digest"));
+  await finish(source.jobId);
+  const caseB = `case-b-${RUN}`;
+  const copy = await service.reuseReading({ sourceJobId: source.jobId, demoContext: { demoCaseId: caseB, company: COMPANY } });
+  const again = await service.start(upload(caseB, {}, "digest"));
+  assert.equal(again.jobId, copy.jobId);
+  assert.equal(again.reused, true);
+  await db.query(`INSERT INTO ubo_poc_cases (case_id, tenant_id, company, current_projection, latest_extraction_job_id) VALUES ($1, $2, $3::jsonb, '{}'::jsonb, $4)`,
+    [caseB, TENANT, JSON.stringify(COMPANY), copy.jobId]);
+  await assert.rejects(service.start(upload(caseB, { evidenceHandoff: { contractVersion: "ubo-external-evidence-handoff-v1", requestedConcepts: ["ECONOMIC_OWNERSHIP"] } }, "digest")), (error) => error.code === "chart_not_evidence");
+});
+
 test("an upload never renames the shared subject record, and a finalised case takes no upload", async (t) => {
   if (skip()) return t.skip(skip());
   const { repository } = services();
