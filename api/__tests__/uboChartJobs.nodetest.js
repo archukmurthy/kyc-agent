@@ -249,3 +249,30 @@ test("an upload that reuses an earlier reading is not counted as a paid step", a
   await make(false)({ method: "POST", headers: {}, body: { demoContext: { demoCaseId: "case-1" } } }, fakeRes());
   assert.deepStrictEqual(counted, ["allowance:ubo-demo-chart", "step"]);
 });
+
+// Owner decision 2026-10-08 (option b): reusing an earlier chart reading for a
+// new case is the analyst's, in their own workspace, and costs nothing.
+test("reusing an earlier chart reading is staff-only, in the caller's workspace, and never counted as paid", async () => {
+  const asked = [];
+  const counted = [];
+  const factory = (options) => { factoryCalls.push(options); return { service: { reuseReading: async (args) => { asked.push(args); return { jobId: "job-2", state: "COMPLETE", demoCaseId: "case-2" }; } }, close: async () => {} }; };
+  const make = (actor) => route.createHandler(null, undefined, factory, {
+    applyCors: () => false,
+    enforceRateLimit: async (_req, _res, bucket) => { counted.push(bucket); return true; },
+    requireUboCaller: async () => actor,
+    demoAllowance: { record: async () => { throw new Error("must not be recorded as an upload"); } },
+    trials: { countPaidStep: async () => { throw new Error("must not be counted as a paid step"); } },
+  });
+  const body = { operation: "REUSE_CHART_READING", sourceJobId: "job-1", demoContext: { demoCaseId: "case-2", company: { registrationNumber: "01471587" } } };
+  const staff = fakeRes();
+  await make({ kind: "staff", tenantId: "acme", role: "analyst" })({ method: "POST", headers: {}, body }, staff);
+  assert.strictEqual(staff.statusCode, 200);
+  assert.strictEqual(staff.body.job.jobId, "job-2");
+  assert.deepStrictEqual(asked, [{ sourceJobId: "job-1", demoContext: body.demoContext }]);
+  assert.deepStrictEqual(factoryCalls, [{ tenantId: "acme" }]);
+  assert.deepStrictEqual(counted, ["ubo-demo-chart-status"], "the free limiter, not the paid one");
+  const customer = fakeRes();
+  await make({ kind: "customer", tenantId: "acme", caseId: "case-2" })({ method: "POST", headers: {}, body }, customer);
+  assert.strictEqual(customer.statusCode, 404);
+  assert.strictEqual(asked.length, 1, "a customer never reaches the service");
+});

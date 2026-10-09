@@ -18,7 +18,7 @@ function documentEventType(started, job) {
   return null;
 }
 
-const KNOWN_OPERATIONS = new Set(["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "RETRY_EXTRACTION_JOB", "REEVALUATE_SAVED_EXTRACTION", "LIST_JOBS_NEEDING_ATTENTION", "GET_CHART_FILE"]);
+const KNOWN_OPERATIONS = new Set(["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "RETRY_EXTRACTION_JOB", "REEVALUATE_SAVED_EXTRACTION", "LIST_JOBS_NEEDING_ATTENTION", "GET_CHART_FILE", "REUSE_CHART_READING"]);
 
 const DEFAULT_GATES = { applyCors, requireUboCaller, enforceRateLimit, demoAllowance, trials };
 
@@ -36,7 +36,7 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
     if (operation !== undefined && !KNOWN_OPERATIONS.has(operation)) {
       return res.status(400).json({ success: false, error: "unknown_operation" });
     }
-    const paid = !["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "REEVALUATE_SAVED_EXTRACTION", "LIST_JOBS_NEEDING_ATTENTION", "GET_CHART_FILE"].includes(operation);
+    const paid = !["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "REEVALUATE_SAVED_EXTRACTION", "LIST_JOBS_NEEDING_ATTENTION", "GET_CHART_FILE", "REUSE_CHART_READING"].includes(operation);
     if (!(await gates.enforceRateLimit(req, res, paid ? "ubo-demo-chart" : "ubo-demo-chart-status"))) return undefined;
     // Clerk owns who is calling. Inert until CLERK_SECRET_KEY is set, so this
     // route behaves exactly as before until the keys land.
@@ -68,6 +68,15 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
       if (body.operation === "LIST_JOBS_NEEDING_ATTENTION") {
         if (actor.kind === "customer") return res.status(404).json({ success: false, code: "not_found" });
         return res.status(200).json({ success: true, jobs: await dependencies.service.needingAttention() });
+      }
+
+      // An earlier reading, copied to a new case started from saved research:
+      // staff only - a customer never reaches another case's upload - and
+      // free, since nothing is read again.
+      if (body.operation === "REUSE_CHART_READING") {
+        if (actor.kind === "customer") return res.status(404).json({ success: false, code: "job_not_found", message: "Extraction job was not found." });
+        const reused = await dependencies.service.reuseReading({ sourceJobId: body.sourceJobId, demoContext: body.demoContext });
+        return res.status(200).json({ success: true, job: reused });
       }
 
       // A customer's session names one case: uploads only for it, and only its

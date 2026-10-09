@@ -31,6 +31,14 @@ const DETERMINISTIC_CODES = new Set([
 // ponytail: a fixed bound on fresh readings of one file in one case; each is paid.
 const MAX_FRESH_READINGS = 5;
 
+// A key made from another key (a fresh reading, a reading reused for another
+// case). The table accepts only a 64-hex key (migration 020): a readable
+// suffix was refused by the database, so re-uploading a file whose reading was
+// partial answered 500 on the live site (2026-10-08).
+function derivedKey(key, ...parts) {
+  return createHash("sha256").update(JSON.stringify([key, ...parts])).digest("hex");
+}
+
 function cacheKey({ digest, profile, provider, modelVersion }) {
   return createHash("sha256").update(JSON.stringify([
     digest,
@@ -210,13 +218,44 @@ class CustomerOwnershipExtractionJobService {
     // or one made before a reading fix, came back every time (end-to-end check,
     // 2026-10-04). Bounded: at most a few fresh readings of one file per case.
     for (let attempt = 1; !claimed.created && claimed.job?.state === "PARTIAL" && attempt <= MAX_FRESH_READINGS; attempt += 1) {
-      claimed = await claim(`${key}:fresh:${attempt}`);
+      claimed = await claim(derivedKey(key, "fresh", attempt));
     }
     // Reused means the READING was reused (nothing new is read or paid for) -
     // not merely that the file's bytes were already stored.
     const job = { ...claimed.job, reused: !claimed.created, artifactReused };
     console.info("[ubo-customer-extraction] job-start", { jobId: job.id, correlationId: job.correlationId, state: job.state, reused: job.reused });
     return publicJob(job);
+  }
+
+  /** The reading of a chart already read for this company on another case,
+   *  for a new case started from saved research (owner decision 2026-10-08,
+   *  option b). A copy of the job for the new case, pointing at the same
+   *  stored file and carrying the same result - nothing is read again and
+   *  nothing is paid. Staff only; the route decides who asks. */
+  async reuseReading({ sourceJobId, demoContext }) {
+    const source = await this.repository.getJob({ id: sourceJobId, tenantId: this.tenantId });
+    const usable = source && (source.state === "COMPLETE" || source.state === "PARTIAL") && !source.evidenceHandoff && source.result;
+    if (!usable) throw Object.assign(new Error("There is no finished chart reading to reuse."), { code: "job_not_found", statusCode: 404 });
+    const caseId = String(demoContext?.demoCaseId || "");
+    if (!caseId || caseId === source.demoCaseId) throw Object.assign(new Error("Choose the new case to reuse the reading for."), { code: "case_required", statusCode: 400 });
+    const registration = (company) => String(company?.registrationNumber || "").replace(/\s+/g, "").toUpperCase();
+    if (!registration(source.company) || registration(source.company) !== registration(demoContext.company)) {
+      throw Object.assign(new Error("That chart was read for a different company."), { code: "chart_company_mismatch", statusCode: 409 });
+    }
+    const claimed = await this.repository.createOrGetJob({
+      tenantId: this.tenantId, contextId: source.contextId, artifactId: source.artifactId, artifactSha256: source.artifactSha256,
+      cacheKey: derivedKey(source.cacheKey, "reused-for", caseId), demoCaseId: caseId, company: demoContext.company, evidenceHandoff: null,
+      profileVersion: source.profileVersion, schemaVersion: source.schemaVersion, instructionVersion: source.instructionVersion,
+      verificationStrategyVersion: source.verificationStrategyVersion, provider: source.provider, modelVersion: source.modelVersion,
+      maxAttempts: this.maxAttempts, correlationId: `customer-chart-reuse:${randomUUID()}`,
+    });
+    let job = claimed.job;
+    if (claimed.created) {
+      const running = await this.repository.claimJob({ id: job.id, tenantId: this.tenantId, leaseSeconds: this.leaseSeconds });
+      job = await this.repository.completeJob({ id: running.id, state: source.state, result: source.result });
+    }
+    console.info("[ubo-customer-extraction] job-reused", { jobId: job.id, sourceJobId: source.id, created: claimed.created });
+    return publicJob({ ...job, reused: true });
   }
 
   /** Whether a job belongs to this UBO case - asked before a customer, whose
@@ -334,6 +373,7 @@ module.exports = {
   DEFAULT_MAX_ATTEMPTS,
   TERMINAL_STATES,
   cacheKey,
+  derivedKey,
   publicJob,
   reason,
   retryDelayMs,

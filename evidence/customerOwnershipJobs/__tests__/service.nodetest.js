@@ -34,6 +34,9 @@ class MemoryJobs {
     return item ? { ...item, artifactId: item.artifactId, storageProvider: item.storageProvider, storageKey: item.storageKey, storageReference: item.storageReference } : null;
   }
   async createOrGetJob(record) {
+    // As the table's CHECK does (migration 020) - the stand-in once accepted
+    // keys the database refuses (2026-10-08).
+    if (!/^[0-9a-f]{64}$/.test(record.cacheKey)) throw Object.assign(new Error("violates check constraint on cache_key"), { code: "23514" });
     if (this.failCreateOnce) { this.failCreateOnce = false; throw Object.assign(new Error("db unavailable"), { code: "database_persistence_failed", statusCode: 503 }); }
     const existing = [...this.jobs.values()].find((job) => job.tenantId === record.tenantId && job.contextId === record.contextId && job.cacheKey === record.cacheKey);
     if (existing) return { created: false, job: structuredClone(existing) };
@@ -232,4 +235,35 @@ test("while a reading runs, its draft is shown on the job's status, and dropped 
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal((await service.status(started.jobId)).progress, undefined);
   assert.equal(stored.size, 0);
+});
+
+// Owner decision 2026-10-08 (option b): a new case started from saved research
+// can take the chart already read for that company - no new reading, no cost.
+test("a finished chart reading is reused for a new case: same file and result, nothing read again", async () => {
+  const h = harness([usableResult()]);
+  const started = await h.service.start(input());
+  const source = await h.service.process(started.jobId);
+  assert.equal(source.state, "COMPLETE");
+  const company = input().demoContext.company;
+  const reused = await h.service.reuseReading({ sourceJobId: source.jobId, demoContext: { demoCaseId: "case-2", company } });
+  assert.equal(reused.state, "COMPLETE");
+  assert.equal(reused.demoCaseId, "case-2");
+  assert.equal(reused.artifactId, source.artifactId);
+  assert.deepEqual(reused.result, source.result);
+  assert.equal(reused.reused, true);
+  assert.equal(h.calls(), 1, "the provider is not asked again");
+  const again = await h.service.reuseReading({ sourceJobId: source.jobId, demoContext: { demoCaseId: "case-2", company } });
+  assert.equal(again.jobId, reused.jobId, "asking twice makes one copy");
+  assert.equal(h.repository.jobs.size, 2);
+});
+
+test("a reading is not reused for a different company, its own case, or before it has finished", async () => {
+  const h = harness([usableResult()]);
+  const started = await h.service.start(input());
+  const company = input().demoContext.company;
+  await assert.rejects(() => h.service.reuseReading({ sourceJobId: started.jobId, demoContext: { demoCaseId: "case-2", company } }), { code: "job_not_found" });
+  const source = await h.service.process(started.jobId);
+  await assert.rejects(() => h.service.reuseReading({ sourceJobId: source.jobId, demoContext: { demoCaseId: "case-2", company: { ...company, registrationNumber: "99999999" } } }), { code: "chart_company_mismatch" });
+  await assert.rejects(() => h.service.reuseReading({ sourceJobId: source.jobId, demoContext: { demoCaseId: "case-1", company } }), { code: "case_required" });
+  await assert.rejects(() => h.service.reuseReading({ sourceJobId: "missing", demoContext: { demoCaseId: "case-2", company } }), { code: "job_not_found" });
 });
