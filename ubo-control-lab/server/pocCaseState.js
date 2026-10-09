@@ -592,10 +592,16 @@ class PostgresPocCaseRepository {
       ...(chartReference?.artifactId ? [{ artifactId: chartReference.artifactId, extractionJobId: chartReference.jobId || null }] : []),
       ...Object.values(assessment?.evidence || {}).filter(({ artifactId }) => artifactId).map(({ artifactId }) => ({ artifactId })),
     ];
+    // The same inputs come back as the same version (after a reopen, say). Its
+    // record keeps that it was once finalised, and when first - recomputing it
+    // un-finalised wrote NULL over that - while what is stored is current: it
+    // kept the first-ever trace, completions and all (review, 2026-10-09).
     await client.query(`INSERT INTO ubo_poc_assessment_versions
       (assessment_id, case_id, policy_id, policy_version, input_state_version, evidence_references, assessment, calculated_at, finalized_at)
       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9)
-      ON CONFLICT (case_id, assessment_id) DO UPDATE SET finalized_at = EXCLUDED.finalized_at`, [current.assessmentVersionId, caseId,
+      ON CONFLICT (case_id, assessment_id) DO UPDATE SET
+        finalized_at = COALESCE(ubo_poc_assessment_versions.finalized_at, EXCLUDED.finalized_at),
+        assessment = EXCLUDED.assessment, evidence_references = EXCLUDED.evidence_references`, [current.assessmentVersionId, caseId,
       trace.policy?.policyId || "UK_CORPORATE_UBO", current.policyVersion || trace.policy?.policyVersion || "1.0",
       current.inputStateVersion, json(evidenceReferences), json(trace), current.calculatedAt,
       current.finalized ? (current.calculatedAt || new Date().toISOString()) : null]);
