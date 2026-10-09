@@ -287,6 +287,24 @@ test("a new link withdraws the earlier one, on the ledger as a withdrawal", asyn
   assert.deepStrictEqual(recorded, ["CUSTOMER_LINK_ISSUED", "CUSTOMER_LINK_REVOKED", "CUSTOMER_LINK_ISSUED"]);
 });
 
+test("an ended trial makes no new links, but can still withdraw one", async () => {
+  const asked = [];
+  const h = route.createHandler({
+    applyCors: () => false,
+    enforceRateLimit: async () => true,
+    requireStaff: async () => ANALYST,
+    caseExists: async () => true,
+    trialEnded: async (actor) => { asked.push(actor); return true; },
+    clerk: { isConfigured: () => false },
+  });
+  const made = await call(h, { action: "create", caseId: "case-1", email: "customer@example.test" });
+  assert.strictEqual(made.statusCode, 403);
+  assert.strictEqual(made.body.error, "trial_ended");
+  assert.strictEqual(made.body.token, undefined);
+  assert.strictEqual(asked[0].userId, ANALYST.userId);
+  assert.strictEqual((await call(h, { action: "revoke", caseId: "case-1" })).statusCode, 200);
+});
+
 test("a link made straight after a withdrawal opens", async () => {
   const h = handler({ clerk: signedInAs("customer@example.test") });
   await call(h, { action: "revoke", caseId: "case-1" });
