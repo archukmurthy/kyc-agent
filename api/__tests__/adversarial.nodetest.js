@@ -53,9 +53,9 @@ function armLimiter({ session = null, access = null, trial = { inTrial: false },
         return { refused: null };
       },
     },
+    // The ceiling is taken and checked in one step (lib/spendCap.js#admit).
     spendCap: {
-      check: async (tenantId) => { recorded.spendCap.push(["check", tenantId]); return spend.blocked ? { blocked: true, limit: 100, message: "stop" } : { blocked: false }; },
-      record: async (tenantId) => { recorded.spendCap.push(["record", tenantId]); },
+      admit: async (tenantId) => { recorded.spendCap.push(["admit", tenantId]); return spend.blocked ? { blocked: true, limit: 100, message: "stop" } : { blocked: false }; },
     },
     resolveDossierActor: async () => null,
     now: () => Date.parse("2026-09-22T10:00:00.000Z"),
@@ -220,7 +220,7 @@ test("the daily ceiling applies to trial users, whose workspace is ours not Cler
   });
   const { req, res } = reqRes({ headers: { authorization: "Bearer t" } });
   await rateLimit.enforceRateLimit(req, res, "ubo-discovery");
-  assert.deepEqual(recorded.spendCap, [["check", "trial-acme-1"], ["record", "trial-acme-1"]]);
+  assert.deepEqual(recorded.spendCap, [["admit", "trial-acme-1"]]);
 });
 
 test("an account over its ceiling is refused before the provider is called", async () => {
