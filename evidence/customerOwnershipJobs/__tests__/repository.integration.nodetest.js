@@ -67,3 +67,32 @@ test("a job whose lease ran out on its last attempt is failed by the next claim,
   assert.equal(await repository.claimJob({ id: started.jobId, tenantId: TENANT }), null);
   assert.equal((await repository.getJob({ id: started.jobId, tenantId: TENANT })).state, "RUNNING");
 });
+
+test("a save stopped mid-way, or failed under another filename, no longer blocks the file", async (t) => {
+  if (skip()) return t.skip(skip());
+  const { service, repository } = services();
+  const { PostgresR1Repository } = require("../../r1/repository");
+  const { sha256 } = require("../../r1/domain");
+  const r1 = new PostgresR1Repository(db);
+  for (const [seed, status, startedAt] of [["stale", "running", "2020-01-01T00:00:00Z"], ["failed", "failed", new Date().toISOString()]]) {
+    const caseId = `case-${seed}-${RUN}`;
+    const body = upload(caseId, {}, seed);
+    const context = await repository.ensureContext({ tenantId: TENANT, demoCaseId: caseId, company: COMPANY });
+    const key = `ubo-customer:${context.id}:${sha256(Buffer.from(body.file.contentBase64, "base64"))}`;
+    const op = await r1.createOperation({ idempotencyKey: key, subjectReferenceId: context.subject_reference_id, contextId: context.id, tenantId: TENANT, requestFingerprint: "an-earlier-filename", startedAt });
+    if (status === "failed") await r1.fail(op.id, "artifact_storage_failed");
+    const job = await service.start(body);
+    assert.ok(job.artifactId, seed);
+    assert.equal((await r1.findByKey(key)).status, "successful", seed);
+  }
+  // A save still inside its time is left to finish.
+  const caseId = `case-live-${RUN}`;
+  const body = upload(caseId, {}, "live");
+  const context = await repository.ensureContext({ tenantId: TENANT, demoCaseId: caseId, company: COMPANY });
+  const key = `ubo-customer:${context.id}:${sha256(Buffer.from(body.file.contentBase64, "base64"))}`;
+  await r1.createOperation({ idempotencyKey: key, subjectReferenceId: context.subject_reference_id, contextId: context.id, tenantId: TENANT, requestFingerprint: "x", startedAt: new Date().toISOString() });
+  await assert.rejects(service.start(body), (error) => ["ingestion_in_progress", "idempotency_conflict"].includes(error.code));
+  // A save with nothing saved is not reached by the purge (it finds saves
+  // through what they saved), so it is removed here.
+  await db.query("DELETE FROM evidence_collection_operations WHERE producer_request_key = $1", [key]);
+});
