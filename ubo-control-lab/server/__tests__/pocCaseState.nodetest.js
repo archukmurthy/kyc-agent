@@ -222,3 +222,31 @@ test("case restore removes repeated immutable analysis internals without losing 
   assert.equal(compact.projection.assessment.trace.verificationPopulation[0].personName, "Alice Morgan");
   assert.ok(JSON.stringify(compact).length < 20_000);
 });
+
+// Review of the rounds fix (2026-10-09): a case reopened before rounds existed
+// has no round, and its old finalisation was recorded under the bare key. The
+// next finalisation, with the same inputs, must not be taken for that one.
+test("a key recorded before rounds existed never matches a step made after them", () => {
+  const legacy = { assessment: null }; // reopened before the change: no round
+  const bareKeyFromBefore = "assessment:ubo-assessment:abc";
+  assert.notStrictEqual(recordedKey(legacy, "FINALIZE_ASSESSMENT", bareKeyFromBefore), bareKeyFromBefore);
+  assert.strictEqual(recordedKey(legacy, "FINALIZE_ASSESSMENT", bareKeyFromBefore), `${bareKeyFromBefore}#round-0`);
+  // Within a round a retry still matches itself, and a reset stays one reset.
+  assert.strictEqual(recordedKey({ round: 2 }, "SUBMIT_ANSWER", "a1"), recordedKey({ round: 2 }, "SUBMIT_ANSWER", "a1"));
+  assert.strictEqual(recordedKey({ round: 2 }, "RESET_ANSWERS", "reset-1"), "reset-1");
+});
+
+// Review of the rounds fix (2026-10-09): a finalisation whose answer was lost,
+// retried after the analyst reopened, must not undo the reopen.
+test("a step that says it was made in an earlier round is refused; one that says nothing is taken", async () => {
+  const { PostgresPocCaseRepository } = require("../pocCaseState");
+  const repository = new PostgresPocCaseRepository({ transaction: async (work) => work({
+    query: async (sql) => (/SELECT/i.test(sql) && /FOR UPDATE/i.test(sql)
+      ? { rows: [{ case_id: "case-1", tenant_id: "acme", company: {}, current_projection: { round: 2 }, version: 7, updated_at: new Date() }] }
+      : { rows: [] }),
+  }) }, "acme");
+  await assert.rejects(
+    () => repository.apply({ caseId: "case-1", operation: "FINALIZE_ASSESSMENT", idempotencyKey: "assessment:x", actorType: "CUSTOMER", payload: {}, round: 1 }),
+    { code: "case_round_changed", statusCode: 409 },
+  );
+});

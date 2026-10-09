@@ -378,7 +378,7 @@ test("a save answers with what the screens read after one, not the whole case", 
   const res = fakeRes();
   await handler({ method: "POST", headers: {}, body: { operation: "SUBMIT_ANSWER", caseId: "case-1", payload: {} } }, res);
   assert.strictEqual(res.statusCode, 200);
-  assert.deepStrictEqual(Object.keys(res.body.case.projection).sort(), ["assessment", "currentStage", "researchRelease"]);
+  assert.deepStrictEqual(Object.keys(res.body.case.projection).sort(), ["assessment", "currentStage", "researchRelease", "round"]);
   assert.deepStrictEqual(res.body.case.projection.assessment, { trace: { discoveryState: "QUESTIONS" } });
   assert.deepStrictEqual(res.body.case.researchRelease, { mayProceed: true });
   assert.strictEqual(res.body.case.history, undefined);

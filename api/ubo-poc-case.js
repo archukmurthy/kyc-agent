@@ -42,7 +42,8 @@ function savedRecord(record) {
     updatedAt: record.updatedAt,
     duplicate: record.duplicate,
     researchRelease: record.researchRelease || projection.researchRelease || null,
-    projection: { currentStage: projection.currentStage || null, assessment: projection.assessment || null, researchRelease: projection.researchRelease || null },
+    // The round, so a screen can say which one its next step belongs to.
+    projection: { currentStage: projection.currentStage || null, assessment: projection.assessment || null, researchRelease: projection.researchRelease || null, round: Number(projection.round) || 0 },
   };
 }
 

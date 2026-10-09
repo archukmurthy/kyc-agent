@@ -252,6 +252,10 @@ function uncomputed(base) {
  *  recorded per round - see recordedKey. */
 function nextRound(base) { return (Number(base?.round) || 0) + 1; }
 
+// The customer's steps that act on what the customer saw: refused when the
+// round they were made in has passed (see apply).
+const ROUND_BOUND = new Set(["SUBMIT_ANSWER", "FINALIZE_ASSESSMENT", "SYNC_RESOLUTION", "COMPLETE_IDV"]);
+
 /**
  * The key a step is recorded under, or null when the case already reflects it.
  *
@@ -265,10 +269,15 @@ function nextRound(base) { return (Number(base?.round) || 0) + 1; }
 function recordedKey(projection, operation, idempotencyKey) {
   // Reopening a case that is not finalised: a retry, or a second analyst tab.
   if (operation === "REOPEN_CASE" && !serverTraceOf(projection)?.verificationAssessment?.finalized) return null;
-  const round = Number(projection?.round) || 0;
   // A reset starts a round itself, and one reset request is one reset however
   // late it is retried - it would otherwise clear answers given after it.
-  return round && operation !== "RESET_ANSWERS" ? `${idempotencyKey}#round-${round}` : idempotencyKey;
+  if (operation === "RESET_ANSWERS") return idempotencyKey;
+  // Round 0 is marked too. A case reopened before rounds existed has none, and
+  // its re-finalisation came back with the very key recorded before the
+  // reopen - skipped as a retry, the case stuck (review of the fix,
+  // 2026-10-09). A bare key is from before this change; it never matches.
+  const round = Number(projection?.round) || 0;
+  return `${idempotencyKey}#round-${round}`;
 }
 
 /** What makes research different research - the same fields the analyst
@@ -445,7 +454,7 @@ class PostgresPocCaseRepository {
     return pickEvidenceReading(readings, requested);
   }
 
-  async apply({ caseId, operation, idempotencyKey, actorType, actorId = null, correlationId = null, receivedAt = null, payload, release, expectedVersion = null }) {
+  async apply({ caseId, operation, idempotencyKey, actorType, actorId = null, correlationId = null, receivedAt = null, payload, release, expectedVersion = null, round = null }) {
     return this.db.transaction(async (client) => {
       const company = payload.demoCase?.company || payload.company;
       // Read and locked once: the case does not change under the lock, so it is
@@ -464,6 +473,14 @@ class PostgresPocCaseRepository {
       // between (found in the browser test). The service recomputes instead.
       if (expectedVersion && locked && locked.version !== expectedVersion) {
         throw Object.assign(new Error("The case changed while this step was being worked out."), { statusCode: 409, code: "case_changed", retryable: true });
+      }
+      // A step made in an earlier round - a finalisation whose answer was lost
+      // and retried after the analyst reopened - would undo what happened
+      // since (review of the rounds fix, 2026-10-09). A screen that says which
+      // round it saw is refused when the case has moved on; one that does not
+      // say is taken as before.
+      if (round !== null && round !== undefined && ROUND_BOUND.has(operation) && Number(round) !== (Number(existing?.projection?.round) || 0)) {
+        throw Object.assign(new Error("This review changed while you were working on it. Please reload the page to see where it stands."), { statusCode: 409, code: "case_round_changed" });
       }
       // Under the lock: the round a step belongs to is the case's as it stands.
       const key = recordedKey(existing?.projection, operation, idempotencyKey);
