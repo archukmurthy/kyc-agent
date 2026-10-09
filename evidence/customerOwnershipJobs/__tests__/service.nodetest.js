@@ -45,10 +45,19 @@ class MemoryJobs {
     this.jobs.set(job.id, job); return { created: true, job: structuredClone(job) };
   }
   async getJob({ id }) { return this.jobs.has(id) ? structuredClone(this.jobs.get(id)) : null; }
-  async claimJob({ id }) {
+  // As repository.js#claimJob: a running job is taken over only once its lease
+  // has run out, and one whose lease ran out on its last attempt fails. (A
+  // retry's wait is not modelled, so the tests need not sleep.)
+  async claimJob({ id, leaseSeconds = 300 }) {
     const job = this.jobs.get(id);
-    if (!job || ["COMPLETE", "PARTIAL", "FAILED"].includes(job.state) || job.attemptCount >= job.maxAttempts) return null;
-    job.state = "RUNNING"; job.attemptCount += 1; job.updatedAt = new Date().toISOString(); return structuredClone(job);
+    if (!job) return null;
+    const expired = job.state === "RUNNING" && Date.parse(job.leaseExpiresAt || 0) < Date.now();
+    if (expired && job.attemptCount >= job.maxAttempts) {
+      Object.assign(job, { state: "FAILED", lastReasonCode: "lease_expired", leaseExpiresAt: null, completedAt: new Date().toISOString() });
+      return null;
+    }
+    if (!(["QUEUED", "RETRYING"].includes(job.state) || expired) || job.attemptCount >= job.maxAttempts) return null;
+    job.state = "RUNNING"; job.attemptCount += 1; job.leaseExpiresAt = new Date(Date.now() + leaseSeconds * 1000).toISOString(); job.updatedAt = new Date().toISOString(); return structuredClone(job);
   }
   async markRetry({ id, code, message, upstreamStatus, nextAttemptAt }) { const job = this.jobs.get(id); Object.assign(job, { state: "RETRYING", lastReasonCode: code, lastReasonMessage: message, upstreamStatus, nextAttemptAt }); return structuredClone(job); }
   async completeJob({ id, state, result }) { const job = this.jobs.get(id); Object.assign(job, { state, result: structuredClone(result), completedAt: new Date().toISOString() }); return structuredClone(job); }
@@ -303,4 +312,27 @@ test("a job made before the fix under the chart's key is not handed back for the
   const again = await h.service.start(input());
   assert.notEqual(again.jobId, chart.jobId);
   assert.equal(h.repository.jobs.get(again.jobId).evidenceHandoff, null);
+});
+
+// A reading killed on its last attempt (the function timed out) left the job
+// RUNNING for good: no claim would take it, failJob runs only in process, and
+// Retry accepts only FAILED - re-upload, Retry and support all stuck.
+test("a job whose last attempt stopped mid-reading fails once its lease runs out, and can be retried", async () => {
+  const h = harness([usableResult()]);
+  const started = await h.service.start(input());
+  Object.assign(h.repository.jobs.get(started.jobId), { state: "RUNNING", attemptCount: 3, leaseExpiresAt: new Date(Date.now() - 1000).toISOString() });
+  const job = await h.service.process(started.jobId);
+  assert.equal(job.state, "FAILED");
+  assert.equal(h.calls(), 0, "nothing is read on the way to failing");
+  const retried = await h.service.retry(started.jobId);
+  assert.equal(retried.retried, true);
+  assert.equal((await h.service.process(started.jobId)).state, "COMPLETE");
+});
+
+test("a running job inside its lease is left alone", async () => {
+  const h = harness([usableResult()]);
+  const started = await h.service.start(input());
+  Object.assign(h.repository.jobs.get(started.jobId), { state: "RUNNING", attemptCount: 3, leaseExpiresAt: new Date(Date.now() + 60000).toISOString() });
+  assert.equal((await h.service.process(started.jobId)).state, "RUNNING");
+  assert.equal(h.calls(), 0);
 });

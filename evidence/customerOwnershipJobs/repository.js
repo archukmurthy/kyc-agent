@@ -109,6 +109,14 @@ class PostgresCustomerExtractionJobRepository {
   }
 
   async claimJob({ id, tenantId, leaseSeconds = 300 }) {
+    // A reading stopped mid-way on its last attempt (the function was killed)
+    // left the job RUNNING for good: nothing below would take it again, and
+    // Retry accepts only FAILED. Once its lease has run out it is FAILED, so
+    // the customer's Retry, a re-upload and support can all recover it.
+    await this.db.query(`UPDATE evidence_customer_extraction_jobs SET
+      state='FAILED',last_reason_code='lease_expired',last_reason_message='The reading stopped before it finished.',
+      next_attempt_at=NULL,lease_expires_at=NULL,completed_at=NOW(),updated_at=NOW()
+      WHERE id=$1 AND tenant_id=$2 AND state='RUNNING' AND lease_expires_at<NOW() AND attempt_count>=max_attempts`, [id, tenantId]);
     const result = await this.db.query(`UPDATE evidence_customer_extraction_jobs SET
       state='RUNNING',attempt_count=attempt_count+1,next_attempt_at=NULL,
       lease_expires_at=NOW()+($3::text||' seconds')::interval,updated_at=NOW()
