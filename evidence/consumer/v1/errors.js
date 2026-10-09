@@ -36,6 +36,10 @@ const PUBLIC_ERRORS = Object.freeze({
   cross_asset_interpretation_not_allowed: ["cross_asset_selection", "request", "All selected Artifacts must belong to one Evidence Asset.", false],
   idempotency_conflict: ["idempotency_conflict", "request", "The operation key is already associated with different inputs.", false],
   database_persistence_failed: ["persistence_failure", "persistence", "The Evidence operation could not be persisted.", true],
+  // Refused by the database itself (a constraint or a value it cannot hold):
+  // the same reading would be refused again, so it is never retried and paid
+  // for twice (review, 2026-10-09).
+  database_persistence_rejected: ["persistence_rejected", "persistence", "The Evidence operation could not be saved.", false],
   evidence_persistence_failed: ["persistence_failure", "persistence", "The Evidence operation could not be persisted.", true],
   operation_persistence_failed: ["persistence_failure", "persistence", "The Evidence operation could not be persisted.", true],
   package_integrity_failure: ["package_integrity_failure", "integrity", "The Evidence Package failed integrity verification.", false],

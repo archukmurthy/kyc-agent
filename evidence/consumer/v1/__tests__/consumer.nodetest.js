@@ -116,3 +116,12 @@ test("internal failures become stable non-disclosing consumer error envelopes", 
     assert.equal(result.ok, false); assert.equal(result.error.code, expected); assert.doesNotMatch(JSON.stringify(result), /SELECT|private_table|credential|C:\\\\secret/);
   }
 });
+
+// Review, 2026-10-09: a reading the database refuses is named as such and is
+// never retryable - retrying would be refused the same way, and paid again.
+test("a database refusal is a non-retryable persistence outcome", () => {
+  const { publicError } = require("../errors.js");
+  const outcome = publicError({ code: "database_persistence_rejected" });
+  assert.equal(outcome.code, "persistence_rejected");
+  assert.equal(outcome.retryable, false);
+});
