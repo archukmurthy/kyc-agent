@@ -967,6 +967,15 @@ not lost with it:
 - **Fix:** answer a customer session with only what the customer pages use (company, chart reading, their questions and evidence, the parts of the assessment they are shown). Keep the single full load for analysts. Do it before real customers use the product; speed is not the reason (the case is 33-88 KB compressed).
 - **Not to do:** the chart analysis stored with the chart and the one stored with the recalculations are different (before and after the customer's answers); both stay.
 
+### UBO-63 - Live end-to-end check findings (2026-10-08)
+- **Category:** Bug - **Priority:** P0 - **Status:** FIXED locally 2026-10-09, not yet pushed (a push to `ubo/integrate` deploys live).
+- **Chart "couldn't complete the analysis":** re-uploading a chart whose reading was partial built a job key `<key>:fresh:N`, which `evidence_customer_extraction_jobs.cache_key` (varchar(64), 64 hex) refuses - a 500. Reproduced on a real database; derived keys are hashed (`derivedKey`), and the in-memory test table now enforces the column rule (the gap that let it through). The chart page also re-checks a job after a server error mid-reading instead of reporting a failure.
+- **Saved research listed one run three times:** cases started from saved research carry a copy (`sourceMode: SAVED`) and were listed too, dated by the case's last change. Now one entry per run, dated when the research finished.
+- **Customer pages showed "Open Audit"/"Open Analyst Review":** hidden only once the customer session had loaded, which is after the header draws. Removed from the customer journey.
+- **"The POC case was not found":** the browser was signed in as the customer (to open their link), so the analyst's case was correctly refused. The page now says the case belongs to another account and offers sign-out.
+- **"Waiting for the customer" on audit:** correct for the case shown (the customer had not finished it), but the page did not say which case. It now names the case and points to the case ledger.
+- **Saved research asked for the chart again (owner: option b):** a case started from saved research offers the chart read on the case it came from; the server copies the reading (`REUSE_CHART_READING`, staff only, free). Limit: only the source case's chart is offered, not one uploaded on a later copy.
+
 ### UBO-62 - The partner's KYC Vercel project hangs 45 minutes building UBO branches
 - **Category:** Deploy - **Priority:** P2 - **Status:** OPEN (owner: later, 2026-10-08)
 - **What:** the partner's `kyc-agent-zayzo` project is connected to the same repo and builds every pushed branch as a preview. Its builds of `ubo/integrate` (`39bb7c1`, `7275a4e`) and of her `codex/ubo-demo-integrated` (`ef14ef2`) all ran 45m38s and failed (Vercel's build time limit). The log reaches the `prebuild` suite (`test:ubo-demo:regression`, Jest). Locally that suite passes in 49 s with no database settings, so the hang is specific to that project's build environment - not yet known what.
