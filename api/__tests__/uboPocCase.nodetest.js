@@ -318,6 +318,22 @@ test("the saved research query is confined to the repository's workspace", async
   assert.deepStrictEqual(listed[0].company, { legalName: "Example Limited", registrationNumber: "00000001", countryCode: "GB" });
 });
 
+// Live end-to-end check (2026-10-08): one research run was listed three times -
+// each case started from it carried a copy and was listed too, dated when the
+// case last changed rather than when the research finished.
+test("saved research lists each research run once, dated when it finished", async () => {
+  const queries = [];
+  const db = { query: async (sql, params) => { queries.push({ sql, params }); return { rows: [
+    { case_id: "case-1", company: { legalName: "Example Limited" }, status: "COMPLETE", completed_at: "2026-10-08T14:51:19.000Z", created_at: "2026-10-08T14:50:47.000Z" },
+    { case_id: "case-2", company: { legalName: "Other Limited" }, status: "COMPLETE", completed_at: "not a date", created_at: "2026-10-08T15:00:00.000Z" },
+  ] }; } };
+  const listed = await new PostgresPocCaseRepository(db, "acme").savedResearch();
+  assert.match(queries[0].sql, /'sourceMode', ''\) <> 'SAVED'/);
+  assert.strictEqual(listed[0].researchedAt, "2026-10-08T14:51:19.000Z");
+  assert.strictEqual(listed[1].researchedAt, "2026-10-08T15:00:00.000Z");
+  assert.strictEqual(listed[0].updatedAt, undefined);
+});
+
 // End-to-end check (2026-10-04): every save sent back the whole case (~1.9 MB).
 test("a save answers with what the screens read after one, not the whole case", async () => {
   const big = { caseId: "case-1", updatedAt: "t", duplicate: false, researchRelease: { mayProceed: true }, history: [{ eventType: "x" }], extraction: { result: "large" },

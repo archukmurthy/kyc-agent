@@ -89,7 +89,7 @@ function CompanyStart({ draft, errors, savedResearch, newCaseNotice, onNewCaseCo
           <label><input type="radio" name="sourceMode" value="LIVE" checked={draft.sourceMode === "LIVE"} onChange={(e) => onChange("sourceMode", e.target.value)} /> Live Lab research</label>
           <label><input type="radio" name="sourceMode" value="FIXTURE" checked={draft.sourceMode === "FIXTURE"} onChange={(e) => onChange("sourceMode", e.target.value)} /> Reviewed ASDA fixture <small>no provider call</small></label>
           <label><input type="radio" name="sourceMode" value="SAVED" disabled={!savedResearch.length} checked={draft.sourceMode === "SAVED"} onChange={(e) => onChange("sourceMode", e.target.value)} /> Saved research <small>no provider call</small></label>
-          {savedMode && <><select aria-label="Saved research" aria-invalid={Boolean(errors.savedCaseId)} value={draft.savedCaseId || ""} onChange={(e) => onSavedSelect(e.target.value)}><option value="">Choose saved research</option>{savedResearch.map((item) => <option key={item.caseId} value={item.caseId}>{item.company.legalName} · {item.company.registrationNumber} · {new Date(item.updatedAt).toLocaleString()}</option>)}</select>{errors.savedCaseId && <FieldError id="saved-research-error">{errors.savedCaseId}</FieldError>}</>}
+          {savedMode && <><select aria-label="Saved research" aria-invalid={Boolean(errors.savedCaseId)} value={draft.savedCaseId || ""} onChange={(e) => onSavedSelect(e.target.value)}><option value="">Choose saved research</option>{savedResearch.map((item) => <option key={item.caseId} value={item.caseId}>{item.company.legalName} · {item.company.registrationNumber} · {new Date(item.researchedAt).toLocaleString()}</option>)}</select>{errors.savedCaseId && <FieldError id="saved-research-error">{errors.savedCaseId}</FieldError>}</>}
           <div className="ubo-demo-replay-library"><div><strong>{savedResearch.length ? `${savedResearch.length} saved research result${savedResearch.length === 1 ? "" : "s"} in this workspace` : "No saved research in this workspace yet"}</strong><small>Every completed research run is kept with its case on our server. Starting from one makes no provider call.</small></div></div>
         </fieldset>
       </div>
@@ -484,7 +484,7 @@ export default function UboDemoRoot() {
       const saved = (await loadPocCase(match.caseId))?.projection?.researchResult;
       if (!saved) return null;
       const { ownershipResolutionTrace: _trace, analystCustomerRequests: _requests, investigationTopicActivations: _topics, ...research } = saved;
-      return { result: research, savedAt: match.updatedAt };
+      return { result: research, savedAt: match.researchedAt };
     } catch (_) {
       return null;
     }
