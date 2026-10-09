@@ -134,7 +134,24 @@ function uploadedFor(stored, requested) {
   return concepts.length > 0 && concepts.every((concept) => wanted.has(concept));
 }
 
-/** Each evidence outcome decided from the extraction the server itself ran of
+/** Which of a file's readings answers this request. One file can be uploaded
+ *  for several requests and each upload purpose has its own reading (review,
+ *  2026-10-09), so "the newest reading of this file" could be another
+ *  request's - which then failed uploadedFor and rejected good evidence. A
+ *  finished reading made for this request first, then one still running for
+ *  it, then whatever the file has (so a file never uploaded for this request
+ *  is still refused as such).
+ *  @param readings [{ state, result, evidenceHandoff }] - best first */
+function pickEvidenceReading(readings, requested) {
+  const list = readings || [];
+  const finished = (reading) => ["COMPLETE", "PARTIAL"].includes(reading.state) && reading.result;
+  const forThis = list.filter((reading) => uploadedFor(reading.evidenceHandoff, requested));
+  const chosen = forThis.find(finished) || forThis[0] || list[0];
+  if (!chosen) return null;
+  return finished(chosen) ? { result: chosen.result, evidenceHandoff: chosen.evidenceHandoff } : { pending: true };
+}
+
+/** Each evidence outcome decided from the extraction the server itself ran of/** Each evidence outcome decided from the extraction the server itself ran of
  *  an upload made AS EVIDENCE for a request of this kind - not the ownership
  *  chart, and not one file counted for two requests. */
 async function decideEvidence(engine, raw, findEvidenceResult, chartArtifactId, now) {
@@ -154,7 +171,7 @@ async function decideEvidence(engine, raw, findEvidenceResult, chartArtifactId, 
       out[record.id] = { ...base, status: EVIDENCE_STATUS.REJECTED, reason: "The ownership chart cannot be its own evidence." };
       continue;
     }
-    const found = await findEvidenceResult(base.artifactId);
+    const found = await findEvidenceResult(base.artifactId, record.handoff);
     // No upload of this case has that id - it is the browser's word, so it is
     // not kept: stored, it failed the database's reference to the upload (a
     // 500) or pointed at another workspace's file (review, 2026-10-09).
@@ -314,4 +331,4 @@ async function computeCaseAssessment({ projection, caseId, operation, incoming, 
   return { resolution, assessment: { assessmentId: trace.verificationAssessment?.assessmentVersionId, trace, evidence } };
 }
 
-module.exports = { computeCaseAssessment, cleanAnswers, mergeAnswers, validFor, decideEvidenceForTest: decideEvidence };
+module.exports = { computeCaseAssessment, cleanAnswers, mergeAnswers, validFor, decideEvidenceForTest: decideEvidence, pickEvidenceReading };

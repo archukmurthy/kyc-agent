@@ -8,7 +8,7 @@ const demoAllowance = require("../lib/demoAllowance");
 const trials = require("../lib/uboTrials");
 const { ensureTenantRow } = require("../lib/tenantRow");
 const auditLedger = require("../ubo-control-lab/server/auditLedger");
-const { PostgresPocCaseRepository } = require("../ubo-control-lab/server/pocCaseState");
+const { PostgresPocCaseRepository, serverTraceOf } = require("../ubo-control-lab/server/pocCaseState");
 
 // Which ledger event a job's answer is, if any (UBO-33): a new upload, or a
 // reading that has just finished one way or the other.
@@ -26,11 +26,10 @@ async function savedCase(db, tenantId, caseId) {
   const record = await new PostgresPocCaseRepository(db, tenantId).get(String(caseId));
   if (!record) return null;
   const projection = record.projection || {};
-  // As pocCaseState.js#serverTraceOf: only the server's own assessment counts.
-  const trace = projection.assessment?.trace || projection.resolution?.trace || null;
+  // Only the server's own assessment counts - the case module's own rule.
   return {
     company: projection.demoCase?.company || record.company || null,
-    finalised: trace?.computedBy === "server" && trace.verificationAssessment?.finalized === true,
+    finalised: serverTraceOf(projection)?.verificationAssessment?.finalized === true,
   };
 }
 

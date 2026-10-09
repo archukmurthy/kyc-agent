@@ -1,7 +1,7 @@
 "use strict";
 
 const { shareRepeatedAnalyses } = require("../../src/uboDemo/customer/recalculationStorage");
-const { computeCaseAssessment } = require("./caseAssessment");
+const { computeCaseAssessment, pickEvidenceReading } = require("./caseAssessment");
 const auditLedger = require("./auditLedger");
 const { completeIdentityVerification, isReadyForIdentityVerification } = require("../../src/uboDemo/customer/verificationAssessment");
 const { createHash } = require("node:crypto");
@@ -430,18 +430,19 @@ class PostgresPocCaseRepository {
   /** The server's extraction of an evidence file uploaded for this case:
    *  { result, evidenceHandoff }, { pending: true } while it is still being
    *  read, or null when no upload for this case has that id. */
-  async evidenceResult(caseId, artifactId) {
+  async evidenceResult(caseId, artifactId, requested = null) {
     // The id comes from the browser: one that is not a UUID failed the query
     // (a 500), so it is no upload of this case.
     if (!UUID.test(String(artifactId || ""))) return null;
-    const row = first(await this.db.query(`SELECT state, result, evidence_handoff FROM evidence_customer_extraction_jobs
+    // Every reading of the file in this case - one per upload purpose - and
+    // the one made for this request is chosen (caseAssessment.js). Which
+    // request an upload answered travels with it: an upload that was not made
+    // as evidence (the ownership chart itself, say) has none.
+    const readings = rows(await this.db.query(`SELECT state, result, evidence_handoff FROM evidence_customer_extraction_jobs
       WHERE tenant_id = $1 AND demo_case_id = $2 AND artifact_id = $3
-      ORDER BY (state IN ('COMPLETE', 'PARTIAL') AND result IS NOT NULL) DESC, (evidence_handoff IS NOT NULL) DESC, completed_at DESC NULLS LAST LIMIT 1`, [this.tenantId, caseId, artifactId]));
-    if (!row) return null;
-    if (!["COMPLETE", "PARTIAL"].includes(row.state) || !row.result) return { pending: true };
-    // Which request the upload answered travels with it: an upload that was
-    // not made as evidence (the ownership chart itself, say) has none.
-    return { result: row.result, evidenceHandoff: row.evidence_handoff };
+      ORDER BY (state IN ('COMPLETE', 'PARTIAL') AND result IS NOT NULL) DESC, (evidence_handoff IS NOT NULL) DESC, completed_at DESC NULLS LAST`, [this.tenantId, caseId, artifactId]))
+      .map((row) => ({ state: row.state, result: row.result, evidenceHandoff: row.evidence_handoff }));
+    return pickEvidenceReading(readings, requested);
   }
 
   async apply({ caseId, operation, idempotencyKey, actorType, actorId = null, correlationId = null, receivedAt = null, payload, release, expectedVersion = null }) {
@@ -774,7 +775,7 @@ class PocCaseService {
         caseId,
         operation,
         incoming,
-        findEvidenceResult: (artifactId) => (this.repository.evidenceResult ? this.repository.evidenceResult(caseId, artifactId) : null),
+        findEvidenceResult: (artifactId, requested) => (this.repository.evidenceResult ? this.repository.evidenceResult(caseId, artifactId, requested) : null),
       });
       incoming = { resolution: computed.resolution, assessment: computed.assessment };
     }
@@ -831,4 +832,5 @@ module.exports = {
   stableHash,
   projectCommand,
   recordedKey,
+  serverTraceOf,
 };

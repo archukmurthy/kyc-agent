@@ -178,3 +178,18 @@ test("a question raised by accepted evidence can be answered", async () => {
   const { resolution } = await run("SUBMIT_ANSWER", { resolution: { answers: { [control.id]: answerFor(control, value) }, submittedAnswer: { question: { id: control.id } } } }, reading, stored);
   assert.ok(resolution.answers[control.id], "the answer to the question the evidence raised is kept");
 });
+
+// Review, 2026-10-09: one file uploaded for two requests has a reading per
+// request; the check for each uses its own, not the newest.
+test("a file's reading made for this request is the one used, whatever was read after it", () => {
+  const { pickEvidenceReading } = require("../caseAssessment");
+  const forA = { state: "PARTIAL", result: { which: "A" }, evidenceHandoff: { requestedConcepts: ["share_transfer"] } };
+  const forB = { state: "COMPLETE", result: { which: "B" }, evidenceHandoff: { requestedConcepts: ["register_of_members"] } };
+  const running = { state: "RUNNING", result: null, evidenceHandoff: { requestedConcepts: ["share_transfer"] } };
+  assert.deepEqual(pickEvidenceReading([forB, forA], { requestedConcepts: ["share_transfer"] }).result, { which: "A" });
+  assert.deepEqual(pickEvidenceReading([forB, forA], { requestedConcepts: ["register_of_members"] }).result, { which: "B" });
+  assert.deepEqual(pickEvidenceReading([forB, running], { requestedConcepts: ["share_transfer"] }), { pending: true });
+  // Never uploaded for this request: what the file has, so it is refused as such.
+  assert.deepEqual(pickEvidenceReading([forB], { requestedConcepts: ["share_transfer"] }).evidenceHandoff, forB.evidenceHandoff);
+  assert.equal(pickEvidenceReading([], { requestedConcepts: ["share_transfer"] }), null);
+});
