@@ -44,11 +44,13 @@ class PostgresCustomerExtractionJobRepository {
 
   async ensureContext({ tenantId, demoCaseId, company }) {
     return this.db.transaction(async (tx) => {
+      // The subject record is one per company, shared by every workspace: an
+      // upload names it once and never renames it (any caller's request did).
       const subjectResult = await tx.query(`INSERT INTO evidence_subject_references
         (subject_type,identifier_scheme,jurisdiction,identifier_value,display_name,external_system,external_reference)
         VALUES('legal_entity','company_registration',$1,$2,$3,'ubo_demo',$4)
         ON CONFLICT(subject_type,identifier_scheme,jurisdiction,identifier_value)
-        DO UPDATE SET display_name=EXCLUDED.display_name RETURNING id`,
+        DO UPDATE SET display_name=COALESCE(evidence_subject_references.display_name,EXCLUDED.display_name) RETURNING id`,
       [company.countryCode, company.registrationNumber, company.legalName, demoCaseId]);
       const subjectId = rows(subjectResult)[0].id;
       const contextId = randomUUID();

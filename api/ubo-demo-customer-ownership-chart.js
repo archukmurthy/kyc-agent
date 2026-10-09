@@ -8,6 +8,7 @@ const demoAllowance = require("../lib/demoAllowance");
 const trials = require("../lib/uboTrials");
 const { ensureTenantRow } = require("../lib/tenantRow");
 const auditLedger = require("../ubo-control-lab/server/auditLedger");
+const { PostgresPocCaseRepository } = require("../ubo-control-lab/server/pocCaseState");
 
 // Which ledger event a job's answer is, if any (UBO-33): a new upload, or a
 // reading that has just finished one way or the other.
@@ -16,6 +17,25 @@ function documentEventType(started, job) {
   if (job?.state === "FAILED") return "DOCUMENT_EXTRACTION_FAILED";
   if (job?.state === "COMPLETE" || job?.state === "PARTIAL") return "DOCUMENT_EXTRACTED";
   return null;
+}
+
+// The case an upload is for, as the server holds it - read only: its company,
+// and whether its review is finalised. Null where no case is saved yet.
+async function savedCase(db, tenantId, caseId) {
+  if (!db || !caseId) return null;
+  const record = await new PostgresPocCaseRepository(db, tenantId).get(String(caseId));
+  if (!record) return null;
+  const projection = record.projection || {};
+  // As pocCaseState.js#serverTraceOf: only the server's own assessment counts.
+  const trace = projection.assessment?.trace || projection.resolution?.trace || null;
+  return {
+    company: projection.demoCase?.company || record.company || null,
+    finalised: trace?.computedBy === "server" && trace.verificationAssessment?.finalized === true,
+  };
+}
+
+function refuseFinalised(res) {
+  return res.status(409).json({ success: false, code: "case_finalized", message: "This review has been finalised, so no more documents can be added. The analyst can reopen it." });
 }
 
 const KNOWN_OPERATIONS = new Set(["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "RETRY_EXTRACTION_JOB", "REEVALUATE_SAVED_EXTRACTION", "LIST_JOBS_NEEDING_ATTENTION", "GET_CHART_FILE", "REUSE_CHART_READING"]);
@@ -75,7 +95,10 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
       // free, since nothing is read again.
       if (body.operation === "REUSE_CHART_READING") {
         if (actor.kind === "customer") return res.status(404).json({ success: false, code: "job_not_found", message: "Extraction job was not found." });
-        const reused = await dependencies.service.reuseReading({ sourceJobId: body.sourceJobId, demoContext: body.demoContext });
+        const target = await savedCase(dependencies.db, tenantId, body.demoContext?.demoCaseId);
+        if (target?.finalised) return refuseFinalised(res);
+        const demoContext = target?.company ? { ...body.demoContext, company: { ...body.demoContext?.company, ...target.company } } : body.demoContext;
+        const reused = await dependencies.service.reuseReading({ sourceJobId: body.sourceJobId, demoContext });
         return res.status(200).json({ success: true, job: reused });
       }
 
@@ -103,6 +126,11 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
       if (body.operation === "GET_EXTRACTION_JOB") job = await dependencies.service.status(body.jobId);
       else if (body.operation === "PROCESS_EXTRACTION_JOB") job = await dependencies.service.process(body.jobId);
       else if (body.operation === "RETRY_EXTRACTION_JOB") {
+        // A retry pays again: not once the case's review is finalised.
+        if (dependencies.db) {
+          const current = await dependencies.service.status(body.jobId);
+          if ((await savedCase(dependencies.db, tenantId, current?.demoCaseId))?.finalised) return refuseFinalised(res);
+        }
         job = await dependencies.service.retry(body.jobId);
         // A retry reads the document again, and pays again: one of the demo's
         // uploads, as the first reading was. Checked with the paid limit above.
@@ -114,7 +142,15 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
       else {
         // A trial workspace has no tenants row until its first write.
         if (dependencies.db) await ensureTenantRow(dependencies.db, tenantId);
-        job = await dependencies.service.start(body);
+        // The case as the server holds it, before anything is stored, read or
+        // counted: a finalised review takes no more uploads (they were accepted
+        // and paid for), and the company is the case's - a customer's request
+        // used to rename the shared subject record and size its columns.
+        const target = await savedCase(dependencies.db, tenantId, body.demoContext?.demoCaseId);
+        if (target?.finalised) return refuseFinalised(res);
+        if (!target && actor.kind === "customer" && dependencies.db) return res.status(404).json({ success: false, code: "job_not_found", message: "Extraction job was not found." });
+        const request = target?.company ? { ...body, demoContext: { ...body.demoContext, company: { ...body.demoContext?.company, ...target.company } } } : body;
+        job = await dependencies.service.start(request);
         started = true;
         // Paid only when something is read: an earlier reading of the same file
         // reused costs nothing, and used to be counted as a step anyway.

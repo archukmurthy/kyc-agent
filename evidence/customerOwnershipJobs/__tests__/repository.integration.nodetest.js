@@ -68,6 +68,31 @@ test("a job whose lease ran out on its last attempt is failed by the next claim,
   assert.equal((await repository.getJob({ id: started.jobId, tenantId: TENANT })).state, "RUNNING");
 });
 
+test("an upload never renames the shared subject record, and a finalised case takes no upload", async (t) => {
+  if (skip()) return t.skip(skip());
+  const { repository } = services();
+  const caseId = `case-final-${RUN}`;
+  await repository.ensureContext({ tenantId: TENANT, demoCaseId: caseId, company: COMPANY });
+  await repository.ensureContext({ tenantId: TENANT, demoCaseId: caseId, company: { ...COMPANY, legalName: "RENAMED BY A REQUEST" } });
+  const names = await db.query("SELECT display_name FROM evidence_subject_references WHERE identifier_value = $1", [COMPANY.registrationNumber]);
+  assert.deepEqual(names.rows.map((row) => row.display_name), [COMPANY.legalName]);
+
+  await db.query(`INSERT INTO ubo_poc_cases (case_id, tenant_id, company, current_projection) VALUES ($1, $2, $3::jsonb, $4::jsonb)`,
+    [caseId, TENANT, JSON.stringify(COMPANY), JSON.stringify({ assessment: { trace: { computedBy: "server", verificationAssessment: { finalized: true } } } })]);
+  const route = require("../../../api/ubo-demo-customer-ownership-chart");
+  const started = [];
+  const handler = route.createHandler(null, undefined, () => ({ db, service: { start: async () => { started.push(1); return {}; } }, close: async () => {} }), {
+    applyCors: () => false, enforceRateLimit: async () => true,
+    requireUboCaller: async () => ({ kind: "customer", tenantId: TENANT, caseId, role: "customer" }),
+    demoAllowance: { record: async () => started.push("counted") }, trials: { countPaidStep: async () => started.push("step") },
+  });
+  const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, setHeader() {}, json(body) { this.body = body; return this; } };
+  await handler({ method: "POST", headers: {}, body: upload(caseId, {}, "final") }, res);
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body.code, "case_finalized");
+  assert.deepEqual(started, []);
+});
+
 test("a save stopped mid-way, or failed under another filename, no longer blocks the file", async (t) => {
   if (skip()) return t.skip(skip());
   const { service, repository } = services();

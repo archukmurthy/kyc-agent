@@ -86,8 +86,65 @@ test("the caller's workspace row exists before a chart job is started", async ()
     return { db: { query: async (text, params) => { queries.push({ text, params }); return { rows: [] }; } }, service: { start: async () => job }, close: async () => {} };
   }, { applyCors: () => false, enforceRateLimit: async () => true, requireUboCaller: async () => ({ kind: "staff", tenantId: "trial-acme-1a2b3c4d", role: "analyst" }), demoAllowance: { record: async () => {} } });
   await handler({ method: "POST", headers: {}, body: { demoContext: {}, file: {} } }, fakeRes());
-  assert.strictEqual(queries.length, 1);
-  assert.deepStrictEqual(queries[0].params, ["trial-acme-1a2b3c4d"]);
+  const tenantRows = queries.filter(({ text }) => /INSERT INTO tenants/.test(text));
+  assert.strictEqual(tenantRows.length, 1);
+  assert.deepStrictEqual(tenantRows[0].params, ["trial-acme-1a2b3c4d"]);
+});
+
+// The case as the server holds it decides an upload (2026-10-09): a finalised
+// review took uploads - and paid for them - and a customer's request named the
+// company written to the shared subject record.
+function caseDb(caseRow) {
+  return { query: async (text) => ({ rows: /FROM ubo_poc_cases/.test(text) && caseRow ? [caseRow] : [] }) };
+}
+const SAVED_COMPANY = { legalName: "SAVED LIMITED", registrationNumber: "01234567", countryCode: "GB" };
+const FINALISED = { assessment: { trace: { computedBy: "server", verificationAssessment: { finalized: true } } } };
+
+function gatedHandler(actor, caseRow, calls) {
+  const job = { jobId: "job-1", state: "QUEUED", demoCaseId: "case-1" };
+  return route.createHandler(null, undefined, () => ({
+    db: caseDb(caseRow),
+    service: {
+      ownedByCase: async () => true,
+      start: async (body) => { calls.push(["start", body.demoContext.company]); return job; },
+      status: async () => job,
+      retry: async () => { calls.push(["retry"]); return { ...job, retried: true }; },
+      reuseReading: async (args) => { calls.push(["reuse", args.demoContext.company]); return job; },
+    },
+    close: async () => {},
+  }), {
+    applyCors: () => false, enforceRateLimit: async () => true, requireUboCaller: async () => actor,
+    demoAllowance: { record: async () => calls.push(["counted"]) },
+    trials: { countPaidStep: async () => calls.push(["step"]) },
+  });
+}
+
+test("a finalised case takes no upload, retry or reused reading - nothing is stored, read or counted", async () => {
+  const row = { case_id: "case-1", tenant_id: "acme", company: SAVED_COMPANY, current_projection: FINALISED };
+  for (const [actor, body] of [
+    [CUSTOMER, { demoContext: { demoCaseId: "case-1", company: SAVED_COMPANY }, file: {} }],
+    [CUSTOMER, { operation: "RETRY_EXTRACTION_JOB", jobId: "job-1" }],
+    [{ kind: "staff", tenantId: "acme", role: "analyst" }, { operation: "REUSE_CHART_READING", sourceJobId: "job-0", demoContext: { demoCaseId: "case-1", company: SAVED_COMPANY } }],
+  ]) {
+    const calls = [];
+    const res = fakeRes();
+    await gatedHandler(actor, row, calls)({ method: "POST", headers: {}, body }, res);
+    assert.strictEqual(res.statusCode, 409, body.operation || "upload");
+    assert.strictEqual(res.body.code, "case_finalized");
+    assert.deepStrictEqual(calls, [], body.operation || "upload");
+  }
+});
+
+test("an upload is read for the company the case holds, whatever the request names", async () => {
+  const calls = [];
+  const row = { case_id: "case-1", tenant_id: "acme", company: SAVED_COMPANY, current_projection: {} };
+  const res = fakeRes();
+  await gatedHandler(CUSTOMER, row, calls)({ method: "POST", headers: {}, body: { demoContext: { demoCaseId: "case-1", company: { legalName: "RENAMED BY CUSTOMER", registrationNumber: "99999999", countryCode: "GBGBGBGBGBGB" } }, file: {} } }, res);
+  assert.strictEqual(res.statusCode, 202);
+  assert.deepStrictEqual(calls[0], ["start", SAVED_COMPANY]);
+  const none = fakeRes();
+  await gatedHandler(CUSTOMER, null, [])({ method: "POST", headers: {}, body: { demoContext: { demoCaseId: "case-1" }, file: {} } }, none);
+  assert.strictEqual(none.statusCode, 404, "a customer's case must exist");
 });
 
 // Customers: a session for ONE case.

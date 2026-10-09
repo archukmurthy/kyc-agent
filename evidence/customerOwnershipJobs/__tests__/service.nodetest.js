@@ -329,6 +329,16 @@ test("a job whose last attempt stopped mid-reading fails once its lease runs out
   assert.equal((await h.service.process(started.jobId)).state, "COMPLETE");
 });
 
+test("an over-long company field is refused before anything is stored (the jurisdiction column is VARCHAR(10))", async () => {
+  const h = harness([usableResult()]);
+  for (const company of [{ countryCode: "GBGBGBGBGBG" }, { registrationNumber: "1".repeat(65) }, { legalName: "L".repeat(301) }]) {
+    const body = input();
+    Object.assign(body.demoContext.company, company);
+    await assert.rejects(h.service.start(body), { code: "invalid_demo_context", statusCode: 400 });
+  }
+  assert.equal(h.ingestion.operations.size, 0);
+});
+
 test("a running job inside its lease is left alone", async () => {
   const h = harness([usableResult()]);
   const started = await h.service.start(input());

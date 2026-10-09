@@ -83,6 +83,11 @@ function validateRequest(input) {
   if (!input?.demoContext?.demoCaseId || !company?.legalName || !company?.registrationNumber || !company?.countryCode) {
     throw demoError("invalid_demo_context", "Seeded demo company and case context is required.");
   }
+  // These land in bounded columns (the subject's jurisdiction is VARCHAR(10)):
+  // an over-long value answered 500 from the database instead of this 400.
+  const bounded = { demoCaseId: [input.demoContext.demoCaseId, 200], legalName: [company.legalName, 300], registrationNumber: [company.registrationNumber, 64], countryCode: [company.countryCode, 10], countryName: [company.countryName || "", 100], referenceCaseId: [input.demoContext.referenceCaseId || "", 200] };
+  const tooLong = Object.keys(bounded).find((name) => String(bounded[name][0]).length > bounded[name][1]);
+  if (tooLong) throw demoError("invalid_demo_context", `The case's ${tooLong} is too long.`);
   if (!file?.originalFilename || !SUPPORTED_MEDIA.has(file.declaredMediaType) || !file.contentBase64) {
     throw demoError("invalid_file", "Upload one PDF, PNG or JPEG ownership chart.");
   }
