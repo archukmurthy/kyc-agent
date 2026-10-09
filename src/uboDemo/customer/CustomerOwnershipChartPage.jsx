@@ -36,6 +36,11 @@ export const RUNNING_POLL_MS = 4000;
 // status limit (600): at 3 s a long reading used about 55 of them.
 export const PROGRESS_POLL_MS = 5000;
 const TRANSIENT_LOOKS = 5;
+// Processing answers that moved nothing on: waits of 4, 8, 16 then 30 s, and
+// the page stops after this many (about three and a half minutes - longer
+// than a reading takes).
+const IDLE_POLL_CAP_MS = 30 * 1000;
+const MAX_IDLE_ANSWERS = 10;
 
 function fileAsBase64(file) {
   return new Promise((resolve, reject) => {
@@ -55,7 +60,12 @@ function validateFile(file) {
 
 function analysisFailureMessage(payload, status) {
   // The rate limiter names itself in `error`, every other refusal in `code`.
+  // A customer's refused paid step carries both - the trial's reason in
+  // `code`, the customer's own wording in `error` - and the customer is never
+  // told about "the trial", so a limit named in `error` comes first.
   const code = String(payload?.code || payload?.error || "customer_ownership_chart_failed");
+  const limit = limitNotice(payload?.error, payload?.message) || limitNotice(code, payload?.message);
+  if (limit) return `${limit.title}. ${limit.body}`;
   const messages = {
     provider_timeout: "The document was received, but analysis reached its time limit. Please retry once.",
     provider_output_truncated: "The document was received, but the analysis result was too large to complete safely.",
@@ -66,17 +76,27 @@ function analysisFailureMessage(payload, status) {
     media_limit_exceeded: "The document was received, but its image dimensions exceed the analysis limit.",
     invalid_media: "The selected file is labelled as an image, but its contents are not a valid supported image.",
     unsupported_model_media: "The document was received, but this file format is not supported by the configured analysis model.",
+    // Refusals before anything is read, said as what they mean to the
+    // customer: no codes (review, 2026-10-09 - "Reference: chart_not_evidence (409)").
+    limits_unavailable: "We could not check usage limits just now, so nothing was started. Please try again in a minute.",
+    case_finalized: "Your answers for this review have already been submitted, so the chart can no longer be changed. If something needs correcting, contact the person who sent you this link.",
+    case_round_changed: "This review changed while you were working on it. Please reload the page to see where it stands.",
+    chart_not_evidence: "This file was uploaded as supporting evidence, not as the ownership chart. Choose the ownership chart itself.",
+    not_a_chart: "This file was uploaded as supporting evidence, not as the ownership chart. Choose the ownership chart itself.",
+    chart_company_mismatch: "This chart was read for a different company. Upload the ownership chart for the company in this review.",
+    job_not_found: "We could not find this chart reading any more. Please upload the chart again.",
+    artifact_unavailable: "We could not open the uploaded file again. Please upload the chart again.",
+    connection_lost: "The connection to our server was interrupted. Your document may still be being read - please try again in a moment.",
   };
-  // A limit reached is the product working, not a failure to analyse. Showing
-  // "We could not analyse this chart" to a prospect whose trial just ended
-  // reads as broken software at the moment they are deciding whether to buy.
-  const notice = limitNotice(code, payload?.message);
-  if (notice) return `${notice.title}. ${notice.body}`;
+  // A limit reached is the product working, not a failure to analyse (above).
+  if (messages[code] && !code.startsWith("provider_")) return messages[code];
   if (status >= 500 || code === "analysis_temporarily_unavailable" || code.startsWith("provider_")) {
     return "We couldn't complete the analysis right now. Your document has been saved safely. Please try again.";
   }
-  const message = messages[code] || payload?.message || "We could not analyse this ownership chart.";
-  return code ? `${message} Reference: ${code}${status ? ` (${status})` : ""}.` : message;
+  if (messages[code]) return messages[code];
+  // A refusal with no wording here: the server's own sentence when it wrote
+  // one, never its code.
+  return payload?.message || "We could not analyse this ownership chart. Please try again, or contact the person who sent you this link.";
 }
 
 function relationshipValue(assertion) {
@@ -402,6 +422,12 @@ export default function CustomerOwnershipChartPage() {
     // waited for, not re-asked twelve times in a row and given up on. Bounded
     // past the job's lease, after which processing takes it over again.
     const deadline = Date.now() + 10 * 60 * 1000;
+    // Answers in a row that moved nothing on (no job named, or the same
+    // unfinished state - the reading is held elsewhere). Each one waits twice
+    // as long before asking again, and after a few the page stops and says
+    // so: it re-asked every ~4 s for ten minutes, each call counted (review,
+    // 2026-10-09).
+    let idle = 0;
     while (Date.now() < deadline) {
       writeCustomerOwnershipJob({ jobId: job.jobId, demoCaseId: context.demoCaseId, artifactId: job.artifactId, correlationId: job.correlationId });
       if (job.state === "COMPLETE" || job.state === "PARTIAL") { await saveUsableResult(job.result, nextPreview, job); return; }
@@ -417,7 +443,8 @@ export default function CustomerOwnershipChartPage() {
       if (job.progress) setReadingProgress(job.progress);
       const { createdAt } = job;
       if (createdAt) setReadingStartedAt((current) => current || createdAt);
-      if (job.state === "RUNNING") await new Promise((resolve) => window.setTimeout(resolve, RUNNING_POLL_MS));
+      const wait = idle ? Math.min(RUNNING_POLL_MS * 2 ** (idle - 1), IDLE_POLL_CAP_MS) : job.state === "RUNNING" ? RUNNING_POLL_MS : 0;
+      if (wait) await new Promise((resolve) => window.setTimeout(resolve, wait));
       // Processing answers only when the reading ends; meanwhile its draft is
       // asked for separately (a free status check).
       const stopWatching = watchProgress(job.jobId);
@@ -438,10 +465,12 @@ export default function CustomerOwnershipChartPage() {
       }
       // An answer naming no job (another instance finished it first) leaves
       // the job as it was, to be asked about again - not a crash shown as an error.
+      const movedOn = answered && (answered.state !== job.state || answered.nextAttemptAt !== job.nextAttemptAt || ["COMPLETE", "PARTIAL", "FAILED"].includes(answered.state));
       if (answered) job = answered;
-      else await new Promise((resolve) => window.setTimeout(resolve, RUNNING_POLL_MS));
+      idle = movedOn ? 0 : idle + 1;
+      if (idle >= MAX_IDLE_ANSWERS) break;
     }
-    throw new Error("Analysis is still safely queued. Refresh this page to continue checking it.");
+    throw new Error("Your chart is saved and is still being read. Refresh this page in a few minutes to see the result.");
   };
 
   useEffect(() => {
@@ -489,8 +518,12 @@ export default function CustomerOwnershipChartPage() {
             savedResult: result,
           }),
         });
-        const payload = await response.json();
-        if (!response.ok || !payload.success) throw new Error(analysisFailureMessage(payload, response.status));
+        // A platform error page is not JSON (review, 2026-10-09).
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.success) {
+          noteCustomerRefusal(response.status, payload);
+          throw new Error(analysisFailureMessage(payload, response.status));
+        }
         if (!active) return;
         const durableResult = { ...payload.result, durableExtraction: result.durableExtraction };
         if (result.durableExtraction?.jobId) await persistPocCase("ASSOCIATE_CHART", {

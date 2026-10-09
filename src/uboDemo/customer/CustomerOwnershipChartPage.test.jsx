@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import "@testing-library/jest-dom";
 import { uboStore } from "../browserStore";
 jest.mock("../pocCaseClient", () => ({ ...jest.requireActual("../pocCaseClient"), persistPocCase: async () => ({ researchRelease: { mayProceed: true } }) }));
-import CustomerOwnershipChartPage, { PROGRESS_POLL_MS, RUNNING_POLL_MS } from "./CustomerOwnershipChartPage";
+import CustomerOwnershipChartPage, { analysisFailureMessage, PROGRESS_POLL_MS, RUNNING_POLL_MS } from "./CustomerOwnershipChartPage";
 import { graphForChartPresentation, projectGraph, provisionalUboLabel, reconcileSubjectIdentity } from "./ChartAnalysisPanel";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import {
@@ -306,6 +306,52 @@ test("an answer that names no job does not end the wait in an error", async () =
   await screen.findByRole("heading", { name: /Continue to questions/i }, { timeout: 8000 });
   expect(processed).toBe(2);
 }, 15000);
+
+// Review (2026-10-09): processing that kept answering with no job was asked
+// again every ~4 s for up to ten minutes, each call counted against the
+// status limit.
+test("processing that keeps answering with no job is asked less and less often, then the page says what to do", async () => {
+  jest.useFakeTimers();
+  try {
+    seed();
+    let processed = 0;
+    window.fetch = jest.fn(async (_url, request) => {
+      const body = JSON.parse(request.body);
+      if (body.operation === "PROCESS_EXTRACTION_JOB") { processed += 1; return { ok: true, json: async () => ({ success: true, job: null }) }; }
+      if (body.operation === "GET_EXTRACTION_JOB") return { ok: true, json: async () => ({ success: true, job: { jobId: "job-1", artifactId: "artifact-1", correlationId: "corr-1", state: "RUNNING" } }) };
+      return { ok: true, json: async () => ({ success: true, job: { jobId: "job-1", artifactId: "artifact-1", correlationId: "corr-1", state: "QUEUED" } }) };
+    });
+    const { container } = render(<CustomerOwnershipChartPage />);
+    fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [new File([Uint8Array.from([137, 80, 78, 71])], "ownership-chart.png", { type: "image/png" })] } });
+    fireEvent.click(screen.getByRole("button", { name: /Upload and analyse/i }));
+    for (let tick = 0; tick < 200 && !screen.queryByRole("alert"); tick += 1) {
+      await act(async () => { await new Promise((resolve) => jest.requireActual("timers").setImmediate(resolve)); jest.advanceTimersByTime(RUNNING_POLL_MS); });
+    }
+    // 200 ticks of 4 s is over 13 minutes: the old loop asked about 150 times.
+    expect(processed).toBeLessThanOrEqual(10);
+    expect(screen.getByRole("alert")).toHaveTextContent(/Refresh this page in a few minutes/);
+  } finally {
+    jest.useRealTimers();
+  }
+}, 20000);
+
+// Review (2026-10-09): unmapped refusals showed the customer a raw code, e.g.
+// "Reference: chart_not_evidence (409)".
+test("every refusal the server can give is told to the customer in plain words, never as a code", () => {
+  const codes = ["chart_not_evidence", "case_finalized", "trial_ended", "trial_budget_spent", "review_limit_reached", "limits_unavailable", "job_not_found", "chart_company_mismatch", "artifact_unavailable", "case_round_changed", "invalid_demo_context", "some_new_code"];
+  codes.forEach((code) => {
+    [400, 403, 404, 409, 503].forEach((status) => {
+      const message = analysisFailureMessage({ code, message: "Extraction job was not found." }, status);
+      expect(message).not.toMatch(/Reference|_/);
+      expect(message).not.toContain(String(status));
+    });
+  });
+  // A customer is never told about "the trial": the review's own wording.
+  expect(analysisFailureMessage({ code: "trial_budget_spent", error: "review_limit_reached", message: "This review cannot read more documents right now." }, 403)).toMatch(/Document reading is paused for this review/);
+  // Nothing was started: not "your document has been saved".
+  expect(analysisFailureMessage({ error: "limits_unavailable", message: "We could not check usage limits just now, so nothing was started. Please try again in a minute." }, 503)).toMatch(/nothing was started/);
+  expect(analysisFailureMessage({ code: "case_finalized" }, 409)).toMatch(/already been submitted/);
+});
 
 test("refresh resumes the same persisted extraction job without uploading bytes again", async () => {
   seed();
