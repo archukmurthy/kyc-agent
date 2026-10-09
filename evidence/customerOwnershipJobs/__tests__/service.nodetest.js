@@ -44,6 +44,16 @@ class MemoryJobs {
     const job = { ...structuredClone(record), id: randomUUID(), state: "QUEUED", attemptCount: 0, createdAt: now, updatedAt: now, completedAt: null, nextAttemptAt: null, result: null };
     this.jobs.set(job.id, job); return { created: true, job: structuredClone(job) };
   }
+  // As repository.js#createCompletedCopy: one write, finished; an unfinished
+  // copy under the key is finished, a finished one left as it is.
+  async createCompletedCopy(record) {
+    if (!/^[0-9a-f]{64}$/.test(record.cacheKey)) throw Object.assign(new Error("violates check constraint on cache_key"), { code: "23514" });
+    const existing = [...this.jobs.values()].find((job) => job.tenantId === record.tenantId && job.contextId === record.contextId && job.cacheKey === record.cacheKey);
+    const now = new Date().toISOString();
+    if (existing && ["COMPLETE", "PARTIAL"].includes(existing.state)) return structuredClone(existing);
+    const job = Object.assign(existing || { id: randomUUID(), createdAt: now }, { ...structuredClone(record), evidenceHandoff: null, attemptCount: 0, leaseExpiresAt: null, nextAttemptAt: null, completedAt: now, updatedAt: now });
+    this.jobs.set(job.id, job); return structuredClone(job);
+  }
   async getJob({ id }) { return this.jobs.has(id) ? structuredClone(this.jobs.get(id)) : null; }
   // As repository.js#claimJob: a running job is taken over only once its lease
   // has run out, and one whose lease ran out on its last attempt fails. (A
@@ -258,7 +268,8 @@ test("a finished chart reading is reused for a new case: same file and result, n
   assert.equal(reused.state, "COMPLETE");
   assert.equal(reused.demoCaseId, "case-2");
   assert.equal(reused.artifactId, source.artifactId);
-  assert.deepEqual(reused.result, source.result);
+  assert.deepEqual({ ...reused.result, demoCaseId: undefined, referenceCaseId: undefined, company: undefined }, { ...source.result, demoCaseId: undefined, referenceCaseId: undefined, company: undefined });
+  assert.equal(reused.result.demoCaseId, "case-2", "the copy names its own case");
   assert.equal(reused.reused, true);
   assert.equal(h.calls(), 1, "the provider is not asked again");
   const again = await h.service.reuseReading({ sourceJobId: source.jobId, demoContext: { demoCaseId: "case-2", company } });
@@ -346,6 +357,30 @@ test("a failure marked not retryable fails at once, even wrapped as a 502", asyn
     const job = await h.service.process(started.jobId);
     assert.equal(job.state, "FAILED", error.code); assert.equal(h.calls(), 1, error.code);
   }
+});
+
+// The reuse was three writes (create QUEUED, claim, complete): a failure in
+// between left a QUEUED copy every later reuse returned, and processing it
+// started a real, uncounted reading.
+test("an unfinished reused copy is never read, and reusing again finishes it", async () => {
+  const h = harness([usableResult()]);
+  const started = await h.service.start(input());
+  const source = await h.service.process(started.jobId);
+  const company = input().demoContext.company;
+  const { derivedKey } = require("../service.js");
+  const sourceJob = h.repository.jobs.get(source.jobId);
+  // As the old reuse left it.
+  const { job: stuck } = await h.repository.createOrGetJob({ ...sourceJob, cacheKey: derivedKey(sourceJob.cacheKey, "reused-for", "case-2"), demoCaseId: "case-2", evidenceHandoff: null, correlationId: "customer-chart-reuse:old" });
+  const processed = await h.service.process(stuck.id);
+  assert.equal(processed.state, "FAILED");
+  assert.equal((await h.service.retry(stuck.id)).retried, false, "a copy is not read on retry either");
+  assert.equal(h.calls(), 1, "only the source was ever read");
+  const mended = await h.service.reuseReading({ sourceJobId: source.jobId, demoContext: { demoCaseId: "case-2", referenceCaseId: "REF-2", company } });
+  assert.equal(mended.jobId, stuck.id);
+  assert.equal(mended.state, "COMPLETE");
+  // The copy names the case it was copied to, not the one it was read for.
+  assert.equal(mended.result.demoCaseId, "case-2");
+  assert.equal(mended.result.referenceCaseId, "REF-2");
 });
 
 test("a running job inside its lease is left alone", async () => {

@@ -68,6 +68,31 @@ test("a job whose lease ran out on its last attempt is failed by the next claim,
   assert.equal((await repository.getJob({ id: started.jobId, tenantId: TENANT })).state, "RUNNING");
 });
 
+async function finish(jobId, result = { contractVersion: "test", candidateFacts: [] }) {
+  await db.query("UPDATE evidence_customer_extraction_jobs SET state='COMPLETE', result=$2::jsonb, completed_at=NOW() WHERE id=$1", [jobId, JSON.stringify(result)]);
+}
+
+test("a reused reading is written finished in one statement, and an unfinished copy is mended", async (t) => {
+  if (skip()) return t.skip(skip());
+  const { service, repository } = services();
+  const source = await service.start(upload(`case-src-${RUN}`, {}, "reuse"));
+  await finish(source.jobId, { contractVersion: "test", demoCaseId: `case-src-${RUN}`, candidateFacts: [] });
+  const { derivedKey } = require("../service");
+  const sourceJob = await repository.getJob({ id: source.jobId, tenantId: TENANT });
+  const target = `case-dst-${RUN}`;
+  // As the old three-step reuse could leave it: a QUEUED copy.
+  const { job: stuck } = await repository.createOrGetJob({ ...sourceJob, id: undefined, cacheKey: derivedKey(sourceJob.cacheKey, "reused-for", target), demoCaseId: target, evidenceHandoff: null, correlationId: "customer-chart-reuse:old" });
+  assert.equal(stuck.state, "QUEUED");
+  const mended = await service.reuseReading({ sourceJobId: source.jobId, demoContext: { demoCaseId: target, company: COMPANY } });
+  assert.equal(mended.jobId, stuck.id);
+  assert.equal(mended.state, "COMPLETE");
+  assert.equal(mended.result.demoCaseId, target);
+  const again = await service.reuseReading({ sourceJobId: source.jobId, demoContext: { demoCaseId: target, company: COMPANY } });
+  assert.equal(again.jobId, stuck.id);
+  const copies = await db.query("SELECT count(*)::int n FROM evidence_customer_extraction_jobs WHERE tenant_id=$1 AND demo_case_id=$2", [TENANT, target]);
+  assert.equal(copies.rows[0].n, 1);
+});
+
 test("an upload never renames the shared subject record, and a finalised case takes no upload", async (t) => {
   if (skip()) return t.skip(skip());
   const { repository } = services();

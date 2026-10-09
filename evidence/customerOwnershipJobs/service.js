@@ -29,6 +29,11 @@ const DETERMINISTIC_CODES = new Set([
   "EVALUATION_PRECONDITION_FAILED",
 ]);
 
+// A copy of a finished reading for another case is never read: it carries this
+// mark, and processing or retrying one never reaches the provider.
+const REUSE_CORRELATION_PREFIX = "customer-chart-reuse:";
+const isReuseCopy = (job) => String(job?.correlationId || "").startsWith(REUSE_CORRELATION_PREFIX);
+
 // ponytail: a fixed bound on fresh readings of one file in one case; each is paid.
 const MAX_FRESH_READINGS = 5;
 
@@ -263,19 +268,19 @@ class CustomerOwnershipExtractionJobService {
     if (!registration(source.company) || registration(source.company) !== registration(demoContext.company)) {
       throw Object.assign(new Error("That chart was read for a different company."), { code: "chart_company_mismatch", statusCode: 409 });
     }
-    const claimed = await this.repository.createOrGetJob({
+    // Written finished, in one statement - never a queued copy a later step
+    // must finish (a failure in between left one that blocked the case).
+    const job = await this.repository.createCompletedCopy({
       tenantId: this.tenantId, contextId: source.contextId, artifactId: source.artifactId, artifactSha256: source.artifactSha256,
-      cacheKey: derivedKey(source.cacheKey, "reused-for", caseId), demoCaseId: caseId, company: demoContext.company, evidenceHandoff: null,
+      cacheKey: derivedKey(source.cacheKey, "reused-for", caseId), demoCaseId: caseId, company: demoContext.company,
       profileVersion: source.profileVersion, schemaVersion: source.schemaVersion, instructionVersion: source.instructionVersion,
       verificationStrategyVersion: source.verificationStrategyVersion, provider: source.provider, modelVersion: source.modelVersion,
-      maxAttempts: this.maxAttempts, correlationId: `customer-chart-reuse:${randomUUID()}`,
+      maxAttempts: this.maxAttempts, correlationId: `${REUSE_CORRELATION_PREFIX}${randomUUID()}`, state: source.state,
+      // The new case's customer sees this result: it names their case, not
+      // the one it was first read for.
+      result: { ...source.result, demoCaseId: caseId, referenceCaseId: String(demoContext.referenceCaseId || ""), company: demoContext.company },
     });
-    let job = claimed.job;
-    if (claimed.created) {
-      const running = await this.repository.claimJob({ id: job.id, tenantId: this.tenantId, leaseSeconds: this.leaseSeconds });
-      job = await this.repository.completeJob({ id: running.id, state: source.state, result: source.result });
-    }
-    console.info("[ubo-customer-extraction] job-reused", { jobId: job.id, sourceJobId: source.id, created: claimed.created });
+    console.info("[ubo-customer-extraction] job-reused", { jobId: job.id, sourceJobId: source.id });
     return publicJob({ ...job, reused: true });
   }
 
@@ -309,6 +314,8 @@ class CustomerOwnershipExtractionJobService {
   /** Retries a failed job. `retried` says whether it was queued again - the
    *  reading, and its cost, happen again only then. */
   async retry(jobId) {
+    // An unfinished copy is mended by reusing the reading again, not read.
+    if (isReuseCopy(await this.repository.getJob({ id: jobId, tenantId: this.tenantId }))) return { ...(await this.status(jobId)), retried: false };
     const job = await this.repository.retryFailed({ id: jobId, tenantId: this.tenantId, correlationId: `customer-chart:${randomUUID()}` });
     if (!job) return { ...(await this.status(jobId)), retried: false };
     console.info("[ubo-customer-extraction] job-retry", { jobId: job.id, correlationId: job.correlationId });
@@ -340,6 +347,12 @@ class CustomerOwnershipExtractionJobService {
     let job = await this.repository.getJob({ id: jobId, tenantId: this.tenantId });
     if (!job) throw Object.assign(new Error("Extraction job was not found."), { code: "job_not_found", statusCode: 404 });
     if (TERMINAL_STATES.has(job.state)) return publicJob({ ...job, reused: true });
+    // An unfinished copy (left by the old three-step reuse) would start a
+    // real, uncounted reading here. It fails instead; reusing again mends it.
+    if (isReuseCopy(job)) {
+      const failed = await this.repository.failJob({ id: job.id, code: "reuse_copy_incomplete", message: "This copy of an earlier reading was never finished; reuse the reading again.", upstreamStatus: null });
+      return publicJob(failed || job);
+    }
     const claimed = await this.repository.claimJob({ id: jobId, tenantId: this.tenantId, leaseSeconds: this.leaseSeconds });
     if (!claimed) return this.status(jobId);
     job = claimed;
