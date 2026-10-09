@@ -152,9 +152,19 @@ function createHandler(deps = DEFAULT_DEPS) {
         const { token, expiresAt, replaced } = await customerLink.mintLink({ caseId, tenantId, email });
         // Recorded before the link is handed over: a link the ledger does not
         // know about is one the analyst's warnings cannot see.
+        // The link is made first and recorded after, so the ledger never names
+        // a link that does not exist. If recording fails, the earlier links
+        // are already replaced and this one is not handed over: the analyst is
+        // told to make it again, which works (review, 2026-10-09).
         if (deps.recordLinkEvent) {
-          if (replaced) await deps.recordLinkEvent(tenantId, { caseId, eventType: "CUSTOMER_LINK_REVOKED", actor: linkActor, receivedAt, operationId: `link-revoked:${randomUUID()}` });
-          await deps.recordLinkEvent(tenantId, { caseId, eventType: "CUSTOMER_LINK_ISSUED", actor: linkActor, receivedAt, operationId: `link-issued:${randomUUID()}`, expiresAt });
+          try {
+            if (replaced) await deps.recordLinkEvent(tenantId, { caseId, eventType: "CUSTOMER_LINK_REVOKED", actor: linkActor, receivedAt, operationId: `link-revoked:${randomUUID()}` });
+            await deps.recordLinkEvent(tenantId, { caseId, eventType: "CUSTOMER_LINK_ISSUED", actor: linkActor, receivedAt, operationId: `link-issued:${randomUUID()}`, expiresAt });
+          } catch (error) {
+            const reference = logFailure("ubo-customer-link", error, req);
+            attachRequestId(req, res);
+            return send(res, 503, { error: "link_not_recorded", reference, message: "The new link could not be recorded, so it was not created. Any earlier link for this case no longer works. Please make the link again." });
+          }
         }
         return send(res, 200, { token, caseId, expiresAt, replaced });
       }

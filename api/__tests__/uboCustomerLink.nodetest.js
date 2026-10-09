@@ -325,3 +325,20 @@ test("a link the ledger could not record is not handed out", async () => {
   assert.strictEqual(res.statusCode, 500);
   assert.strictEqual(res.body.token, undefined);
 });
+
+// Review, 2026-10-09: a link that could not be recorded is not handed over,
+// and the analyst is told plainly what happened and what to do.
+test("a new link that cannot be recorded is not handed over, and says to make it again", async () => {
+  const h = route.createHandler({
+    applyCors: () => false,
+    enforceRateLimit: async () => true,
+    requireStaff: async () => ANALYST,
+    caseExists: async () => true,
+    recordLinkEvent: async () => { throw new Error("ledger unavailable"); },
+    clerk: signedInAs("customer@example.test"),
+  });
+  const res = await call(h, { action: "create", caseId: "case-1", email: "customer@example.test" });
+  assert.strictEqual(res.statusCode, 503);
+  assert.strictEqual(res.body.token, undefined);
+  assert.match(res.body.message, /make the link again/);
+});
