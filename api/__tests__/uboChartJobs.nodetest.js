@@ -115,7 +115,7 @@ function gatedHandler(actor, caseRow, calls) {
   }), {
     applyCors: () => false, enforceRateLimit: async () => true, requireUboCaller: async () => actor,
     demoAllowance: { record: async () => calls.push(["counted"]) },
-    trials: { countPaidStep: async () => calls.push(["step"]) },
+    trials: { admitPaidStep: async () => { calls.push(["step"]); return { refused: null }; } },
   });
 }
 
@@ -141,7 +141,7 @@ test("an upload is read for the company the case holds, whatever the request nam
   const res = fakeRes();
   await gatedHandler(CUSTOMER, row, calls)({ method: "POST", headers: {}, body: { demoContext: { demoCaseId: "case-1", company: { legalName: "RENAMED BY CUSTOMER", registrationNumber: "99999999", countryCode: "GBGBGBGBGBGB" } }, file: {} } }, res);
   assert.strictEqual(res.statusCode, 202);
-  assert.deepStrictEqual(calls[0], ["start", SAVED_COMPANY]);
+  assert.deepStrictEqual(calls.find((call) => call[0] === "start"), ["start", SAVED_COMPANY]);
   const none = fakeRes();
   await gatedHandler(CUSTOMER, null, [])({ method: "POST", headers: {}, body: { demoContext: { demoCaseId: "case-1" }, file: {} } }, none);
   assert.strictEqual(none.statusCode, 404, "a customer's case must exist");
@@ -233,7 +233,7 @@ test("starting a chart reading uses one trial step for the caller, a status poll
     enforceRateLimit: async () => true,
     requireUboCaller: async () => ({ kind: "staff", tenantId: "acme", role: "analyst", userId: "user_1" }),
     demoAllowance: { record: async () => {} },
-    trials: { countPaidStep: async (actor) => { counted.push(actor.userId); } },
+    trials: { admitPaidStep: async ({ userId }) => { counted.push(userId); return { refused: null }; } },
   });
   await handler({ method: "POST", headers: {}, body: { operation: "GET_EXTRACTION_JOB", jobId: "job-1" } }, fakeRes());
   await handler({ method: "POST", headers: {}, body: { demoContext: { demoCaseId: "case-1" }, file: {} } }, fakeRes());
@@ -299,12 +299,12 @@ test("an upload that reuses an earlier reading is not counted as a paid step", a
     applyCors: () => false, enforceRateLimit: async () => true,
     requireUboCaller: async () => ({ kind: "staff", tenantId: "acme", role: "analyst", userId: "u1" }),
     demoAllowance: { record: async (bucket) => counted.push(`allowance:${bucket}`) },
-    trials: { countPaidStep: async () => counted.push("step") },
+    trials: { admitPaidStep: async () => { counted.push("step"); return { refused: null, giveBack: async () => { counted.splice(counted.indexOf("step"), 1); } }; } },
   });
   await make(true)({ method: "POST", headers: {}, body: { demoContext: { demoCaseId: "case-1" } } }, fakeRes());
   assert.deepStrictEqual(counted, []);
   await make(false)({ method: "POST", headers: {}, body: { demoContext: { demoCaseId: "case-1" } } }, fakeRes());
-  assert.deepStrictEqual(counted, ["allowance:ubo-demo-chart", "step"]);
+  assert.deepStrictEqual(counted, ["step", "allowance:ubo-demo-chart"]);
 });
 
 // Owner decision 2026-10-08 (option b): reusing an earlier chart reading for a
@@ -318,7 +318,7 @@ test("reusing an earlier chart reading is staff-only, in the caller's workspace,
     enforceRateLimit: async (_req, _res, bucket) => { counted.push(bucket); return true; },
     requireUboCaller: async () => actor,
     demoAllowance: { record: async () => { throw new Error("must not be recorded as an upload"); } },
-    trials: { countPaidStep: async () => { throw new Error("must not be counted as a paid step"); } },
+    trials: { admitPaidStep: async () => { throw new Error("must not be counted as a paid step"); } },
   });
   const body = { operation: "REUSE_CHART_READING", sourceJobId: "job-1", demoContext: { demoCaseId: "case-2", company: { registrationNumber: "01471587" } } };
   const staff = fakeRes();
@@ -332,4 +332,42 @@ test("reusing an earlier chart reading is staff-only, in the caller's workspace,
   await make({ kind: "customer", tenantId: "acme", caseId: "case-2" })({ method: "POST", headers: {}, body }, customer);
   assert.strictEqual(customer.statusCode, 404);
   assert.strictEqual(asked.length, 1, "a customer never reaches the service");
+});
+
+// Review, 2026-10-09: the step is taken before anything is stored and checked
+// as it is taken; a refused upload or retry stores and reads nothing.
+test("an upload or retry whose trial step is refused stores nothing and starts no reading", async () => {
+  const calls = [];
+  const handler = route.createHandler(null, undefined, () => ({ service: {
+    start: async () => { calls.push("start"); return { jobId: "job-1", state: "QUEUED" }; },
+    retry: async () => { calls.push("retry"); return { jobId: "job-1", state: "QUEUED", retried: true }; },
+    status: async () => ({ jobId: "job-1", demoCaseId: "case-1" }),
+  }, close: async () => {} }), {
+    applyCors: () => false, enforceRateLimit: async () => true,
+    requireUboCaller: async () => ({ kind: "staff", tenantId: "acme", role: "analyst", userId: "u1" }),
+    demoAllowance: { record: async () => calls.push("allowance") },
+    trials: { admitPaidStep: async () => ({ refused: "trial_budget_spent", budget: 10 }) },
+  });
+  for (const body of [{ demoContext: { demoCaseId: "case-1" }, file: {} }, { operation: "RETRY_EXTRACTION_JOB", jobId: "job-1" }]) {
+    const res = fakeRes();
+    await handler({ method: "POST", headers: {}, body }, res);
+    assert.strictEqual(res.statusCode, 403);
+    assert.strictEqual(res.body.code, "trial_budget_spent");
+  }
+  assert.deepStrictEqual(calls, []);
+});
+
+test("a retry that queues nothing gives its step back", async () => {
+  const ledger = [];
+  const handler = route.createHandler(null, undefined, () => ({ service: {
+    retry: async () => ({ jobId: "job-1", state: "COMPLETE", retried: false }),
+    status: async () => ({ jobId: "job-1", demoCaseId: "case-1" }),
+  }, close: async () => {} }), {
+    applyCors: () => false, enforceRateLimit: async () => true,
+    requireUboCaller: async () => ({ kind: "staff", tenantId: "acme", role: "analyst", userId: "u1" }),
+    demoAllowance: { record: async () => ledger.push("allowance") },
+    trials: { admitPaidStep: async () => { ledger.push("taken"); return { refused: null, giveBack: async () => ledger.push("given back") }; } },
+  });
+  await handler({ method: "POST", headers: {}, body: { operation: "RETRY_EXTRACTION_JOB", jobId: "job-1" } }, fakeRes());
+  assert.deepStrictEqual(ledger, ["taken", "given back"]);
 });

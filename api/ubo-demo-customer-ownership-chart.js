@@ -3,7 +3,7 @@
 const { analyseCustomerOwnershipChart, reevaluateSavedCustomerOwnershipChart } = require("../ubo-control-lab/server/customerOwnershipChartDemo.js");
 const { createCustomerOwnershipJobService } = require("../evidence/customerOwnershipJobs/dependencies.js");
 const { applyCors, requireUboCaller, uboCallerTenant } = require("../lib/routeAuth");
-const { enforceRateLimit } = require("../lib/rateLimit");
+const { enforceRateLimit, paidStepRefusal } = require("../lib/rateLimit");
 const demoAllowance = require("../lib/demoAllowance");
 const trials = require("../lib/uboTrials");
 const { ensureTenantRow } = require("../lib/tenantRow");
@@ -36,6 +36,18 @@ async function savedCase(db, tenantId, caseId) {
 
 function refuseFinalised(res) {
   return res.status(409).json({ success: false, code: "case_finalized", message: "This review has been finalised, so no more documents can be added. The analyst can reopen it." });
+}
+
+// A trial's paid step for a reading: the staff member's own trial, or for a
+// customer the trial of the workspace that sent the link (UBO-48). Taken and
+// checked in one atomic step (lib/uboTrials.js#admitPaidStep); a storage
+// failure throws, so a reading that cannot be counted is not started.
+function takePaidStep(gates, actor, tenantId) {
+  return (gates.trials || trials).admitPaidStep({ userId: actor.kind === "customer" ? null : actor.userId, tenantId, take: true });
+}
+
+async function giveBackStep(step) {
+  if (step?.giveBack) await Promise.resolve().then(step.giveBack).catch(() => {});
 }
 
 const KNOWN_OPERATIONS = new Set(["GET_EXTRACTION_JOB", "PROCESS_EXTRACTION_JOB", "RETRY_EXTRACTION_JOB", "REEVALUATE_SAVED_EXTRACTION", "LIST_JOBS_NEEDING_ATTENTION", "GET_CHART_FILE", "REUSE_CHART_READING"]);
@@ -131,13 +143,19 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
           const current = await dependencies.service.status(body.jobId);
           if ((await savedCase(dependencies.db, tenantId, current?.demoCaseId))?.finalised) return refuseFinalised(res);
         }
-        job = await dependencies.service.retry(body.jobId);
-        // A retry reads the document again, and pays again: one of the demo's
-        // uploads, as the first reading was. Checked with the paid limit above.
-        if (job?.retried) {
-          await gates.demoAllowance.record("ubo-demo-chart");
-          await (gates.trials || trials).countPaidStep(actor);
+        // A retry reads the document again, and pays again: the trial's step is
+        // taken first and checked as it is taken, and given back if nothing
+        // was queued again (review, 2026-10-09).
+        const step = await takePaidStep(gates, actor, tenantId);
+        if (step.refused) return res.status(403).json({ success: false, code: step.refused, ...paidStepRefusal(actor, step.refused, step.budget) });
+        try {
+          job = await dependencies.service.retry(body.jobId);
+        } catch (error) {
+          await giveBackStep(step);
+          throw error;
         }
+        if (job?.retried) await gates.demoAllowance.record("ubo-demo-chart");
+        else await giveBackStep(step);
       }
       else {
         // A trial workspace has no tenants row until its first write.
@@ -150,16 +168,23 @@ function createHandler(analyse = null, reevaluate = reevaluateSavedCustomerOwner
         if (target?.finalised) return refuseFinalised(res);
         if (!target && actor.kind === "customer" && dependencies.db) return res.status(404).json({ success: false, code: "job_not_found", message: "Extraction job was not found." });
         const request = target?.company ? { ...body, demoContext: { ...body.demoContext, company: { ...body.demoContext?.company, ...target.company } } } : body;
-        job = await dependencies.service.start(request);
+        // One of the caller's trial steps, taken before anything is stored or
+        // read and checked as it is taken, so uploads in flight together cannot
+        // pass the budget; a refused upload stores nothing (review, 2026-10-09).
+        const step = await takePaidStep(gates, actor, tenantId);
+        if (step.refused) return res.status(403).json({ success: false, code: step.refused, ...paidStepRefusal(actor, step.refused, step.budget) });
+        try {
+          job = await dependencies.service.start(request);
+        } catch (error) {
+          await giveBackStep(step);
+          throw error;
+        }
         started = true;
         // Paid only when something is read: an earlier reading of the same file
-        // reused costs nothing, and used to be counted as a step anyway.
-        if (!job?.reused) {
-          // One of a public demo's shared uploads (a no-op anywhere else).
-          await gates.demoAllowance.record("ubo-demo-chart");
-          // ...and one of the caller's trial steps, here where it is spent (UBO-44).
-          await (gates.trials || trials).countPaidStep(actor);
-        }
+        // reused costs nothing, so its step is given back.
+        if (job?.reused) await giveBackStep(step);
+        // One of a public demo's shared uploads (a no-op anywhere else).
+        else await gates.demoAllowance.record("ubo-demo-chart");
       }
       if (job?.correlationId) res.setHeader("X-Correlation-Id", job.correlationId);
       const eventType = documentEventType(started, job);
