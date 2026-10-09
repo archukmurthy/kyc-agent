@@ -261,7 +261,32 @@ function uncomputed(base) {
   return {
     resolution: base.resolution ? { createdAt: base.resolution.createdAt, answers: base.resolution.answers, evidence: base.resolution.evidence, ...(priorTrace ? { priorTrace } : {}) } : base.resolution,
     assessment: null,
+    round: nextRound(base),
   };
+}
+
+/** A new round starts whenever what was computed for the case is dropped (a
+ *  reopen, a reset, a new chart, new research, a renamed company). Steps are
+ *  recorded per round - see recordedKey. */
+function nextRound(base) { return (Number(base?.round) || 0) + 1; }
+
+/**
+ * The key a step is recorded under, or null when the case already reflects it.
+ *
+ * The screens key a step by what it carries - a finalisation by the hash of
+ * its inputs, an upload by its file - so the same key comes round again once
+ * the computed state is dropped. Recorded as sent, the repeat was taken for a
+ * retry and skipped: after a reopen the re-finalisation never happened, and the
+ * customer and analyst were both left waiting (review, 2026-10-09). Recorded
+ * per round, a repeat within a round is still a retry and changes nothing.
+ */
+function recordedKey(projection, operation, idempotencyKey) {
+  // Reopening a case that is not finalised: a retry, or a second analyst tab.
+  if (operation === "REOPEN_CASE" && !serverTraceOf(projection)?.verificationAssessment?.finalized) return null;
+  const round = Number(projection?.round) || 0;
+  // A reset starts a round itself, and one reset request is one reset however
+  // late it is retried - it would otherwise clear answers given after it.
+  return round && operation !== "RESET_ANSWERS" ? `${idempotencyKey}#round-${round}` : idempotencyKey;
 }
 
 /** What makes research different research - the same fields the analyst
@@ -296,7 +321,7 @@ function projectCommand(current, operation, payload, release) {
     // So were its identity checks: nothing of the old company's history carries over.
     const { chartReference: _reference, chartProjection: _chart, ...rest } = base;
     const { priorTrace: _history, ...resolution } = uncomputed(base).resolution || {};
-    return { ...rest, resolution: base.resolution ? resolution : base.resolution, assessment: null, currentStage: "COMPANY_DETAILS" };
+    return { ...rest, resolution: base.resolution ? resolution : base.resolution, assessment: null, round: nextRound(base), currentStage: "COMPANY_DETAILS" };
   }
   if (operation === "REOPEN_CASE") return { ...base, ...uncomputed(base), currentStage: "QUESTIONS" };
   if (operation === "SAVE_RESEARCH") {
@@ -330,6 +355,7 @@ function projectCommand(current, operation, payload, release) {
       ...base,
       resolution: payload.resolution,
       assessment: payload.assessment,
+      ...(operation === "RESET_ANSWERS" ? { round: nextRound(base) } : {}),
       currentStage: stageFromTrace(payload.assessment?.trace, "QUESTIONS"),
     };
   }
@@ -450,11 +476,14 @@ class PostgresPocCaseRepository {
       if (expectedVersion && locked && locked.version !== expectedVersion) {
         throw Object.assign(new Error("The case changed while this step was being worked out."), { statusCode: 409, code: "case_changed", retryable: true });
       }
+      // Under the lock: the round a step belongs to is the case's as it stands.
+      const key = recordedKey(existing?.projection, operation, idempotencyKey);
+      if (key === null) return { record: existing, duplicate: true };
       const inserted = first(await client.query(`INSERT INTO ubo_poc_case_events
         (case_id, event_type, idempotency_key, actor_type, payload)
         VALUES ($1, $2, $3, $4, $5::jsonb)
         ON CONFLICT (case_id, event_type, idempotency_key) DO NOTHING
-        RETURNING event_id`, [caseId, operation, idempotencyKey, actorType, json(payload)]));
+        RETURNING event_id`, [caseId, operation, key, actorType, json(payload)]));
       if (!inserted && operation !== "SUBMIT_ANSWER") return { record: existing, duplicate: true };
       const projection = projectCommand(existing?.projection, operation, payload, release);
       const chart = projection.chartReference || {};
@@ -466,16 +495,17 @@ class PostgresPocCaseRepository {
         projection.researchRelease?.state || existing?.researchReleaseState || null,
         chart.jobId || existing?.latestExtractionJobId || null, chart.artifactId || existing?.latestArtifactId || null,
         assessmentId, json(projection)]));
-      await this.persistResolution(client, caseId, payload.resolution, operation, idempotencyKey);
+      await this.persistResolution(client, caseId, payload.resolution, operation, key);
       await this.persistAssessment(client, caseId, payload.assessment, projection.chartReference);
       // The audit ledger, in the same transaction: the step and its record
-      // stand or fall together (UBO-33).
+      // stand or fall together (UBO-33). Under the round's key, so a second
+      // finalisation is recorded rather than taken for the first.
       await auditLedger.record(client, this.tenantId, auditLedger.eventsForCommand({
-        caseId, operation, before: existing?.projection, after: projection, payload, operationId: idempotencyKey,
+        caseId, operation, before: existing?.projection, after: projection, payload, operationId: key,
         actor: { type: actorType, id: actorId }, correlationId, receivedAt,
         researchChanged: operation === "SAVE_RESEARCH" && researchIdentity(existing?.projection?.researchResult) !== researchIdentity(projection.researchResult),
       }));
-      if (operation === "COMPLETE_IDV") await this.persistVerificationEvent(client, caseId, payload, idempotencyKey);
+      if (operation === "COMPLETE_IDV") await this.persistVerificationEvent(client, caseId, payload, key);
       console.info("[ubo-poc-case] projection-applied", {
         caseRef: stableHash(caseId).slice(0, 12),
         operation,
@@ -735,6 +765,11 @@ class PocCaseService {
       // A finalised assessment is what identity verification was started
       // from; answers after that would change it with no new finalisation.
       const stored = serverTraceOf(record?.projection);
+      // Finalising a case that is finalised is a retry (a timed-out request
+      // sent again): it is done, so it is answered as done, not refused.
+      if (stored?.verificationAssessment?.finalized && operation === "FINALIZE_ASSESSMENT") {
+        return { caseId, updatedAt: record.updatedAt || null, projection: record.projection, duplicate: true, researchRelease: record.projection?.researchRelease || null };
+      }
       if (stored?.verificationAssessment?.finalized) {
         throw Object.assign(new Error("This review has been finalised and can no longer be changed."), { statusCode: 409, code: "case_finalized" });
       }
@@ -793,4 +828,5 @@ module.exports = {
   compactCaseRecordForTransport,
   stableHash,
   projectCommand,
+  recordedKey,
 };
