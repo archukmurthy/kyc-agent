@@ -1,4 +1,4 @@
-# Evidence Platform Core V1 — Normative Contract Candidates and Handoffs
+# Evidence Platform Core V1 - Normative Contract Candidates and Handoffs
 
 **Audit date:** 8 September 2026
 
@@ -134,34 +134,34 @@ The module inventory below records the state at implementation baseline `4602d76
 | Capability | Authoritative current source/export | Exact operation signature | Recorded version | Status | Protecting tests |
 |---|---|---|---|---|---|
 | Public consumer façade | No implementation exists. `evidence/platform.js` exports only `getPlatformStatus()` | Not available | Missing | **PROVISIONAL** | `evidence/__tests__/platform.nodetest.js` protects only status/scaffold behavior |
-| Authorized Artifact resolution | `evidence/a3/repository.js` — `PostgresA3Repository.findArtifactForInterpretation` | `findArtifactForInterpretation({ artifactId, tenantId, contextId = null })` | Missing | **INTERNAL ONLY** | `evidence/a3/__tests__/liveArtifact.nodetest.js`; `evidence/r2/__tests__/r2.nodetest.js` |
-| Artifact byte read | `evidence/a3/artifactReader.js` — `EvidenceArtifactReader.read` | `read(artifact)` | Missing | **INTERNAL ONLY** | `evidence/a3/__tests__/artifactReader.nodetest.js`; `evidence/r2/__tests__/r2.nodetest.js` |
-| Artifact reference/metadata projection | `evidence/r2/service.js` — nested output from `buildResult` | `result.evidence.artifacts[]` | Missing Artifact-reference contract version | **PROVISIONAL** | `evidence/r2/__tests__/r2.nodetest.js`; `evidence/r2/__tests__/api.nodetest.js` |
-| Targeted interpretation | `evidence/r2/service.js` — `TargetedInterpretationService.interpret` | `interpret(input, trustedAuthorization)` | Missing contract version | **PROVISIONAL** | `evidence/r2/__tests__/r2.nodetest.js`; `evidence/r2/__tests__/api.nodetest.js`; `evidence/r4/__tests__/liveProviderStructured.nodetest.js` |
-| Interpretation history | `evidence/r2/service.js` — `TargetedInterpretationService.history` | `history({ artifactIds = [] }, trustedAuthorization)` | Missing contract version | **PROVISIONAL** | `evidence/r2/__tests__/r2.nodetest.js`; `evidence/r2/__tests__/api.nodetest.js` |
+| Authorized Artifact resolution | `evidence/a3/repository.js` - `PostgresA3Repository.findArtifactForInterpretation` | `findArtifactForInterpretation({ artifactId, tenantId, contextId = null })` | Missing | **INTERNAL ONLY** | `evidence/a3/__tests__/liveArtifact.nodetest.js`; `evidence/r2/__tests__/r2.nodetest.js` |
+| Artifact byte read | `evidence/a3/artifactReader.js` - `EvidenceArtifactReader.read` | `read(artifact)` | Missing | **INTERNAL ONLY** | `evidence/a3/__tests__/artifactReader.nodetest.js`; `evidence/r2/__tests__/r2.nodetest.js` |
+| Artifact reference/metadata projection | `evidence/r2/service.js` - nested output from `buildResult` | `result.evidence.artifacts[]` | Missing Artifact-reference contract version | **PROVISIONAL** | `evidence/r2/__tests__/r2.nodetest.js`; `evidence/r2/__tests__/api.nodetest.js` |
+| Targeted interpretation | `evidence/r2/service.js` - `TargetedInterpretationService.interpret` | `interpret(input, trustedAuthorization)` | Missing contract version | **PROVISIONAL** | `evidence/r2/__tests__/r2.nodetest.js`; `evidence/r2/__tests__/api.nodetest.js`; `evidence/r4/__tests__/liveProviderStructured.nodetest.js` |
+| Interpretation history | `evidence/r2/service.js` - `TargetedInterpretationService.history` | `history({ artifactIds = [] }, trustedAuthorization)` | Missing contract version | **PROVISIONAL** | `evidence/r2/__tests__/r2.nodetest.js`; `evidence/r2/__tests__/api.nodetest.js` |
 | Single interpretation-operation retrieval | No dedicated service/public export exists; R2 history returns authorized operation lists | Not available | Missing | **PROVISIONAL** | History-list tests only; no single-operation façade test |
-| R2 request validation | `evidence/r2/domain.js` — `validateRequest`, `validateAuthorization` | `validateRequest(input)`; `validateAuthorization(input)` | Missing contract/schema version | **INTERNAL ONLY** | `evidence/r2/__tests__/r2.nodetest.js` |
-| Interpretation result | `evidence/r2/service.js` — `buildResult`, `publicFact`, `publicTypedRelationship` | `buildResult(operation, interpreted, request, completedAt)` | Missing response version | **PROVISIONAL** | `evidence/r2/__tests__/r2.nodetest.js`; `evidence/r4/__tests__/r4.nodetest.js` |
+| R2 request validation | `evidence/r2/domain.js` - `validateRequest`, `validateAuthorization` | `validateRequest(input)`; `validateAuthorization(input)` | Missing contract/schema version | **INTERNAL ONLY** | `evidence/r2/__tests__/r2.nodetest.js` |
+| Interpretation result | `evidence/r2/service.js` - `buildResult`, `publicFact`, `publicTypedRelationship` | `buildResult(operation, interpreted, request, completedAt)` | Missing response version | **PROVISIONAL** | `evidence/r2/__tests__/r2.nodetest.js`; `evidence/r4/__tests__/r4.nodetest.js` |
 | Ordinary Fact consumer projection | `evidence/a3/domain.js`; projected by `evidence/r2/service.js` `publicFact` | Persisted Fact mapped to bounded R2 result | Missing Fact schema version | **PROVISIONAL** | `evidence/a3/__tests__/domain.nodetest.js`; `evidence/a3/__tests__/persistence.nodetest.js`; R2 tests |
 | Typed relationship consumer projection | `evidence/r4/domain.js`; projected by `evidence/r2/service.js` `publicTypedRelationship` | Validated relationship extension mapped beneath one Fact | `evidence-relationship-v1`; API version missing | **PROVISIONAL** | `evidence/r4/__tests__/r4.nodetest.js`; `evidence/r4/__tests__/liveProviderStructured.nodetest.js` |
-| Source-party snapshot | `evidence/r4/domain.js` — `validateParty` | `validateParty(input, label)` | Part of `evidence-relationship-v1`; no separate API version | **INTERNAL ONLY** | `evidence/r4/__tests__/r4.nodetest.js` |
-| Relationship vocabulary/direction | `evidence/r4/domain.js` — `RELATIONSHIP_TYPES`; `validateTypedRelationshipCandidate` | Candidate requires `directionEstablished === true`; persists subject → relationship → object | `evidence-relationship-v1` | **INTERNAL ONLY** | `evidence/r4/__tests__/r4.nodetest.js`; `evidence/r4/__tests__/liveProviderStructured.nodetest.js` |
-| Value kind/measurement | `evidence/r4/domain.js` — `VALUE_KINDS`, `MEASUREMENT_TYPES`, `validateValue` | `validateValue(input)` | `evidence-relationship-v1` | **INTERNAL ONLY** | `evidence/r4/__tests__/r4.nodetest.js` |
-| Temporal state | `evidence/r4/domain.js` — `TEMPORAL_STATES`, `validateTemporal` | `validateTemporal(input = {})` | `evidence-relationship-v1` | **INTERNAL ONLY** | `evidence/r4/__tests__/r4.nodetest.js` |
-| Locator | `evidence/a3/locators.js` — `normalizeLocator`, `assessFactLocators` | Internal normalization beneath Fact↔Artifact support | Missing locator schema version | **INTERNAL ONLY** | `evidence/r3/__tests__/r3.nodetest.js`; `evidence/r4/__tests__/liveProviderStructured.nodetest.js` |
-| Artifact SHA-256 consumer projection | `evidence/a1/domain.js` — `sha256`; verified by A3/R1 readers and projected by R2 | SHA-256 over exact preserved Artifact bytes | Algorithm recorded as `sha256`; no public digest-contract version | **PROVISIONAL** | A1 domain, R1 service, A3 Artifact-reader, and R2 integrity tests |
-| Interpretation operation/outcome/error | `evidence/r2/service.js` — `TargetedInterpretationService`, `safeMessage`, `buildResult` | Operation/result or bounded failure returned from `interpret`/`history` | Missing outcome/error vocabulary version | **PROVISIONAL** | `evidence/r2/__tests__/r2.nodetest.js`; `evidence/r2/__tests__/api.nodetest.js` |
-| Point-in-time reconstruction | `evidence/a5a/service.js` — `EvidenceReconstructionService.reconstructEvidence` | `reconstructEvidence({ authorizedTenant, authorizedContext, subject = null, asOf })` | `evidence-a5a-availability-v1` applies to availability rules; response contract version missing | **INTERNAL ONLY** | `evidence/a5a/__tests__/a5a.nodetest.js` |
-| Package list/reopen/verify | `evidence/a5b/service.js` — `EvidencePackageService` | `listAuthorizedPackages({ tenantId, contextId, subjectReferenceId })`; `reopenPackage({ tenantId, contextId, packageId })`; `verifyPackageManifest({ tenantId, contextId, packageId })` | Service response version missing | **INTERNAL ONLY** | `evidence/a5b/__tests__/a5b.nodetest.js` |
-| Evidence Package manifest | `evidence/a5b/domain.js` — `MANIFEST_VERSION`, `buildManifest`, `verifyStoredPackage` | Canonical frozen reconstruction manifest plus relational membership | `evidence-package-manifest-v1` | **INTERNAL ONLY** | `evidence/a5b/__tests__/a5b.nodetest.js` |
-| Package-manifest SHA-256 | `evidence/a5b/canonicalize.js` — `CANONICALIZATION_VERSION`, `sha256`; used by A5b service/domain | SHA-256 over exact canonical manifest bytes | `evidence-package-canonical-json-v1` | **INTERNAL ONLY** | `evidence/a5b/__tests__/a5b.nodetest.js` canonical golden/integrity tests |
+| Source-party snapshot | `evidence/r4/domain.js` - `validateParty` | `validateParty(input, label)` | Part of `evidence-relationship-v1`; no separate API version | **INTERNAL ONLY** | `evidence/r4/__tests__/r4.nodetest.js` |
+| Relationship vocabulary/direction | `evidence/r4/domain.js` - `RELATIONSHIP_TYPES`; `validateTypedRelationshipCandidate` | Candidate requires `directionEstablished === true`; persists subject → relationship → object | `evidence-relationship-v1` | **INTERNAL ONLY** | `evidence/r4/__tests__/r4.nodetest.js`; `evidence/r4/__tests__/liveProviderStructured.nodetest.js` |
+| Value kind/measurement | `evidence/r4/domain.js` - `VALUE_KINDS`, `MEASUREMENT_TYPES`, `validateValue` | `validateValue(input)` | `evidence-relationship-v1` | **INTERNAL ONLY** | `evidence/r4/__tests__/r4.nodetest.js` |
+| Temporal state | `evidence/r4/domain.js` - `TEMPORAL_STATES`, `validateTemporal` | `validateTemporal(input = {})` | `evidence-relationship-v1` | **INTERNAL ONLY** | `evidence/r4/__tests__/r4.nodetest.js` |
+| Locator | `evidence/a3/locators.js` - `normalizeLocator`, `assessFactLocators` | Internal normalization beneath Fact↔Artifact support | Missing locator schema version | **INTERNAL ONLY** | `evidence/r3/__tests__/r3.nodetest.js`; `evidence/r4/__tests__/liveProviderStructured.nodetest.js` |
+| Artifact SHA-256 consumer projection | `evidence/a1/domain.js` - `sha256`; verified by A3/R1 readers and projected by R2 | SHA-256 over exact preserved Artifact bytes | Algorithm recorded as `sha256`; no public digest-contract version | **PROVISIONAL** | A1 domain, R1 service, A3 Artifact-reader, and R2 integrity tests |
+| Interpretation operation/outcome/error | `evidence/r2/service.js` - `TargetedInterpretationService`, `safeMessage`, `buildResult` | Operation/result or bounded failure returned from `interpret`/`history` | Missing outcome/error vocabulary version | **PROVISIONAL** | `evidence/r2/__tests__/r2.nodetest.js`; `evidence/r2/__tests__/api.nodetest.js` |
+| Point-in-time reconstruction | `evidence/a5a/service.js` - `EvidenceReconstructionService.reconstructEvidence` | `reconstructEvidence({ authorizedTenant, authorizedContext, subject = null, asOf })` | `evidence-a5a-availability-v1` applies to availability rules; response contract version missing | **INTERNAL ONLY** | `evidence/a5a/__tests__/a5a.nodetest.js` |
+| Package list/reopen/verify | `evidence/a5b/service.js` - `EvidencePackageService` | `listAuthorizedPackages({ tenantId, contextId, subjectReferenceId })`; `reopenPackage({ tenantId, contextId, packageId })`; `verifyPackageManifest({ tenantId, contextId, packageId })` | Service response version missing | **INTERNAL ONLY** | `evidence/a5b/__tests__/a5b.nodetest.js` |
+| Evidence Package manifest | `evidence/a5b/domain.js` - `MANIFEST_VERSION`, `buildManifest`, `verifyStoredPackage` | Canonical frozen reconstruction manifest plus relational membership | `evidence-package-manifest-v1` | **INTERNAL ONLY** | `evidence/a5b/__tests__/a5b.nodetest.js` |
+| Package-manifest SHA-256 | `evidence/a5b/canonicalize.js` - `CANONICALIZATION_VERSION`, `sha256`; used by A5b service/domain | SHA-256 over exact canonical manifest bytes | `evidence-package-canonical-json-v1` | **INTERNAL ONLY** | `evidence/a5b/__tests__/a5b.nodetest.js` canonical golden/integrity tests |
 | Semantic provider instruction | `evidence/a3/anthropicOutputSchema.js`; `evidence/a3/providers.js` | Provider-adapter implementation detail | `evidence-r4-live-v4-typed-relations-shallow` | **INTERNAL ONLY** | `evidence/r4/__tests__/liveProviderStructured.nodetest.js` |
 | Evidence HTTP routes | `api/evidence/*.js` | Lab-specific handlers | No versioned API envelope | **LAB ONLY** | Stage API characterization tests |
 | Deterministic providers and example graphs | `evidence/**/fixtures.js`, test helpers | Test-specific | Fixture-local only | **FIXTURE/TEST ONLY** | Corresponding fixture/unit tests |
 
 Architecture Authority may freeze a future façade and the minimum request/result/reference/error contracts without changing their Evidence semantics. Until that source path and versioned export exist, consumers use this document for diagnostic fit only.
 
-### Smallest proposed consumer façade — not implemented
+### Smallest proposed consumer façade - not implemented
 
 The smallest repository-conventional productization task is one dependency-injected CommonJS façade at proposed path `evidence/consumer.js`, backed by one contract-definition module at proposed path `evidence/contracts/v1.js`. These paths and names are recommendations, not current exports or frozen contracts.
 
@@ -193,7 +193,7 @@ No migration or new HTTP route is required for an in-process server-side consume
 
 The producer façade should be separate. Producer operations accept source coordinates or uploaded bytes and create collection/ingestion records; consumer operations resolve and interpret existing authorized Evidence or reconstruct/reopen it. Their trust, idempotency, side effects, DTOs and operational controls differ. A future root-level `evidence/producer.js` may wrap the already accepted A2/R1 producer candidates, but it is not needed for the bounded UBO G4.1 consumer façade and is not authorized here.
 
-## Producer-contract candidate — PROVISIONAL
+## Producer-contract candidate - PROVISIONAL
 
 ### Purpose
 
@@ -251,7 +251,7 @@ The adapter must not own Evidence identity, storage authorization, KYC satisfact
 
 `CompaniesHouseEvidenceService` is the accepted first adapter and proves the pattern. Its A2 route, fixture/live dependency selection, Lab tenant input, standalone extraction context, and inspection payload are not the generic production contract. Companies House client/capture/extractor code remains source-specific.
 
-## Consumer-contract candidates — PROVISIONAL
+## Consumer-contract candidates - PROVISIONAL
 
 | Candidate | Inputs | Outputs | Current implementation/maturity |
 |---|---|---|---|
@@ -278,8 +278,8 @@ TargetedInterpretationService.interpret(input, trustedAuthorization)
 
 ```text
 operationKey          required bounded string
-artifactIds           required unique list, 1–20 persisted Artifact UUIDs
-requestedConcepts     required unique list, 1–20 objects:
+artifactIds           required unique list, 1-20 persisted Artifact UUIDs
+requestedConcepts     required unique list, 1-20 objects:
   concept             required neutral concept string
   description         optional bounded description
   schemaFieldId       optional; only when supplied by an authorized upstream schema context
@@ -330,7 +330,7 @@ Each projected Fact currently contains `id`, `semanticConceptId`, `value`, `requ
 
 The typed relationship projection contains `factId`, `schemaVersion`, `relationshipType`, source `subject` and `object` party snapshots, `value`, `temporal`, `sourceSpecificMetadata`, `qualifications`, `mapping`, and `createdAt`. Value fields preserve exact/range endpoints and inclusivity, count numerator/denominator, qualitative value, unit, or unknown. The projection carries no UBO conclusion.
 
-Current operation status is `completed`, `in_progress`, or `failed`; a completed operation result uses `completed` or `completed_partial`. Requested-concept status is mechanically normalized by the live provider path to `found`, `not_found`, or `not_evaluated`; R2 characterization also contains `unsupported`. These vocabularies are provisional until explicitly versioned. Complete means only that selected input and extraction processing reported no incompleteness—it does not mean all real-world facts were found, source truth was verified, the ownership graph is complete, or a requirement is satisfied.
+Current operation status is `completed`, `in_progress`, or `failed`; a completed operation result uses `completed` or `completed_partial`. Requested-concept status is mechanically normalized by the live provider path to `found`, `not_found`, or `not_evaluated`; R2 characterization also contains `unsupported`. These vocabularies are provisional until explicitly versioned. Complete means only that selected input and extraction processing reported no incompleteness-it does not mean all real-world facts were found, source truth was verified, the ownership graph is complete, or a requirement is satisfied.
 
 ## Current HTTP/API classification
 

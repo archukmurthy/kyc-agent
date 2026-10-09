@@ -35,7 +35,7 @@
   }
 
   function shortHash(value) {
-    return String(value || "—").replace("sha256:", "").slice(0, 12);
+    return String(value || "-").replace("sha256:", "").slice(0, 12);
   }
 
   function pretty(value) {
@@ -63,7 +63,7 @@
   }
 
   function Metric({ label, value }) {
-    return h("div", { className: "metric" }, h("span", null, label), h("strong", null, value ?? "—"));
+    return h("div", { className: "metric" }, h("span", null, label), h("strong", null, value ?? "-"));
   }
 
   function Empty({ children }) {
@@ -74,7 +74,7 @@
     if (!readiness?.watermarkRequired) return null;
     const identity = readiness.policyIdentity;
     return h("aside", { className: "policy-watermark", role: "status", "aria-label": "Policy readiness warning" },
-      h("strong", null, "REVIEW POLICY — NOT APPROVED FOR PRODUCTION"),
+      h("strong", null, "REVIEW POLICY - NOT APPROVED FOR PRODUCTION"),
       h("span", null, `${identity.policyPackId} · ${identity.version} · ${readiness.readiness} · ${readiness.blockingReasons.length} production blocker(s) · ${readiness.unresolvedSignoffs.length} unresolved sign-off(s)`));
   }
 
@@ -110,7 +110,7 @@
         h("div", null, h("strong", null, person.displayName), h("span", { className: qualification ? "state RESOLVED" : "state UNRESOLVED" }, qualification ? "Confirmed qualifying person" : "Not a confirmed UBO")),
         h("dl", null,
           h("dt", null, "Candidate / source fact"), h("dd", null, support.length ? support.map(({ system, referenceId }) => `${system} · ${referenceId}`).join("; ") : "No displayable source reference"),
-          h("dt", null, "Operative relationship(s)"), h("dd", null, relationships.length ? relationships.map((relationship) => `${human(relationship.relationshipType)} ${human(relationship.measurement?.type)} ${relationship.measurement?.type === "RANGE" ? `${relationship.measurement.lowerBound}–${relationship.measurement.upperBound}%` : relationship.measurement?.value ?? ""} → ${nodes.get(relationship.targetEntityId)?.displayName}`).join("; ") : "None"),
+          h("dt", null, "Operative relationship(s)"), h("dd", null, relationships.length ? relationships.map((relationship) => `${human(relationship.relationshipType)} ${human(relationship.measurement?.type)} ${relationship.measurement?.type === "RANGE" ? `${relationship.measurement.lowerBound}-${relationship.measurement.upperBound}%` : relationship.measurement?.value ?? ""} → ${nodes.get(relationship.targetEntityId)?.displayName}`).join("; ") : "None"),
           h("dt", null, "Economic calculation"), h("dd", null, calculations.filter(({ dimension }) => dimension === "ECONOMIC").length ? pretty(calculations.filter(({ dimension }) => dimension === "ECONOMIC")) : "None recorded"),
           h("dt", null, "Voting / control basis"), h("dd", null, relationships.filter(({ dimension }) => dimension !== "ECONOMIC").length ? relationships.filter(({ dimension }) => dimension !== "ECONOMIC").map((relationship) => `${human(relationship.relationshipType)} · ${relationship.measurement?.type === "RANGE" ? `(${relationship.measurement.lowerBound}%, ${relationship.measurement.upperBound}%]` : human(relationship.measurement?.type)}`).join("; ") : "None recorded"),
           h("dt", null, "G2.3 assessment"), h("dd", null, bases.length ? bases.map(({ requirementId, basisType, state, rationaleCode }) => `${requirementId} · ${human(basisType)} · ${human(state)} · ${human(rationaleCode)}`).join("; ") : "No determinative qualifying basis recorded"),
@@ -126,7 +126,7 @@
       h("nav", { className: "mode-list", "aria-label": "Lab mode" },
         h("button", { className: `mode-button ${mode === "FIXTURE" ? "active" : ""}`, onClick: () => setMode("FIXTURE") }, h("strong", null, "Fixture Mode"), h("span", null, "Repeatable deterministic compliance scenarios.")),
         h("button", { className: `mode-button ${mode === "LIVE_DISCOVERY" ? "active" : ""}`, onClick: () => setMode("LIVE_DISCOVERY") }, h("strong", null, "Live Discovery"), h("span", null, "Real UK discovery through the accepted server-side adapter.")),
-        h("button", { className: "mode-button", disabled: true, title: "Evidence Platform integration is pending" }, h("strong", null, "Live Evidence"), h("span", null, "Unavailable until Gate 4 — Evidence Platform integration is pending."))),
+        h("button", { className: "mode-button", disabled: true, title: "Evidence Platform integration is pending" }, h("strong", null, "Live Evidence"), h("span", null, "Unavailable until Gate 4 - Evidence Platform integration is pending."))),
       h("section", { className: "card" },
         h("p", { className: "source-label" }, mode === "FIXTURE" ? "SIMULATED FIXTURE" : "LAB TEST COST CONTROL / REPLAY"),
         h("h2", null, mode === "FIXTURE" ? "Choose a compliance scenario" : "Reuse Discovery input or run a fresh search"),
@@ -140,7 +140,7 @@
           : h("div", null,
             h("section", { className: "replay-library", "aria-label": "Saved Discovery results" },
               h("div", { className: "replay-heading" }, h("div", null, h("h3", null, "Replay saved result"), h("p", null, "No external Discovery request. No paid search.")), h("span", { className: "source-label" }, "SAVED LOCALLY")),
-              h("p", { className: "local-storage-note" }, "Saved locally in this browser — Lab testing only"),
+              h("p", { className: "local-storage-note" }, "Saved locally in this browser - Lab testing only"),
               storageError && h("div", { className: "error", role: "alert" }, storageError, h("button", { type: "button", className: "danger", onClick: clearReplays }, "Clear invalid local data")),
               savedResults.length
                 ? h("div", { className: "replay-list" }, savedResults.map((record) => h("article", { className: "replay-item", key: record.replayId },
@@ -195,7 +195,7 @@
         h("div", null, h("h3", null, "Recorded calculations"), compliance.calculations.length ? compliance.calculations.map((calculation) => h("details", { key: calculation.calculationId }, h("summary", null, `${human(calculation.dimension)} · ${calculation.aggregateKnownValue?.value ?? calculation.result?.value ?? "incomplete"}%`), h("pre", { className: "json" }, pretty(calculation)))) : h(Empty, null, "No effective-interest calculation is currently recorded."))),
       h("div", { className: "section" }, h("h3", null, "Natural-person qualification assessment"), compliance.qualifyingPersons.length || view.graph.nodes.some(({ category }) => category === "NATURAL_PERSON") ? h(NaturalPersonAssessments, { view }) : h(Empty, null, "No natural-person source facts are recorded.")),
       h("div", { className: "section" }, h(ResolutionExplanation, { view })),
-      h("div", { className: "section" }, h("h3", null, "R01–R14 requirement matrix"), h(Requirements, { requirements: view.requirements })),
+      h("div", { className: "section" }, h("h3", null, "R01-R14 requirement matrix"), h(Requirements, { requirements: view.requirements })),
       h("div", { className: "section grid-2" },
         [["InformationNeeds", compliance.informationNeeds], ["PolicyGaps", compliance.policyGaps], ["OperationalBlockers", compliance.operationalBlockers], ["Conflicts", compliance.conflicts], ["ReviewRequirements", compliance.reviewRequirements], ["Risk signals", compliance.riskSignals]].map(([title, items]) => h("details", { key: title }, h("summary", null, `${title} · ${items.length}`), h("pre", { className: "json" }, pretty(items))))),
       h("div", { className: "section" }, h("h3", null, "Ownership and control explanation"), h(OwnershipGraph, { projection: view.graph, detailLevel: DETAIL_LEVEL.EXPLAIN, height: 760 })));
@@ -269,7 +269,7 @@
           h(Metric, { label: "State", value: human(entry.view.plan.state) }),
           h(Metric, { label: "Checkpoint", value: entry.view.snapshot.decisionContent.checkpoint.type })),
         comparison && h("details", { open: true }, h("summary", null, "Change from predecessor"), h("pre", { className: "json" }, pretty(comparison))),
-        h("h3", { className: "section" }, "Historical graph — projected from this immutable snapshot"),
+        h("h3", { className: "section" }, "Historical graph - projected from this immutable snapshot"),
         h(OwnershipGraph, { projection: entry.view.graph, detailLevel: DETAIL_LEVEL.EXPLAIN }),
         h("details", null, h("summary", null, "Historical journey and requirements"),
           h("pre", { className: "json" }, pretty({ journey: entry.view.journey, requirements: entry.view.requirements })))));
@@ -277,7 +277,7 @@
 
   function EvidencePanel({ view, session }) {
     const references = view.compliance.evidenceManifest?.evidenceReferences || [];
-    return h("section", { className: "panel" }, h("p", { className: "source-label" }, "LIVE EVIDENCE DISABLED"), h("h2", null, "Evidence"), h("div", { className: "notice" }, "NOT YET AVAILABLE — EVIDENCE PLATFORM INTEGRATION IN PROGRESS"), h("p", null, "Customer evidence actions produce only a correlated external handoff. There is no fake upload or browser extraction path."), h("h3", { className: "section" }, `Current EvidenceReferences · ${references.length}`), references.length ? h("pre", { className: "json" }, pretty(references)) : h(Empty, null, "No evidence references are present in the current manifest."), h("h3", { className: "section" }, `Pending external handoffs · ${session.externalHandoffs.length}`), session.externalHandoffs.length ? h("pre", { className: "json" }, pretty(session.externalHandoffs)) : h(Empty, null, "No evidence handoff has been requested."));
+    return h("section", { className: "panel" }, h("p", { className: "source-label" }, "LIVE EVIDENCE DISABLED"), h("h2", null, "Evidence"), h("div", { className: "notice" }, "NOT YET AVAILABLE - EVIDENCE PLATFORM INTEGRATION IN PROGRESS"), h("p", null, "Customer evidence actions produce only a correlated external handoff. There is no fake upload or browser extraction path."), h("h3", { className: "section" }, `Current EvidenceReferences · ${references.length}`), references.length ? h("pre", { className: "json" }, pretty(references)) : h(Empty, null, "No evidence references are present in the current manifest."), h("h3", { className: "section" }, `Pending external handoffs · ${session.externalHandoffs.length}`), session.externalHandoffs.length ? h("pre", { className: "json" }, pretty(session.externalHandoffs)) : h(Empty, null, "No evidence handoff has been requested."));
   }
 
   function FeedbackPanel({ view, feedback, setFeedback }) {
@@ -352,7 +352,7 @@
     const update = (field, value) => setCompany((current) => ({ ...current, [field]: value }));
     const selectedProfile = profiles.find((profile) => profile.profileId === profileId);
     const Profile = h("div", { className: "field full" },
-      h("label", { htmlFor: "review-profile" }, "RegistryCapabilityProfile — Lab review only"),
+      h("label", { htmlFor: "review-profile" }, "RegistryCapabilityProfile - Lab review only"),
       h("select", { id: "review-profile", value: profileId, onChange: (event) => setProfileId(event.target.value) }, profiles.map((profile) => h("option", { key: profile.profileId, value: profile.profileId }, profile.label))),
       h("p", { className: "field-help" }, selectedProfile?.warning || "NOT_PROVIDED"),
       selectedProfile?.profileHash && h("details", null, h("summary", null, `Profile #${shortHash(selectedProfile.profileHash)} · A-15 dependency`), h("pre", { className: "json" }, pretty(selectedProfile))));
@@ -439,7 +439,7 @@
       journey.policyContentBlocks.length > 0 && h("div", { className: "notice" }, `POLICY CONTENT REQUIRED · ${journey.policyContentBlocks.length} blocked option(s). No wording has been invented.`),
       bundles.length ? h("div", { className: "work-bundle-list section" }, bundles.map((bundle) => h("article", { className: "qualification-card", key: bundle.bundleId },
         h("div", { className: "panel-heading" }, h("div", null, h("h3", null, `${bundle.informationNeedIds.length} causal need(s) · ${human(bundle.state)}`), h("p", null, `${human(bundle.expectedResult)} · re-evaluate: ${human(bundle.reEvaluationTrigger)}`)), h("span", { className: "status" }, bundle.permittedSemanticActions.some(({ executable }) => executable) ? "ACTION AVAILABLE" : human(bundle.state))),
-        bundle.evidenceHandoff && h("div", { className: bundle.evidenceHandoff.readiness === "EVIDENCE_HANDOFF_READY_EXECUTION_NOT_CONNECTED" ? "notice evidence-ready" : "notice" }, bundle.evidenceHandoff.readiness === "EVIDENCE_HANDOFF_READY_EXECUTION_NOT_CONNECTED" ? "EVIDENCE HANDOFF READY — EXECUTION NOT CONNECTED" : human(bundle.evidenceHandoff.readiness)),
+        bundle.evidenceHandoff && h("div", { className: bundle.evidenceHandoff.readiness === "EVIDENCE_HANDOFF_READY_EXECUTION_NOT_CONNECTED" ? "notice evidence-ready" : "notice" }, bundle.evidenceHandoff.readiness === "EVIDENCE_HANDOFF_READY_EXECUTION_NOT_CONNECTED" ? "EVIDENCE HANDOFF READY - EXECUTION NOT CONNECTED" : human(bundle.evidenceHandoff.readiness)),
         h("p", null, `Subject: ${bundle.canonicalSubject.entityId || bundle.canonicalSubject.entityIds.join(", ")} · Requirements: ${bundle.requirementIds.join(", ") || "none"}`),
         h("details", null, h("summary", null, "Known, missing and permitted work"), h("pre", { className: "json" }, pretty({ knownInformation: bundle.knownInformation, missingInformation: bundle.missingInformation, permittedSemanticActions: bundle.permittedSemanticActions, signoffDependencies: bundle.signoffDependencies })))))) : h(Empty, null, journey.customerInputComplete ? "No customer work is currently executable. Final review and system work remain separate." : "No customer bundle is present in the pinned plan."));
   }
@@ -496,8 +496,8 @@
       h("div", { className: "panel applicant-lab-toolbar" },
         h("div", null,
           h("p", { className: "source-label" }, labSession.sourceMode === "LIVE"
-            ? (labSession.liveSaveOptIn === true ? "LIVE LAB CASE — SAVED LOCALLY FOR DEMO/TESTING" : "LIVE LAB CASE — NOT SAVED")
-            : "LAB SESSION — SAVED LOCALLY IN THIS BROWSER"),
+            ? (labSession.liveSaveOptIn === true ? "LIVE LAB CASE - SAVED LOCALLY FOR DEMO/TESTING" : "LIVE LAB CASE - NOT SAVED")
+            : "LAB SESSION - SAVED LOCALLY IN THIS BROWSER"),
           h("h2", null, `${labSession.fixtureId} - ${labSession.fixtureLabel}`),
           h("p", null, `Snapshot #${shortHash(current.snapshot.snapshotId)} | ${labSession.policyMode} | ${labSession.snapshots.length} immutable snapshot(s)`)),
         h("div", { className: "actions" },
@@ -514,7 +514,7 @@
         h("h3", null, "Your response has been submitted."),
         h("p", null, "Our review team needs to verify it.")),
       labSession.orchestrationState?.status === "EVIDENCE_HANDOFF_PENDING" && h("section", { className: "panel applicant-pending", role: "status" },
-        h("h3", null, "EVIDENCE HANDOFF READY — EXECUTION NOT CONNECTED"),
+        h("h3", null, "EVIDENCE HANDOFF READY - EXECUTION NOT CONNECTED"),
         h("p", null, "Nothing was uploaded and no Evidence Artifact was created.")),
       labSession.orchestrationState?.status === "DELEGATION_HANDOFF_PENDING" && h("section", { className: "panel applicant-pending", role: "status" },
         h("h3", null, "Help request prepared"),
@@ -545,12 +545,12 @@
     const pendingCount = applicantSession.pendingDecisionTargets.candidateParties.length
       + applicantSession.pendingDecisionTargets.candidateClaims.length;
     return h("section", { className: "panel section" },
-      h("p", { className: "source-label" }, "APPLICANT SESSION — INTERNAL ORCHESTRATION"),
+      h("p", { className: "source-label" }, "APPLICANT SESSION - INTERNAL ORCHESTRATION"),
       h("h2", null, "Applicant submission review"),
       h("p", null, `${pendingCount} explicit identity/claim decision target(s) pending.`),
       applicantSession.sourceMode === "FIXTURE" && applicantSession.fixtureReviewConfiguration && pendingCount > 0
         ? h("div", { className: "notice" },
-          h("strong", null, "DEMO FIXTURE — PRECONFIGURED REVIEW DECISIONS"),
+          h("strong", null, "DEMO FIXTURE - PRECONFIGURED REVIEW DECISIONS"),
           h("p", null, "This deterministic fixture helper calls the normal applyDecisions and evaluate operations. It is unavailable for live or replay data."),
           h("button", { className: "primary", disabled: busy, onClick: completeFixtureReview }, "Complete fixture review and refresh journey"))
         : pendingCount > 0 ? h("p", null, "A reviewer must complete the explicit decisions through an authorised internal workflow.") : null);
@@ -587,7 +587,7 @@
       const bases = assessment.basisRecords.map((basis) => h("details", { className: "section", key: basis.basisId },
         h("summary", null, `${human(basis.route)} · ${human(basis.dimension || basis.condition)} · ${human(basis.assessmentState)}`),
         h("div", { className: "route-summary" },
-          h("p", null, `${human(basis.classification)} · ${human(basis.directness)} · ${human(basis.methodStatus)} · threshold ${basis.threshold?.comparator || "—"}${basis.threshold?.value ?? "—"}%`),
+          h("p", null, `${human(basis.classification)} · ${human(basis.directness)} · ${human(basis.methodStatus)} · threshold ${basis.threshold?.comparator || "-"}${basis.threshold?.value ?? "-"}%`),
           h("p", null, `Reason: ${human(basis.reasonCode)} · Sign-offs: ${(basis.requiredSignoffs || basis.reviewDependencies || []).join(", ") || "none"}`),
           h("pre", { className: "json" }, pretty({ calculation: basis.recordedCalculation, attributedRights: basis.targetRightReferences, chains: basis.orderedPathReferences, evidenceReferences: basis.evidenceReferences, governance: assessment.governance })))));
       return h("article", { className: "qualification-card", key: assessment.assessmentId },
@@ -610,7 +610,7 @@
         h("p", null, `Affected: ${need.affected.calculationIds.length} calculation(s), ${need.affected.pathIds.length} path(s), ${need.affected.relationshipIds.length} relationship(s)`),
         h("p", null, `Content: ${human(need.contentReadinessStatus)} · Sign-offs: ${need.requiredSignoffIds.join(", ") || "none"}`),
         h("pre", { className: "json" }, pretty(need)))));
-    return h("section", { className: "panel" }, h("h2", null, "R01–R14 requirements and causal InformationNeeds"), h("p", null, "Each open causal need appears once. Affected paths and calculations are dependent diagnostics, not additional needs."),
+    return h("section", { className: "panel" }, h("h2", null, "R01-R14 requirements and causal InformationNeeds"), h("p", null, "Each open causal need appears once. Affected paths and calculations are dependent diagnostics, not additional needs."),
       h("div", { className: "table-wrap" }, h("table", null, h("thead", null, h("tr", null, ["Requirement", "Applies", "Resolution", "Reason", "Causal needs", "Reviews / blockers"].map((item) => h("th", { key: item }, item)))), h("tbody", null, rows))),
       h("div", { className: "section" }, needs));
   }
@@ -657,7 +657,7 @@
       if (!String(session.selectedFixtureId || "").startsWith("V2-LAB-")) return;
       request("REVIEW_COMPARISON", { fixtureId: session.selectedFixtureId, profileId: session.selectedProfileId }).then(setComparison).catch((cause) => setError(cause.message));
     }, [session.selectedFixtureId, session.selectedProfileId]);
-    return h("section", { className: "panel" }, h("p", { className: "source-label" }, "SAME NORMALIZED CANDIDATE FACTS · NO SECOND SEARCH"), h("h2", null, "Baseline 1.5-RC versus successor 1.6-RC"), h("div", { className: "notice" }, "The definitions differ: v1 projected unresolved rows and v2 causal needs/dependent diagnostics are not directly identical metrics."), error && h("div", { className: "error" }, error), comparison ? h("div", { className: "comparison-grid section" }, [["Baseline — 1.5-RC", comparison.baseline], ["Successor review — 1.6-RC", comparison.successor]].map(([title, value]) => h("article", { className: "comparison-card", key: title }, h("h3", null, title), h("pre", { className: "json" }, pretty(value))))) : h(Empty, null, String(session.selectedFixtureId || "").startsWith("V2-LAB-") ? "Building the exact comparison…" : "Comparison is available for the sanitized fixture set."));
+    return h("section", { className: "panel" }, h("p", { className: "source-label" }, "SAME NORMALIZED CANDIDATE FACTS · NO SECOND SEARCH"), h("h2", null, "Baseline 1.5-RC versus successor 1.6-RC"), h("div", { className: "notice" }, "The definitions differ: v1 projected unresolved rows and v2 causal needs/dependent diagnostics are not directly identical metrics."), error && h("div", { className: "error" }, error), comparison ? h("div", { className: "comparison-grid section" }, [["Baseline - 1.5-RC", comparison.baseline], ["Successor review - 1.6-RC", comparison.successor]].map(([title, value]) => h("article", { className: "comparison-card", key: title }, h("h3", null, title), h("pre", { className: "json" }, pretty(value))))) : h(Empty, null, String(session.selectedFixtureId || "").startsWith("V2-LAB-") ? "Building the exact comparison…" : "Comparison is available for the sanitized fixture set."));
   }
 
   function PreingestedEvidenceWorkspace({ readiness }) {
@@ -727,9 +727,9 @@
       : "source statement · no relationship-currentness assertion";
     if (!demo) return h("main", { className: "shell preingested-demo" },
       h("section", { className: "panel demo-hero" },
-        h("p", { className: "source-label" }, "REAL SOURCE IMAGE — MANUALLY REVIEWED FIXTURE"),
-        h("p", { className: "source-label" }, "REVIEW LAB — NOT PRODUCTION UPLOAD"),
-        h("h2", null, "BETTERCOMMS — SOURCE-BACKED REVIEWED OWNERSHIP CHART"),
+        h("p", { className: "source-label" }, "REAL SOURCE IMAGE - MANUALLY REVIEWED FIXTURE"),
+        h("p", { className: "source-label" }, "REVIEW LAB - NOT PRODUCTION UPLOAD"),
+        h("h2", null, "BETTERCOMMS - SOURCE-BACKED REVIEWED OWNERSHIP CHART"),
         h("p", null, "Replay reviewed source statements through EvidenceConsumerV1, the merged adapter, explicit fixture decisions, Decision Application v3 and Snapshot v2."),
         h("div", { className: "notice" }, "Historical Evidence-store linkage not yet revalidated · No fresh automated interpretation performed · No source bytes are published or stored in this browser."),
         notice && h("div", { className: "notice", role: "status" }, notice),
@@ -737,7 +737,7 @@
         h("button", { className: "primary", disabled: busy || !restored, onClick: () => run("START_PREINGESTED_EVIDENCE_DEMO", {}) }, !restored ? "Restoring saved demo…" : busy ? "Starting…" : "Open source-backed Bettercomms demo")));
     return h("main", { className: "shell preingested-demo" },
       h("header", { className: "workspace-header" },
-        h("div", null, demo.labels.map((label) => h("p", { className: "source-label", key: label }, label)), h("p", { className: "source-label" }, "REVIEW LAB — NOT PRODUCTION UPLOAD"), h("h2", null, demo.fixtureLabel), h("p", null, `${human(demo.stage)} · ${demo.snapshots.length} immutable snapshot(s) · productionAuthorized=false`)),
+        h("div", null, demo.labels.map((label) => h("p", { className: "source-label", key: label }, label)), h("p", { className: "source-label" }, "REVIEW LAB - NOT PRODUCTION UPLOAD"), h("h2", null, demo.fixtureLabel), h("p", null, `${human(demo.stage)} · ${demo.snapshots.length} immutable snapshot(s) · productionAuthorized=false`)),
         h("button", { className: "secondary", disabled: busy, onClick: reset }, "Reset demo")),
       notice && h("div", { className: "notice", role: "status" }, notice),
       error && h("div", { className: "error", role: "alert" }, error),
@@ -758,10 +758,10 @@
           h("details", null, h("summary", null, "Inspect the pinned ExternalEvidenceHandoff plan"), h("pre", { className: "json" }, pretty(current.journey.customerWorkBundles))),
           h("button", { className: "primary section", disabled: busy || demo.sourceMode !== "FIXTURE", onClick: () => run("USE_PREINGESTED_BETTERCOMMS_ARTIFACT", { session: demo }) }, "Use source-backed reviewed Bettercomms fixture")),
         demo.stage === "SOURCE_FACTS_EXTRACTED" && h("div", { className: "section" },
-          h("div", { className: "evidence-extracted-state" }, "SOURCE FACTS EXTRACTED — NOT YET ACCEPTED INTO THE UBO GRAPH"),
+          h("div", { className: "evidence-extracted-state" }, "SOURCE FACTS EXTRACTED - NOT YET ACCEPTED INTO THE UBO GRAPH"),
           h("p", null, `${extracted.candidateFacts.length} extracted facts from one source document. No claim is operative and no UBO calculation has run from them yet.`),
           h("div", { className: "grid-3 section" }, h(Metric, { label: "Identity targets", value: demo.decisionTargets.candidateParties.length }), h(Metric, { label: "Claim targets", value: demo.decisionTargets.candidateClaims.length }), h(Metric, { label: "Interpretation", value: extracted.outcome.state })),
-          h("button", { className: "primary section", disabled: busy, onClick: () => run("APPLY_PREINGESTED_FIXTURE_DECISIONS", { session: demo }) }, "DEMO FIXTURE — APPLY PRECONFIGURED IDENTITY AND CLAIM DECISIONS"))),
+          h("button", { className: "primary section", disabled: busy, onClick: () => run("APPLY_PREINGESTED_FIXTURE_DECISIONS", { session: demo }) }, "DEMO FIXTURE - APPLY PRECONFIGURED IDENTITY AND CLAIM DECISIONS"))),
       extracted && h("section", { className: "panel section" },
         h("h2", null, "Public Evidence DTO and adapter trace"),
         h("p", { className: "notice" }, "This is a deterministic replay of manually reviewed source statements. It is not a new automated interpretation or a persisted historical Evidence operation."),
@@ -908,14 +908,14 @@
         suppressNextApplicantSave.current = true;
         setApplicantSession(next);
         setCachedApplicantRecord(record);
-        setApplicantCacheNotice("Saved only in this browser — Lab testing, not production case storage");
+        setApplicantCacheNotice("Saved only in this browser - Lab testing, not production case storage");
       } catch (cause) { setApplicantCacheError(cause.message); }
       finally { setBusy(false); }
     };
     if (!view) return h("main", { className: "shell" }, h("header", { className: "workspace-header" }, h("div", null, h("h2", null, session.companyContext.legalEntityName), h("p", null, "Successor intake is candidate-before-conclusion; explicit identity and claim decisions are required.")), h("button", { className: "secondary", onClick: reset }, "New case")), error && h("div", { className: "error" }, error), h(DecisionsPanel, { session, busy, apply }));
     const profileOptions = (catalogue?.profiles || []).map((profile) => h("option", { key: profile.profileId, value: profile.profileId }, profile.label));
     const header = h("header", { className: "workspace-header" },
-      h("div", null, h("p", { className: "source-label" }, "SUCCESSOR REVIEW — 1.6-RC"), h("h2", null, session.companyContext.legalEntityName), h("p", null, `${session.sourceLabel} · ${session.sourceState} · Snapshot #${shortHash(view.snapshot.snapshotId)}`)),
+      h("div", null, h("p", { className: "source-label" }, "SUCCESSOR REVIEW - 1.6-RC"), h("h2", null, session.companyContext.legalEntityName), h("p", null, `${session.sourceLabel} · ${session.sourceState} · Snapshot #${shortHash(view.snapshot.snapshotId)}`)),
       h("div", { className: "actions", style: { marginTop: 0 } }, h("label", { className: "profile-control" }, "Lab profile", h("select", { value: session.selectedProfileId, disabled: busy, onChange: (event) => changeProfile(event.target.value) }, profileOptions)), h("button", { className: "secondary", onClick: reset }, "New case")));
     const tabs = h("div", { className: "tabs", role: "tablist", "aria-label": "Successor review workspace views" }, REVIEW_TABS.map((name) => h("button", { key: name, className: "tab", role: "tab", "aria-selected": tab === name, onClick: () => setTab(name) }, human(name))));
     const summary = h("section", { className: "panel" }, h("h2", null, "Case Summary"), h("div", { className: "grid-2" },
@@ -1024,11 +1024,11 @@
     const readiness = session?.policyReadiness || currentView?.policyReadiness || (successor ? setupReviewReadiness : catalogue?.policyReadiness);
     const selectDoctrine = (value) => { setDoctrine(value); setSession(null); setError(""); setMode("FIXTURE"); };
     return h("div", { className: "lab" },
-      h("header", { className: "topbar" }, h("div", { className: "brand" }, h("div", { className: "brand-mark", "aria-hidden": "true" }, "UBO"), h("div", null, h("h1", null, "UBO Control Lab"), h("p", null, "Standalone compliance testing environment"))), h("div", { className: "session-badges" }, h("span", { className: "badge warn" }, "LAB DEMO — BROWSER-LOCAL SESSION STORAGE"), h("span", { className: "badge" }, successor ? "Policy 1.6-RC · REVIEW ONLY" : "Policy 1.5-RC · BASELINE"), h("span", { className: "badge" }, evidenceDemo ? "EvidenceConsumerV1 · Decision App v3" : successor ? "Review App v1 · Snapshot v2" : "Decision App v2 · Snapshot v1"))),
+      h("header", { className: "topbar" }, h("div", { className: "brand" }, h("div", { className: "brand-mark", "aria-hidden": "true" }, "UBO"), h("div", null, h("h1", null, "UBO Control Lab"), h("p", null, "Standalone compliance testing environment"))), h("div", { className: "session-badges" }, h("span", { className: "badge warn" }, "LAB DEMO - BROWSER-LOCAL SESSION STORAGE"), h("span", { className: "badge" }, successor ? "Policy 1.6-RC · REVIEW ONLY" : "Policy 1.5-RC · BASELINE"), h("span", { className: "badge" }, evidenceDemo ? "EvidenceConsumerV1 · Decision App v3" : successor ? "Review App v1 · Snapshot v2" : "Decision App v2 · Snapshot v1"))),
       h(PolicyReadinessWatermark, { readiness }),
       h("nav", { className: "doctrine-selector with-evidence-demo", "aria-label": "Policy and engine version" },
-        h("button", { className: !successor ? "active" : "", "aria-pressed": !successor, onClick: () => selectDoctrine("BASELINE") }, h("strong", null, "BASELINE — 1.5-RC"), h("span", null, "Existing public v1 behavior")),
-        h("button", { className: doctrine === "SUCCESSOR_REVIEW" ? "active" : "", "aria-pressed": doctrine === "SUCCESSOR_REVIEW", onClick: () => selectDoctrine("SUCCESSOR_REVIEW") }, h("strong", null, "SUCCESSOR REVIEW — 1.6-RC"), h("span", null, "Snapshot v2 · Review only · Not production approved")),
+        h("button", { className: !successor ? "active" : "", "aria-pressed": !successor, onClick: () => selectDoctrine("BASELINE") }, h("strong", null, "BASELINE - 1.5-RC"), h("span", null, "Existing public v1 behavior")),
+        h("button", { className: doctrine === "SUCCESSOR_REVIEW" ? "active" : "", "aria-pressed": doctrine === "SUCCESSOR_REVIEW", onClick: () => selectDoctrine("SUCCESSOR_REVIEW") }, h("strong", null, "SUCCESSOR REVIEW - 1.6-RC"), h("span", null, "Snapshot v2 · Review only · Not production approved")),
         h("button", { className: evidenceDemo ? "active" : "", "aria-pressed": evidenceDemo, onClick: () => selectDoctrine("PREINGESTED_EVIDENCE") }, h("strong", null, "BETTERCOMMS EVIDENCE DEMO"), h("span", null, "Pre-ingested Artifact · No upload"))),
       evidenceDemo
         ? h(PreingestedEvidenceWorkspace, { readiness })

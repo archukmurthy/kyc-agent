@@ -72,7 +72,7 @@ function forReviewer(result) {
     ownershipGraph: result.ownershipGraph ? {
       ...result.ownershipGraph,
       nodes: (result.ownershipGraph.nodes || []).map((node) => node.type === "public_company"
-        ? { ...node, type: "Publicly listed company — terminal; no further shareholder investigation required" }
+        ? { ...node, type: "Publicly listed company - terminal; no further shareholder investigation required" }
         : node),
     } : result.ownershipGraph,
   };
@@ -130,7 +130,7 @@ module.exports = async function handler(req, res) {
     if (!forceRefresh) {
       const cached = await _deps.getFresh(key);
       if (cached) {
-        emit({ stage: "cache_hit", message: "Reusing cached investigation — no live research needed" });
+        emit({ stage: "cache_hit", message: "Reusing cached investigation - no live research needed" });
         const response = { ...cached.result, cache: { hit: true, cachedAt: cached.cachedAt, validUntil: cached.expiresAt, layer: "investigation" } };
         const auditId = randomUUID();
         schedulePersistence({ jobId, tenantId, input, cacheHit: true, forceRefresh: false, result: response, cacheKey: key, auditId });

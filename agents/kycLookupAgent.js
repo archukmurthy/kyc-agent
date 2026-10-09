@@ -1,14 +1,14 @@
 /**
  * kycLookupAgent.js
  *
- * KYC Lookup Agent — separate agent that calls the Nium KYB (eKYB) API and
+ * KYC Lookup Agent - separate agent that calls the Nium KYB (eKYB) API and
  * returns structured field data in the same shape as AI research results.
  *
  * Two sequential API calls:
- *   1. publicDetails           — confirms the company exists, returns a
+ *   1. publicDetails           - confirms the company exists, returns a
  *                                publicDetailsId (and basic identity fields)
- *   2. exhaustiveDetailsSearch — full company record incl. stakeholders,
- *                                address, registry info (CHARGEABLE — cached)
+ *   2. exhaustiveDetailsSearch - full company record incl. stakeholders,
+ *                                address, registry info (CHARGEABLE - cached)
  *
  * Interface contract with the main KYC agent:
  *   Input:  { companyName, countryCode, registrationNumber? }
@@ -21,13 +21,13 @@
  * so the main KYC agent processes Nium results identically to AI research and
  * does not know (or care) that the data came from Nium.
  *
- * TRANSPORT / AUTH: delegated to lib/niumClient.js — the verified, working
+ * TRANSPORT / AUTH: delegated to lib/niumClient.js - the verified, working
  * Nium V5 client (x-api-key + X_REQUEST_ID, eKYB host api.preprod.nium.com,
  * env vars NIUM_EKYB_* falling back to NIUM_CLIENT_HASH_ID / NIUM_API_KEY).
- * This agent does NOT re-implement HTTP or hardcode credentials/base URLs —
+ * This agent does NOT re-implement HTTP or hardcode credentials/base URLs -
  * it reuses the single source of truth so auth stays consistent across the app.
  *
- * Owner: separate from the main KYC agent — can be extended independently.
+ * Owner: separate from the main KYC agent - can be extended independently.
  */
 
 const { randomUUID } = require("crypto");
@@ -37,7 +37,7 @@ const { randomUUID } = require("crypto");
 const { fetchExhaustiveDetails, NiumAPIError } = require("../lib/niumClient");
 const storage = require("../lib/storage");
 
-// eKYB host + credentials — identical resolution to lib/niumClient.js so auth
+// eKYB host + credentials - identical resolution to lib/niumClient.js so auth
 // stays consistent (env names, preprod default, eKYB-specific keys falling back
 // to the shared gateway creds). No hardcoded secrets.
 const EKYB_BASE_URL =
@@ -60,7 +60,7 @@ function niumHeaders() {
 }
 
 /**
- * Step 1 — publicDetails by company NAME (+ country). Registration number is
+ * Step 1 - publicDetails by company NAME (+ country). Registration number is
  * NOT required; when present it only narrows the search. Country is sent as
  * registeredCountry + region (the verified param names from lib/niumClient.js).
  *
@@ -84,7 +84,7 @@ async function fetchPublicDetailsByName({ businessName, countryCode, registratio
     url.searchParams.set("region", countryCode);
   }
   if (type) url.searchParams.set("type", type);
-  // Optional — only added when provided; never required.
+  // Optional - only added when provided; never required.
   if (registrationNumber) {
     url.searchParams.set("businessRegistrationNumber", registrationNumber);
   }
@@ -225,7 +225,7 @@ function mapExhaustiveDetails(data) {
     });
   }
 
-  // ── Stakeholders — individuals ──
+  // ── Stakeholders - individuals ──
   const individuals = (data.stakeholders?.individual || []).map((p) => {
     const fullName = [p.firstName, p.middleName, p.lastName].filter(Boolean).join(" ");
     const roles = (p.positions || []).map((pos) => pos.title);
@@ -236,7 +236,7 @@ function mapExhaustiveDetails(data) {
       full_name: fullName,
       role: roles.filter((r) => r !== "UBO").join(", ") || roles[0] || "",
       share_percentage: p.sharePercentage || null,
-      // PRE-POPULATED FROM API — customer does not need to fill these.
+      // PRE-POPULATED FROM API - customer does not need to fill these.
       nationality: p.nationality || "",
       date_of_birth: p.dateOfBirth || "",
       residential_country: p.address?.country || "",
@@ -250,7 +250,7 @@ function mapExhaustiveDetails(data) {
     };
   });
 
-  // ── Stakeholders — corporates (treated as UBOs) ──
+  // ── Stakeholders - corporates (treated as UBOs) ──
   const corporates = (data.stakeholders?.corporate || []).map((c) => ({
     id: shortId(),
     type: "ubo",
@@ -298,7 +298,7 @@ function mapExhaustiveDetails(data) {
 
 // exhaustiveDetailsSearch is chargeable; share the route's cache (key +
 // TTL) so repeat lookups for the same publicDetailsId are free. Cache failures
-// are non-fatal — fall through to the live API.
+// are non-fatal - fall through to the live API.
 async function fetchExhaustiveDetailsCached(publicDetailsId) {
   const cacheKey = `exhaustive:${publicDetailsId}`;
   try {
@@ -354,7 +354,7 @@ async function kycLookupAgent(params) {
 
   try {
     // ── Step 1: publicDetails ──
-    // Search by company NAME + country. Registration number is optional — when
+    // Search by company NAME + country. Registration number is optional - when
     // provided it narrows the search; when absent the name search still runs.
     console.log("[KYCLookupAgent] Step 1: publicDetails (by name)");
     const publicData = await fetchPublicDetailsByName({
@@ -383,7 +383,7 @@ async function kycLookupAgent(params) {
 
     const exhaustiveMapped = mapExhaustiveDetails(exhaustiveData);
 
-    // Merge fields — exhaustive wins on duplicates (richer data).
+    // Merge fields - exhaustive wins on duplicates (richer data).
     const fieldMap = new Map(result.fields.map((f) => [f.field, f]));
     exhaustiveMapped.fields.forEach((f) => fieldMap.set(f.field, f));
     result.fields = Array.from(fieldMap.values());

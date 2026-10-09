@@ -53,7 +53,7 @@ describe('draft scoping', () => {
 
   // Isolates the `!parsed.tenantId` clause specifically: this saves AND loads
   // with an empty scope, so `parsed.tenantId === wantTenant` (`"" === ""`)
-  // would already be true without that clause — without it, two different
+  // would already be true without that clause - without it, two different
   // no-tenant sessions (both reachable: no ?tenant= present) could match each
   // other's draft.
   test('a draft saved with an empty scope is never offered back, even to an empty scope', () => {

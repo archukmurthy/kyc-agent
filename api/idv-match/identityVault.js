@@ -5,12 +5,12 @@
 // Extracted identity PII (name, DOB, document number, ...) must live ONLY in
 // the secure Vault as encrypted values behind an opaque reference; our own
 // tables persist that reference, never plaintext. This is the single seam the
-// rest of api/idv-match/ uses to store/read identity PII — callers never touch
+// rest of api/idv-match/ uses to store/read identity PII - callers never touch
 // the idv/ module's store or canonical builders directly.
 //
 // Dev/test uses the module's in-memory synthetic Vault (no infra: no KMS, no
-// OIDC, no separate DB). Production hardening — real KMS-backed ManagedKey
-// provider, OIDC-authenticated SecurityContext, separate encrypted DB — is
+// OIDC, no separate DB). Production hardening - real KMS-backed ManagedKey
+// provider, OIDC-authenticated SecurityContext, separate encrypted DB - is
 // BACKLOG IDV-2; it slots in behind this same wrapper without changing callers.
 
 const {
@@ -22,7 +22,7 @@ const durable = require("./vaultStore");
 
 // When an IDV database is configured, PII is stored in the durable, encrypted
 // Vault (vaultStore.js). Without a DB (unit tests) the in-memory synthetic Vault
-// is used. Callers never see the difference — this seam hides the backend.
+// is used. Callers never see the difference - this seam hides the backend.
 function useDurable() {
   return !!process.env.IDV_DATABASE_URL;
 }
@@ -31,7 +31,7 @@ let cachedStore = null;
 
 // The synthetic store is process-wide and in-memory; build it once. We pass an
 // explicit minimal env (not process.env) so a stray IDV_* var can't flip this
-// to a durable/production store — the synthetic Vault is the ONLY thing this
+// to a durable/production store - the synthetic Vault is the ONLY thing this
 // dev wrapper is allowed to bind to.
 function vaultStore() {
   if (cachedStore) return cachedStore;
@@ -57,7 +57,7 @@ function vaultAccess({ tenantId, subjectId, purpose, fields, correlationId }) {
 
 // Persist extracted identity PII. `attributes` are already-canonical identity
 // attributes (each with attribute_concept + attribute_value) produced by the
-// provider-neutral mapping layer — the sole producer of canonical PII. The
+// provider-neutral mapping layer - the sole producer of canonical PII. The
 // store runs assertNoRawEvidence on them. `sessionId` (our attempt id) keys the
 // Vault entry: re-storing the same attempt updates it and returns the same
 // opaque reference (idempotent under duplicate webhooks). Returns the opaque
@@ -90,7 +90,7 @@ async function storeExtractedIdentity({
   return secureIdentityReference;
 }
 
-// Read identity PII back under an explicit field allowlist (data minimization —
+// Read identity PII back under an explicit field allowlist (data minimization -
 // only the concepts named in `fields` are decrypted and returned). Returns a
 // plain { concept: value } map for display/matching. An empty allowlist is a
 // caller error, not a silent empty read.

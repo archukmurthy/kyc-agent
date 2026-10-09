@@ -2,7 +2,7 @@ import { formatAssertionMeasurement } from "./assertionPresentation";
 
 export const CALCULATION_METHODS = Object.freeze([
   { value: "POLICY_ALL_ROUTES", label: "All policy routes" },
-  { value: "EFFECTIVE_INTEREST", label: "Effective ownership — multiply + add" },
+  { value: "EFFECTIVE_INTEREST", label: "Effective ownership - multiply + add" },
   { value: "PSC_CONDITION_ATTRIBUTION", label: "Control attribution" },
 ]);
 

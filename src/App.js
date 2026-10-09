@@ -10,7 +10,7 @@ import Step5Recompute from "./components/Step5Recompute";
 import { buildChangeEvent } from "./components/changeDialogue/buildChangeEvent";
 import { classifyFieldClass, deriveSource } from "./components/changeDialogue/dialogueContent";
 import ConfirmStep from "./components/companyConfirm/ConfirmStep";
-// TEST VIEW imports — the analyst strip is commented out at both render sites.
+// TEST VIEW imports - the analyst strip is commented out at both render sites.
 // Uncomment these two lines together with those blocks to bring it back.
 // import AnalystSignalStrip from "./components/companyConfirm/AnalystSignalStrip";
 // import { buildAnalystSignal } from "./components/companyConfirm/analystSignals";
@@ -54,7 +54,7 @@ import {
 // with them. They now live solely in foundTableHelpers, used by that component.
 import { ApplicantPage } from "./components/applicant/ApplicantPage";
 // The journey-selection screen moved out; App now only wires it up. All of its
-// state stayed here — every item has a consumer outside that screen.
+// state stayed here - every item has a consumer outside that screen.
 import { JourneyPicker } from "./components/companyLookup/JourneyPicker";
 import { CompanyLookupPage } from "./components/companyLookup/CompanyLookupPage";
 // Pre-boarding screens. The ?preboarding=1 early-return routing block below stays
@@ -64,7 +64,7 @@ import { DossierView } from "./components/preboarding/DossierView";
 import { InviteScreen } from "./components/preboarding/InviteScreen";
 import { AIDocumentsPage } from "./components/aiDocuments/AIDocumentsPage";
 import { FoundFieldsTable } from "./components/companyConfirm/FoundFieldsTable";
-// Slice 2 — the People section moved out; App now only wires it up. The PURE
+// Slice 2 - the People section moved out; App now only wires it up. The PURE
 // helpers of that family live alongside it and are imported back here because
 // personConfirmItems and buildStakeholderAttributeTrail still use them.
 import { StakeholderConfirmSection } from "./components/companyConfirm/StakeholderConfirmSection";
@@ -74,7 +74,7 @@ import {
   isPersonLowConfidence,
 } from "./components/companyConfirm/peopleHelpers";
 import { uploadAmendmentDoc } from "./components/amendmentDocuments/uploadAmendmentDoc";
-// LEGAL_NAME_ALERT went with the journey picker — it was only ever rendered by
+// LEGAL_NAME_ALERT went with the journey picker - it was only ever rendered by
 // that screen's cap notice. evaluateSearchCap and CONTACT_ADMIN_MSG stay: both
 // are still used by proceedFromJourney, which did not move.
 import { evaluateSearchCap, CONTACT_ADMIN_MSG } from "./reresearch/searchPolicy";
@@ -111,7 +111,7 @@ import {
   NIUM_DEMO_REG_NUMBER,
   NIUM_DEMO_COUNTRY,
   OWNERSHIP_ID_TO_DRS,
-  // TEST_FLAG went with the journey picker — it gated that screen's DemoToggle.
+  // TEST_FLAG went with the journey picker - it gated that screen's DemoToggle.
   SHOW_TEST_TOOLS,
   COUNTRIES,
 } from "./constants/appConstants";
@@ -144,7 +144,7 @@ import { LinkUnavailable } from "./components/preboarding/LinkUnavailable";
 import { buildLocalDefaultConfig } from "./config/localDefaultConfig";
 import { PreviewBanner } from "./components/banners/PreviewBanner";
 import { DemoBanner } from "./components/banners/DemoBanner";
-// DemoToggle went with the journey picker — that screen was its only mount site.
+// DemoToggle went with the journey picker - that screen was its only mount site.
 import { FillGapsPage } from "./components/fillGaps/FillGapsPage";
 import { BUSINESS_TYPE_OPTIONS, stakeholderMissingFields } from "./components/fillGaps/stakeholderHelpers";
 import {
@@ -166,11 +166,11 @@ if (SHOW_TEST_TOOLS && typeof window !== "undefined") {
 }
 
 export default function KYCAgent({ previewMode = false, preboarding = false } = {}) {
-  // Tenant config — loaded from /api/config on mount, or from sessionStorage
+  // Tenant config - loaded from /api/config on mount, or from sessionStorage
   // when running in preview mode (the admin "Preview" button stages the
   // current unsaved config under the "preview_config" key).
   //
-  // Tenant resolution comes from the URL (?tenant=X) ONLY — 3-strict, no
+  // Tenant resolution comes from the URL (?tenant=X) ONLY - 3-strict, no
   // default tenant. Plain / (no ?tenant=) renders NoTenantLanding instead.
   // Preview mode is either triggered by the /preview route (index.js sets
   // previewMode prop) or by ?preview=true in the URL.
@@ -178,7 +178,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   // Pre-boarding entry. The path (/preboarding) is the real entry; the legacy
   // ?preboarding=1 param is redirected to it once, on mount, so old bookmarks
-  // and emailed links keep working. Read in ONE place — this used to be parsed
+  // and emailed links keep working. Read in ONE place - this used to be parsed
   // separately here and inside resetAll.
   const isPreboardingSurface = preboarding;
   useEffect(() => {
@@ -204,10 +204,10 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // in the preview banner so the admin can tell whether the tab is stale.
   const [previewTimestamp, setPreviewTimestamp] = useState(null);
   // True when /?preview=true is set but no sessionStorage staged config was
-  // found — banner switches to amber + "go to admin" link.
+  // found - banner switches to amber + "go to admin" link.
   const [previewMissing, setPreviewMissing] = useState(false);
 
-  // Demo mode — when on, all journeys short-circuit to doDummyResearch so the
+  // Demo mode - when on, all journeys short-circuit to doDummyResearch so the
   // flow renders instantly with sample data. Initialised from ?demo=true or
   // a prior sessionStorage opt-in so it survives step navigation.
   const [demoMode, setDemoModeState] = useState(() => {
@@ -238,14 +238,14 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setDemoModeState(next);
     try { sessionStorage.setItem("demo_mode", next ? "true" : "false"); } catch (_) { /* ignore */ }
   }, []);
-  // Visibility gate — see utils/demoToggle.js.
+  // Visibility gate - see utils/demoToggle.js.
   const demoToggleVisible = typeof window !== "undefined"
     && isDemoToggleVisible({ search: window.location.search, hostname: window.location.hostname });
 
   useEffect(() => {
     let cancelled = false;
     // 3-strict: no tenant means nothing to load. Render bails out to
-    // NoTenantLanding further down (after all hooks) — don't hit /api/config
+    // NoTenantLanding further down (after all hooks) - don't hit /api/config
     // or read staged preview config for a tenant that doesn't exist.
     if (!tenantId) {
       setConfigLoading(false);
@@ -273,7 +273,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
           return () => {};
         }
       } catch (_) { /* fall through */ }
-      // No staged config — surface this in the banner and fall through to the
+      // No staged config - surface this in the banner and fall through to the
       // normal API fetch so the page still has SOMETHING to render.
       setPreviewMissing(true);
     }
@@ -339,11 +339,11 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // so `dossierId || onboardingSubmissionId` always resolves to dossierId.
   const [onboardingSubmissionId, setOnboardingSubmissionId] = useState(null);
   // Journey-origin flag: true when the customer landed via an invite link
-  // (?dossierId&journey=customer) and so never saw the lookup page —
+  // (?dossierId&journey=customer) and so never saw the lookup page -
   // Company/Research were done by the analyst before they arrived. This is the
   // SAME "dossier/invite journey" definition the reg-number "you provided this"
   // lock uses (the link-landing URL param; regNumberSource stays null on exactly
-  // this journey). Captured as reactive state — not read live from the URL —
+  // this journey). Captured as reactive state - not read live from the URL -
   // because resetAll does not clear the URL: clearing this flag on a "wrong
   // company" dispute reset correctly returns the redirected-to-lookup customer
   // to the full 7-step bar. Drives which step-bar pills show (never routing) and,
@@ -364,8 +364,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   const saveInFlightRef = useRef(null);
 
   // Self-serve re-research (front-door "wrong company / wrong type") state.
-  //  seededBy          — 'analyst' (default) | 'customer' (after a self-serve dispute)
-  //  searchAttempts    — searches already consumed for this dossier (server-read)
+  //  seededBy          - 'analyst' (default) | 'customer' (after a self-serve dispute)
+  //  searchAttempts    - searches already consumed for this dossier (server-read)
   // 'customer' once the customer has corrected a foundational fact; recorded on
   // the dossier as seeded_by and used to route a failed re-search to manual entry.
   const [seededBy, setSeededBy] = useState("analyst");
@@ -415,7 +415,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   const [inviteSent, setInviteSent] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   // Scroll to top on every step transition. React keeps the previous scroll
-  // position by default — undesirable for a stepped wizard where the new
+  // position by default - undesirable for a stepped wizard where the new
   // page's heading should be visible immediately. The smooth scroll here
   // is the catch-all; for user-triggered Next clicks we also scroll
   // instantly before the new step renders (see scrollAndSetStep below) so
@@ -436,7 +436,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   const [entityType, setEntityType] = useState("");
   // Optional business registration / company number captured on the lookup page
   // (slice 1 of the reg-number initiative). When provided it's used as the
-  // PRIMARY search key — fed to the Companies House officers layer (via the
+  // PRIMARY search key - fed to the Companies House officers layer (via the
   // `registrationNumber` body field /api/research already accepts) and injected
   // into the web-research prompt. Blank or unresolved silently falls back to the
   // existing name-based search (the company name is always in the prompt+body,
@@ -447,21 +447,21 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // Provenance of `regNumber`, kept EXPLICIT rather than inferred from whether
   // the string is non-empty. Set to "customer" ONLY by the lookup-page input
   // handler (the customer typed it themselves this session). Every link-landing
-  // path (?dossierId) leaves it null — even once `regNumber` is later
-  // restored from a loaded dossier — so slice 2's FoundationalFactsGate locks
+  // path (?dossierId) leaves it null - even once `regNumber` is later
+  // restored from a loaded dossier - so slice 2's FoundationalFactsGate locks
   // the "✓ You provided this" row only for the genuine lookup journey and keeps
   // it verifiable/uncheckable everywhere else.
   const [regNumberSource, setRegNumberSource] = useState(null);
   // Registration number for the Nium API Lookup journey (test mode only). The
   // Nium eKYB publicDetails endpoint searches registries by registration number
-  // — a name-only search returns HTTP 400 — so this is required for that one
+  // - a name-only search returns HTTP 400 - so this is required for that one
   // journey. Not used by the AI/manual journeys.
   const [niumRegNumber, setNiumRegNumber] = useState("");
   // Companies House name → reg-number resolver state (test mode only).
   const [niumSearchLoading, setNiumSearchLoading] = useState(false);
   const [niumSearchResults, setNiumSearchResults] = useState(null);
   const [niumSearchError, setNiumSearchError] = useState("");
-  // Ownership type (Step 1) — drives the Phase 0 research strategy. Reset to ""
+  // Ownership type (Step 1) - drives the Phase 0 research strategy. Reset to ""
   // whenever the entity type changes, since each entity type exposes a
   // different set of allowed ownership types.
   const [ownershipType, setOwnershipType] = useState("");
@@ -516,7 +516,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // so it survives the Confirm subtree unmounting on navigation. Without this,
   // leaving Confirm (→ Fill Gaps) and returning re-mounts each dialogue with
   // empty local state and re-asks already-answered questions. Keyed by fieldId;
-  // cleared in resetAll. (`checks` itself already persists — it's parent state.)
+  // cleared in resetAll. (`checks` itself already persists - it's parent state.)
   const dialogueStateRef = useRef({});
   // MERGE (not replace): the dialogue persists {index, answers, emitted, event,
   // eventId}, while the inline-capture save path (commit 3) stashes its own
@@ -540,12 +540,12 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // suppresses stakeholder EDD forms on Fill Gaps the same way auto-detection
   // would (see effectivelyListed below).
   const [isPubliclyListedOverride, setIsPubliclyListedOverride] = useState(false);
-  // Single source of truth for "treat as listed" — auto-detected OR manually
+  // Single source of truth for "treat as listed" - auto-detected OR manually
   // declared on Confirm. Used by the gap forms, validation, the Fill Gaps
   // caller, and the submission payload so the behaviour stays consistent.
   const effectivelyListed = isPubliclyListed || isPubliclyListedOverride;
   const [revealedTs, setRevealedTs] = useState({});
-  // Confirm-page affirmation, keyed by FIELD ID (stable across the tier sort —
+  // Confirm-page affirmation, keyed by FIELD ID (stable across the tier sort -
   // unlike `checks`, which is research.found-index-keyed and must stay that
   // way). Every row arrives pre-ticked, so "ticked" cannot distinguish
   // "customer agreed" from "customer hasn't looked"; ticking a low-confidence
@@ -558,7 +558,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   const [affirmedPersonFields, setAffirmedPersonFields] = useState({});
   // Amendment documents derived server-side from the append-only event store
   // (authoritative in production). Unioned with the LIVE dialogue outcomes so
-  // the requirement shows the instant a change is classified — before the
+  // the requirement shows the instant a change is classified - before the
   // round-trip lands, and at all in a DB-less dev environment. De-duped by
   // docType in canonicalDocs so one real document is never asked for twice.
   const [persistedAmendmentDocs, setPersistedAmendmentDocs] = useState([]);
@@ -599,25 +599,25 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   const [submitTs, setSubmitTs] = useState("");
   const [activeSchema, setActiveSchema] = useState(null);
   const [uploadedDocs, setUploadedDocs] = useState(initialUploadedDocs());
-  // Journey selection (Part 1) — lives between Step 1 input and the rest.
+  // Journey selection (Part 1) - lives between Step 1 input and the rest.
   const [journeyType, setJourneyType] = useState("");          // "ai_documents" | "ai_only" | "manual" | ""
   const [journeyOpen, setJourneyOpen] = useState(false);
   const [selectedJourneyCard, setSelectedJourneyCard] = useState(null); // "A" | "B" | "C"
   const [manualOpened, setManualOpened] = useState(false);
-  // Part 5 — silent metadata trail of every pre-fill / customer action.
+  // Part 5 - silent metadata trail of every pre-fill / customer action.
   const [fieldMetadata, setFieldMetadata] = useState([]);
-  // Loader messages — replaced per-run in doResearch when documents are
+  // Loader messages - replaced per-run in doResearch when documents are
   // being processed. Phase 0 = web only, Phase 1 = doc extraction, Phase 2 = web.
   const [phase1Msgs, setPhase1Msgs] = useState(LOADER_MSGS_WOLFSBERG_PHASE1);
 
-  // Doc search agent state (Step 2 — Document Intelligence, Section A).
+  // Doc search agent state (Step 2 - Document Intelligence, Section A).
   // null = not yet run; otherwise the /api/doc-search response shape
   // { documents, summaryTable, summary, cost, searchedAt, isDemo? }.
   const [docSearchResults, setDocSearchResults] = useState(null);
   const [docSearchLoading, setDocSearchLoading] = useState(false);
   const [docSearchError, setDocSearchError] = useState(null);
   const [selfSourceResults, setSelfSourceResults] = useState(null);
-  // PR-071 — amendment-document uploads (Fill Gaps). Lifted out of
+  // PR-071 - amendment-document uploads (Fill Gaps). Lifted out of
   // AmendmentDocuments so the permanent blobUrls persist in the dossier payload
   // and survive navigating away from Fill Gaps and back. Keyed by fieldId::docType.
   const [amendmentUploads, setAmendmentUploads] = useState({});
@@ -650,19 +650,19 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // dossier stakeholders loaded when a customer arrives via an invite link
   // (?dossierId=&journey=customer) without having run research in this session.
   const [applicantValidationError, setApplicantValidationError] = useState(null);
-  // PR-044 — "I am not listed" applicant path. `applicantNotListed` records the
-  // EXPLICIT "I am not listed — fill in manually" choice (distinct from "nothing
+  // PR-044 - "I am not listed" applicant path. `applicantNotListed` records the
+  // EXPLICIT "I am not listed - fill in manually" choice (distinct from "nothing
   // selected yet", which also leaves applicantSelectedPerson null). When set, the
   // applicant must prove authority to act: `authorityToActFile` holds that upload
   // for the session (durable storage is PR-034, out of scope). This document now
-  // lives only here — it was removed from the Required Docs checklist.
+  // lives only here - it was removed from the Required Docs checklist.
   const [applicantNotListed, setApplicantNotListed] = useState(false);
   const [authorityToActFile, setAuthorityToActFile] = useState(null);
-  // PR-072 — Signatory ID proof, COPIED from the Required Docs section onto the
+  // PR-072 - Signatory ID proof, COPIED from the Required Docs section onto the
   // Applicant page and shown for EVERY applicant (unlike authorityToActFile,
   // which is conditional on "not listed"). Its own session-hold slot; durable
   // storage is PR-034, out of scope. NOTE: this Applicant-page slot is
-  // INDEPENDENT of the Required Docs Signatory ID upload — uploading here does
+  // INDEPENDENT of the Required Docs Signatory ID upload - uploading here does
   // NOT satisfy the Required Docs one (and vice versa). "One-upload-satisfies-
   // both" is a possible later enhancement, deliberately deferred for now.
   const [signatoryIdFile, setSignatoryIdFile] = useState(null);
@@ -708,12 +708,12 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         ? ["Company", "Research", "Applicant", "Verify ID", "Confirm", "Fill Gaps", "Required Docs", "Declare"]
         : ["Company", "Research", "Applicant", "Confirm", "Fill Gaps", "Required Docs", "Declare"]);
 
-  // Loader messages — four modes: Nium API lookup, no docs (existing),
+  // Loader messages - four modes: Nium API lookup, no docs (existing),
   // doc-extraction phase, web phase. The Nium journey swaps in registry-specific
   // copy so the spinner reflects what's actually happening (a direct API call,
   // not AI web research). Memoised because the Nium branch builds a fresh array
   // (interpolating companyName) and loaderMsgs is a dependency of the loader
-  // interval effect below — a new reference every render would re-arm it.
+  // interval effect below - a new reference every render would re-arm it.
   const loaderMsgs = useMemo(() => {
     if (journeyType === "nium_api") {
       return [
@@ -744,7 +744,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   const countryObj = COUNTRIES.find(c => c.code === countryCode);
 
-  // Fields referenced by any other field's dependsOn — when their value changes
+  // Fields referenced by any other field's dependsOn - when their value changes
   // we bump formVersion so conditional fields show/hide. Computed once per
   // schema change so text-field updates stay cheap. Also tracks
   // `corrected_<researchField>` for deps whose parent now lives in researchFields.
@@ -790,7 +790,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   const resetAll = () => {
     setStep(STEPS.input); setResearch(null); setActiveSchema(null);
-    // A brand-new application starts from an empty lookup and no saved draft —
+    // A brand-new application starts from an empty lookup and no saved draft -
     // this is the shared root for Start Over and Start New Application.
     setCompanyName(""); setCountryCode(""); setEntityType(""); setOwnershipType("");
     clearDraft();
@@ -821,13 +821,13 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // Foundational-facts gate → back to all-confirmed default for the next run.
     setFactChecks({}); setOwnershipFork(null); setOwnershipChangeDeclared(null);
     setRegNumberFork(null); setRegNumberChangeDeclared(null);
-    // Landing page hidden for stakeholder review weekend — instead of
+    // Landing page hidden for stakeholder review weekend - instead of
     // returning to agent selection, reset to the agent type implied by the URL
     // so "Start New Application" keeps the user in the right flow.
     setAgentType(isPreboardingSurface ? "preboarding" : "onboarding");
     setPreboardingUnlocked(false);
     // Re-locking the pre-boarding gate must drop the analyst credential too, so
-    // it isn't left sitting in sessionStorage. Only on the pre-boarding surface —
+    // it isn't left sitting in sessionStorage. Only on the pre-boarding surface -
     // a customer's Start Over must keep their own dossier link credential, and
     // clearDossierCredentials() clears both.
     if (isPreboardingSurface) clearDossierCredentials();
@@ -853,22 +853,22 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   // Persist a resumable draft whenever meaningful wizard state changes. Debounced
   // so typing does not thrash localStorage. Skipped once the app is done.
-  // KEEP IN SYNC with resetAll() — every data-bearing atom resetAll clears must
+  // KEEP IN SYNC with resetAll() - every data-bearing atom resetAll clears must
   // be saved here AND restored in applyResume(). Intentionally NOT saved:
   // agentType (self-heals from the ?preboarding URL param, see resetAll),
   // landedViaLink (see the note below), authorityToActFile/
-  // signatoryIdFile/uploadedDocs (hold raw File objects — cannot survive
+  // signatoryIdFile/uploadedDocs (hold raw File objects - cannot survive
   // JSON.stringify/localStorage; durable upload storage is PR-034).
   // selfSourceResults IS saved, via draftableSelfSourceResults, which strips
-  // any manualUploadFile (a File object) off each result so the rest — and
-  // the dossier's "Documents Sourced" list — survives a resume. The
+  // any manualUploadFile (a File object) off each result so the rest - and
+  // the dossier's "Documents Sourced" list - survives a resume. The
   // preboarding password gate (access gate over a hardcoded client constant,
   // not user data), newQuestion (in-progress "ask more" compose draft), and
   // pure UI toggles (expanded/open/hover/reveal state, transient loading and
   // error strings) that are harmless to lose and default back safely, and the
   // in-flight search refs (searchGrantRef/searchSpendBusyRef/researchGrantRef). landedViaLink is
   // not saved: a link customer re-lands through their token URL, which sets it.
-  // searchAttempts is saved for display only — the server count is authoritative.
+  // searchAttempts is saved for display only - the server count is authoritative.
   useEffect(() => {
     if (done) return;
     const t = setTimeout(() => {
@@ -912,7 +912,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       researchTimestamp, docSearchResults, selfSourceResults, acceptedDocTypes, applicantNotListed, amendmentUploads,
       niumRegNumber, niumSearchResults, dossierStakeholders, tenantId, agentType]);
 
-  // Offer to resume an unfinished application found in localStorage (Task 9 —
+  // Offer to resume an unfinished application found in localStorage (Task 9 -
   // browser draft is the pre-capture backstop). Checked once on mount.
   const [resumeOffer, setResumeOffer] = useState(null); // the loaded draft, or null
   useEffect(() => {
@@ -996,7 +996,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     }).catch((err) => console.warn("[trackEvent] Failed:", err));
   }
 
-  // Landing page viewed — fires on mount and whenever the user returns to the
+  // Landing page viewed - fires on mount and whenever the user returns to the
   // agent-selection screen (agentType back to null).
   useEffect(() => {
     if (agentType === null) {
@@ -1024,7 +1024,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // persisted automatically once research returns and the Dossier View renders
   // without a click.
   //
-  // IMPORTANT — only fire once the flow has reached the Confirm step. On the
+  // IMPORTANT - only fire once the flow has reached the Confirm step. On the
   // Documents journey (Card A) the self-source agent seeds research.found while
   // the customer is still on the Documents step (to pick the Annual Report /
   // Wolfsberg before running extraction). Without the step gate that partial
@@ -1045,7 +1045,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       !dossierSaved &&
       // A restored (resumed) dossierId means a dossier already exists for this
       // session. saveDossier() now UPSERTS (updates in place when dossierId is
-      // set), so re-firing no longer duplicates — but auto-saving on every
+      // set), so re-firing no longer duplicates - but auto-saving on every
       // resume-at-confirm is still needless churn (a redundant UPDATE), and the
       // dossierSaved guard resets to false on resume so it can't suppress it.
       // A non-null dossierId blocks the redundant auto-save; the explicit
@@ -1085,7 +1085,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   const dossierHydratedRef = useRef(false);
   useEffect(() => {
     if (dossierHydratedRef.current) return;
-    // 3-strict: no tenant means nothing to fetch — mirrors the config-loading
+    // 3-strict: no tenant means nothing to fetch - mirrors the config-loading
     // effect's own !tenantId guard. The landing gate renders NoTenantLanding
     // regardless, so there's no dossier to hydrate into.
     if (!tenantId) return;
@@ -1122,12 +1122,12 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // and the analyst's "Preview" ({ tenant, dossierId }) which authenticates with
   // the analyst credential already held for this tab.
   async function loadDossierAndStartOnboarding({ tenant, dossierId: requestedId, dossierToken } = {}) {
-    // Customer landed via the dossier/invite link — mark the journey so the step
+    // Customer landed via the dossier/invite link - mark the journey so the step
     // bar hides the analyst-completed Company/Research steps (display only).
     setLandedViaLink(true);
     try {
       // The customer token travels ONLY in the Authorization header (set via
-      // setCustomerDossierToken before this call) — never in the query string,
+      // setCustomerDossierToken before this call) - never in the query string,
       // where it would land in server logs, browser history and any Referer
       // header. resolveDossierActor accepts the header-only bearer form.
       const query = dossierToken
@@ -1138,7 +1138,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       if (dossierToken && (res.status === 410 || res.status === 401)) {
         // Customer token path: the link is unusable. Never drop the customer
         // into an empty wizard. A 401 on the ANALYST Preview path (no
-        // dossierToken — e.g. an expired preboarding session) must NOT render
+        // dossierToken - e.g. an expired preboarding session) must NOT render
         // this customer-facing full-screen error; it falls through to the
         // same graceful, empty-wizard fallback as every other analyst-path
         // failure below.
@@ -1160,7 +1160,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         if (d.country_code) setCountryCode(d.country_code);
         if (d.ownership_type) setOwnershipType(d.ownership_type);
         // Resolve the schema so the Applicant gap fields (and the rest of the
-        // flow) have field definitions to render — the dossier stores entity
+        // flow) have field definitions to render - the dossier stores entity
         // type + country, not the schema itself.
         let dossierSchema = null;
         if (d.entity_type && d.country_code) {
@@ -1170,7 +1170,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
           }
           catch (_) { /* leave schema unset; page still renders the selector */ }
         }
-        // Primary source: raw_research.found — the complete, intact research
+        // Primary source: raw_research.found - the complete, intact research
         // data with .stakeholders arrays and verificationStatus on every row.
         // Fallback: the stripped tiered arrays (older dossiers, or if
         // raw_research is somehow missing) which lack .stakeholders.
@@ -1210,27 +1210,27 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         });
         if (found.length > 0) {
           setResearch({ companyName: d.company_name, found });
-          // PR-056 — match the KYC/research path (see the live-research and
+          // PR-056 - match the KYC/research path (see the live-research and
           // lookup paths): pre-accept every scalar field (checked by default) so
           // the customer only unchecks what's wrong. Without this, `checks` stays
           // {} from resetAll on the dossier-load path, so every scalar arrives
           // UNCHECKED and each row spuriously shows its change-dialogue on arrival
-          // (4765: `!checks[idx]`). Stakeholders are unaffected — they default to
+          // (4765: `!checks[idx]`). Stakeholders are unaffected - they default to
           // confirmed via their own separate state.
           const c = {};
           found.forEach((_, i) => { c[i] = true; });
           setChecks(c);
         }
-        // Bug 2 — restore self-sourced registry results folded into raw_research
+        // Bug 2 - restore self-sourced registry results folded into raw_research
         // at save time, so the "Sourced from company registry" section and the
         // per-card "Sourced automatically" banners reappear after the dossier →
         // onboarding round-trip. Null-safe: a company with no self-source has no
         // selfSourceResults on raw_research, so this restores null (renders clean).
         setSelfSourceResults(d.raw_research?.selfSourceResults || null);
-        // PR-071 — restore amendment-document uploads (permanent blobUrls) so the
+        // PR-071 - restore amendment-document uploads (permanent blobUrls) so the
         // Amendment Documentation section reappears filled after reload. Null-safe.
         setAmendmentUploads(d.raw_research?.amendmentUploads || {});
-        // PR-043 — restore the internet-research docs (annual report / Wolfsberg)
+        // PR-043 - restore the internet-research docs (annual report / Wolfsberg)
         // so they reappear in the unified Documents Sourced panel after reload.
         // Null-safe, same as selfSourceResults above.
         setDocSearchResults(d.raw_research?.docSearchResults || null);
@@ -1239,8 +1239,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         if (d.stakeholders) setDossierStakeholders(d.stakeholders);
 
         // Restore coverage so the Confirm-page coverage bar renders. There is no
-        // single `coverage` column — reconstruct it from the broken-out counts
-        // (fill_rate / verified_fill_rate are stored as 0–100 ints, so /100).
+        // single `coverage` column - reconstruct it from the broken-out counts
+        // (fill_rate / verified_fill_rate are stored as 0-100 ints, so /100).
         if (d.total_fields != null || d.verified_fields != null) {
           const verified = d.verified_fields || 0;
           const probable = d.probable_fields || 0;
@@ -1316,7 +1316,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   };
 
   /**
-   * Per-attribute AFFIRMATION for people — the exact counterpart of
+   * Per-attribute AFFIRMATION for people - the exact counterpart of
    * `affirmedFields` on the pre-filled rows, and for the same reason.
    *
    * Every attribute arrives ticked, so `isStkFieldConfirmed` alone cannot tell
@@ -1336,8 +1336,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setAffirmedPersonFields((prev) => ({ ...prev, [personFieldKey(stakeholderId, key)]: true }));
 
   /**
-   * THE per-attribute predicate. One rule, three consumers — the attribute row's
-   * tick, the card's "needs you" badge, and the tile/gate counts — so they can
+   * THE per-attribute predicate. One rule, three consumers - the attribute row's
+   * tick, the card's "needs you" badge, and the tile/gate counts - so they can
    * never disagree, exactly as rowState() does for the pre-filled rows.
    *
    * IMPURE, so it stayed here in slice 2 rather than moving to peopleHelpers:
@@ -1357,7 +1357,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   };
 
   /**
-   * A corrected attribute is SETTLED — the customer supplied the value, which
+   * A corrected attribute is SETTLED - the customer supplied the value, which
    * is a stronger statement than confirming ours. Otherwise it is settled when
    * ticked, and additionally affirmed if it came from a low-confidence source.
    */
@@ -1366,7 +1366,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     (isStkFieldConfirmed(s.id, f.key) && (!lowConf || isPersonFieldAffirmed(s.id, f.key)));
 
   /**
-   * "Confirm all" — settle every outstanding attribute on one person in a
+   * "Confirm all" - settle every outstanding attribute on one person in a
    * single action. Same outcome as clicking each ✓ in turn, including
    * restoring anything the customer had marked wrong, so it is a shortcut and
    * never a different decision.
@@ -1387,7 +1387,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         toRetick.forEach((f) => { next[f.key] = true; });
         return { ...prev, [s.id]: next };
       });
-      // Re-ticking is the undo path — close any correction editor it opened.
+      // Re-ticking is the undo path - close any correction editor it opened.
       setPersonEditing(null);
     }
     setAffirmedPersonFields((prev) => {
@@ -1428,7 +1428,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
    * from the ref applied on top.
    *
    * The ref is only seeded on entry to Fill Gaps, so on Confirm it is empty and
-   * the card renders research values — which is why an inline correction saved
+   * the card renders research values - which is why an inline correction saved
    * here did not show up.
    */
   const personWithEdits = (fieldId, s) => {
@@ -1439,7 +1439,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   const updateStakeholderField = (fieldId, stakeholderId, key, value) => {
     // SEED LAZILY. `current` is [] until Fill Gaps seeds the ref, and mapping
-    // over [] stored [] — so a correction saved on Confirm was silently
+    // over [] stored [] - so a correction saved on Confirm was silently
     // dropped, value and all. Fall back to the research list so the edit lands
     // on a real person rather than on nothing.
     const current = getStakeholders(fieldId);
@@ -1474,7 +1474,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       if (!isStakeholderField(result.field)) return;
       if (!Array.isArray(result.stakeholders) || result.stakeholders.length === 0) return;
       const fieldId = result.field;
-      // Registry exemption notices are not people — keep them out of the ref so
+      // Registry exemption notices are not people - keep them out of the ref so
       // they can never become a person card or EDD form.
       const aiStakeholders = result.stakeholders.filter((s) => !isRegistryExemptionNotice(s));
       const existing = nextMap[fieldId] || [];
@@ -1563,7 +1563,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         if (g.inputType === "select" && Array.isArray(g.options) && g.options.length > 0) {
           // Options may be plain strings (hardcoded fields) or { value, label }
           // objects (config-saved fields). The <select> option value is the
-          // extracted string, so set that — not the whole object — or it won't
+          // extracted string, so set that - not the whole object - or it won't
           // match and the dropdown stays on "Select...".
           const first = g.options[0];
           val = (first && typeof first === "object") ? (first.value ?? first.label) : first;
@@ -1577,7 +1577,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
     // Also fill stakeholder compliance fields for any per-person cards
     // currently in stakeholdersRef. Doesn't add new people, doesn't overwrite
-    // already-filled fields — keeps existing edits intact and just paints
+    // already-filled fields - keeps existing edits intact and just paints
     // sensible demo values into the blanks.
     const demoCountry = countryObj ? countryObj.name : "United Kingdom";
     const demoIdType = "passport";
@@ -1625,15 +1625,15 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   };
 
   // Unified post-Confirm gap list.
-  //   1. corrections — fields the user unchecked on Confirm (any tier)
-  //   2. missing_research — research fields the AI couldn't find from
+  //   1. corrections - fields the user unchecked on Confirm (any tier)
+  //   2. missing_research - research fields the AI couldn't find from
   //      any source (rendered as plain text inputs, optional)
-  //   3. schema.gapFields — always-manual fields
+  //   3. schema.gapFields - always-manual fields
   const getCombinedGaps = () => {
     if (!research || !activeSchema) return [];
     const apiGaps = research.gaps || activeSchema.gapFields;
 
-    // Corrections — fields the user unchecked on Confirm. We must preserve
+    // Corrections - fields the user unchecked on Confirm. We must preserve
     // the original field's inputType and (for selects) options so the
     // correction is collected with the same UI as the original; defaulting
     // to "text" would mean a dropdown loses its option list at this point.
@@ -1655,7 +1655,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         };
       });
 
-    // Missing research — fields the AI couldn't find. Same principle: keep
+    // Missing research - fields the AI couldn't find. Same principle: keep
     // the configured inputType/options so a dropdown stays a dropdown.
     const foundIds = new Set((research.found || []).map(i => i.field));
     const missingResearch = (activeSchema.researchFields || [])
@@ -1684,7 +1684,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // tenant, its credential (which picks the rate-limit bucket) and, in admin
   // preview, the staged draft config plus the admin token the server needs to
   // honour it.
-  // `grant`: the run's grant, captured once when the run starts — never read
+  // `grant`: the run's grant, captured once when the run starts - never read
   // live, so a second click can't swap grants mid-run.
   const researchHeaders = (grant) => {
     const headers = { ...getDossierAuthHeaders(preboardingTenantId || tenantId) };
@@ -1693,7 +1693,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       try {
         const adminToken = sessionStorage.getItem("admin_token");
         if (adminToken) headers["X-Admin-Token"] = adminToken;
-      } catch (_) { /* storage blocked — preview falls back to the live config */ }
+      } catch (_) { /* storage blocked - preview falls back to the live config */ }
     }
     return headers;
   };
@@ -1702,7 +1702,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // Safety net: doResearch is the REAL, paid path (Anthropic + web search). In
   // dev/testing contexts (demo toggle available) confirm before spending, so an
   // accidental non-demo run can't silently bill. Real end-customer URLs
-  // (demoToggleVisible false) are unaffected — that's the intended paid path.
+  // (demoToggleVisible false) are unaffected - that's the intended paid path.
   // Customer paths call this BEFORE spending a server-counted search.
   const confirmPaidResearch = () => {
     if (!demoMode && demoToggleVisible && typeof window !== "undefined" && typeof window.confirm === "function") {
@@ -1714,7 +1714,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // `confirmed`: the caller already ran confirmPaidResearch (a correction always has).
   const doResearch = async (journeyOverride, { overrides = null, correction = false, confirmed = false } = {}) => {
     if (!correction && !confirmed && !confirmPaidResearch()) return;
-    // A correction passes the corrected facts EXPLICITLY — state setters from the
+    // A correction passes the corrected facts EXPLICITLY - state setters from the
     // same click have not re-rendered yet, so the closure values are stale.
     const facts = overrides
       ? {
@@ -2006,7 +2006,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
             }
           }
         } catch (gapErr) {
-          // Gap recovery is best-effort — keep the first-pass results on failure.
+          // Gap recovery is best-effort - keep the first-pass results on failure.
           // eslint-disable-next-line no-console
           console.warn("Gap recovery pass failed:", gapErr.message);
         }
@@ -2018,7 +2018,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       // runRealSelfSource merge remains the backup for the case where self-source
       // finishes AFTER this research pass.
       const selfSourcedRows = correction ? [] : selfSourcedToRows(selfSourceResults?.selfSourcedFields, schema);
-      // Use this SAME list for research, metadata, and checks below — otherwise
+      // Use this SAME list for research, metadata, and checks below - otherwise
       // the appended registry rows get no checks entry and wrongly surface as
       // "unchecked" corrections on Confirm / Fill Gaps.
       const mergedFound = normalizeResearchFieldIds(
@@ -2080,7 +2080,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       setStakeholderErrors([]);
       setRevealedTs({});
       // A correcting customer keeps everything they already typed (applicant
-      // details and gap answers live in gapRef) — also on a later picker search.
+      // details and gap answers live in gapRef) - also on a later picker search.
       if (!correction && !isCustomerResearch) {
         gapRef.current = {};
         setFormVersion(v => v + 1);
@@ -2138,7 +2138,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
     // Demo: document-based journeys (Upload+AI, Max Prefill) normally populate
     // their doc-search + registry results on the Documents step. In demo mode
-    // that step is skipped, so seed the same dummy results here — otherwise the
+    // that step is skipped, so seed the same dummy results here - otherwise the
     // dossier's "Documents Sourced" section is empty. Reuse any results already
     // present (e.g. tester walked through the Documents step) rather than
     // clobbering them.
@@ -2282,7 +2282,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setRejectedStakeholders({});
     setStakeholderFieldChecks({});
     setExpandedStakeholders({});
-    // Leave the manual "publicly listed" override OFF by default — the user
+    // Leave the manual "publicly listed" override OFF by default - the user
     // ticks it on Confirm only if they want to override and skip stakeholder
     // EDD forms. (Previously demo mode pre-checked this; now it starts unticked.)
     setIsPubliclyListedOverride(false);
@@ -2324,7 +2324,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setNiumSearchLoading(false);
   };
 
-  // KYC Lookup Agent journey (TEST MODE ONLY) — pulls verified registry data
+  // KYC Lookup Agent journey (TEST MODE ONLY) - pulls verified registry data
   // from the Nium eKYB API (POST /api/kyc-lookup → agents/kycLookupAgent.js)
   // instead of AI research. The agent returns the SAME found-item shape as AI
   // research (tier1 / verified, stakeholders with nationality + DOB
@@ -2337,7 +2337,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     if (!countryCode) { setError("Please select a country."); return; }
     // The Nium eKYB registry searches by registration number (a name-only
     // search returns HTTP 400). While the Companies House resolver is parked,
-    // use a fixed preprod placeholder — the sandbox returns dummy data for any
+    // use a fixed preprod placeholder - the sandbox returns dummy data for any
     // registration number, so the journey always returns a result.
     const lookupRegNumber = SHOW_NIUM_REG_PANEL ? niumRegNumber.trim() : NIUM_DEMO_REG_NUMBER;
     // Demo mode: force the country the fixture lives under (SG) so the lookup
@@ -2436,7 +2436,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         setLoading(false); setLoaderPhase(0); setResearchStatus("");
         setStep(agentType === "preboarding" ? S.confirm : S.applicant);
       } else {
-        // No data — surface a clear error and return to the journey screen.
+        // No data - surface a clear error and return to the journey screen.
         // The analyst chose the Nium API journey deliberately; do NOT silently
         // switch to AI research. They decide whether to retry or pick another
         // journey type.
@@ -2451,7 +2451,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[startNiumApiLookup] Error:", err);
-      // Network / unexpected failure — same rule: clear error, no AI fallback.
+      // Network / unexpected failure - same rule: clear error, no AI fallback.
       const reason = err.name === "AbortError"
         ? "the request timed out after 120s"
         : err.message;
@@ -2480,7 +2480,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     if (searchSpendBusyRef.current) return;
     searchSpendBusyRef.current = true;
     try {
-      // Card A (or an earlier unburned run) already paid for — and confirmed — this run.
+      // Card A (or an earlier unburned run) already paid for - and confirmed - this run.
       if (!searchGrantRef.current) {
         if (!confirmPaidResearch()) return;
         const attempt = await consumeCustomerSearch();
@@ -2492,7 +2492,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     } finally { searchSpendBusyRef.current = false; }
   };
 
-  // ─── Doc search agent (Step 2 — Document Intelligence, Section A) ───
+  // ─── Doc search agent (Step 2 - Document Intelligence, Section A) ───
   // Calls the real sub-agent via /api/doc-search. Demo mode and local dev /
   // ?test=1 default to buildDemoDocSearchResults instead (no API spend);
   // the testing-mode toggle on Step 2 can trigger this explicitly.
@@ -2520,7 +2520,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   // Safety timeout for the document/registry agents. The self-source agent
   // retrieves registry items one-by-one (some behind captchas / screenshots)
-  // and can occasionally never return — locally there is no serverless
+  // and can occasionally never return - locally there is no serverless
   // max-duration to kill it, so without this the Documents step waits on
   // `selfSourceLoading` forever. On timeout we abort the request, surface a
   // note, and let the customer proceed (web research still covers the fields).
@@ -2557,10 +2557,10 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
           // ── PR-026: Merge registry-sourced fields into researchResults ────
           // selfSourcedFields shape: { [fieldId]: { value, tier, source, ... } }
           // mergeResearchResults() treats tier-1 registry sources as highest
-          // priority — they win over AI web search for the same field.
+          // priority - they win over AI web search for the same field.
           if (data.selfSourcedFields && Object.keys(data.selfSourcedFields).length > 0) {
             const selfSourcedRows = selfSourcedToRows(data.selfSourcedFields, activeSchema);
-            // research is null until the Research step runs, so guard prev — at
+            // research is null until the Research step runs, so guard prev - at
             // the Documents step we seed it; once research exists we merge.
             setResearch(prev => prev
               ? { ...prev, found: mergeResearchResults(prev.found || [], selfSourcedRows) }
@@ -2662,7 +2662,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     if (!companyName.trim()) return;
     if (demoMode || SHOW_TEST_TOOLS) {
       // Demo/test mode: show dummy doc-search AND dummy registry results
-      // immediately. The real agents are NOT auto-fired here — the "Run real
+      // immediately. The real agents are NOT auto-fired here - the "Run real
       // agent" button (test mode only) lets the user trigger both on demand,
       // which clears these dummies and replaces them with real results.
       const demo = buildDemoDocSearchResults(companyName, ownershipType, entityType);
@@ -2671,7 +2671,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       setDocSearchLoading(false);
       setSelfSourceResults(buildDemoSelfSourceResults(companyName));
     } else if (!isCustomerResearch) {
-      // Run both agents in parallel — doc search (Wolfsberg/Annual Report)
+      // Run both agents in parallel - doc search (Wolfsberg/Annual Report)
       // and registry self-source (Companies House / ACRA / etc.)
       // A researching customer starts them from the page instead (paid calls).
       runRealDocSearch();
@@ -2838,7 +2838,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // (entity type included) re-researches with the corrected values and spends
   // one server-counted search. Never resets the application.
   // `shown.registrationNumber`: the number the gate displayed (and the customer
-  // edited against) — it can differ from regNumber state (e.g. research found one).
+  // edited against) - it can differ from regNumber state (e.g. research found one).
   // With nothing shown the fact is not disputable, so regNumber is kept as-is.
   const applyCorrections = async (corrections, shown = {}) => {
     const current = {
@@ -2856,7 +2856,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     }
 
     const next = plan.next;
-    // Audit trail (spec §6.2 step 6), once the corrected facts are applied —
+    // Audit trail (spec §6.2 step 6), once the corrected facts are applied -
     // for a dossier, only after they have saved (the deferred-save effect).
     const correctionEvent = {
       submissionId: dossierId || onboardingSubmissionId,
@@ -2878,7 +2878,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
     // Saves are queued, not awaited here: this closure still holds the pre-
     // correction state, so the deferred-save effect runs them on the next render.
-    // ponytail: demo mode never spends a paid search — the corrected facts are
+    // ponytail: demo mode never spends a paid search - the corrected facts are
     // kept and the existing (dummy) research stands. Real runs go below.
     if (demoMode) { cancelFactDispute(); return; }
 
@@ -2930,7 +2930,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // work), and RESOLVE the gate (re-confirm the ownership fact + close the fork) so
   // the applicant fields + Continue REAPPEAR. This un-traps the journey.
   //
-  // DEFERRED: the inline-on-Applicant document-upload card is a later piece — for
+  // DEFERRED: the inline-on-Applicant document-upload card is a later piece - for
   // now these documents surface in Fill Gaps' Amendment Documentation. We also do
   // NOT reshape the question set / EDD off the new type (that's PR-049): the stored
   // ownershipType is left unchanged; we only record the change + request docs.
@@ -2984,9 +2984,9 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // "Registration number genuinely changed" resolution: capture the NEW number,
   // request the jurisdiction-appropriate change document into Fill Gaps (via
   // change_events, keyed dossierId||onboardingSubmissionId), and RESOLVE the gate.
-  // A BRN change is evidenced by a jurisdiction-dependent document — Certificate
+  // A BRN change is evidenced by a jurisdiction-dependent document - Certificate
   // of Change of Registration Number / Notice of Registration / updated Extract
-  // from the Commercial Register — same document class, label per jurisdiction.
+  // from the Commercial Register - same document class, label per jurisdiction.
   // DEFERRED (as with ownership): inline-on-Applicant doc card is a later piece
   // (docs surface in Fill Gaps for now); the stored regNumber is left unchanged.
   const resolveRegNumberChange = (newNumber) => {
@@ -3025,7 +3025,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setError("");
 
     // Two-retry cap: search cards (A/B/E) are blocked once the customer has used
-    // their searches — only manual entry (C) remains. Card C is never blocked.
+    // their searches - only manual entry (C) remains. Card C is never blocked.
     const isSearchCard = ["A", "B", "E"].includes(selectedJourneyCard);
     // An unused, already-paid grant (card A, then Back) is still usable at the cap.
     if (isSearchCard && evaluateSearchCap(searchAttempts).locked && !searchGrantRef.current) {
@@ -3090,7 +3090,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     deriveApplicantProvenance({ applicantSelectedPerson, applicantAgentValues, gapValues: gapRef.current });
 
   // Final submission: build the metadata + payload, log, persist to Neon via
-  // /api/submit, advance to Done. The DB write is best-effort — a failure
+  // /api/submit, advance to Done. The DB write is best-effort - a failure
   // never blocks the customer from reaching the success screen.
   const submitApplication = async () => {
     const submittedAt = new Date().toISOString();
@@ -3107,7 +3107,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       // the AI entry for any corrected field, so the manual entry would be the
       // only record and it holds the CUSTOMER's value. The server writes this
       // into field_provenance.agent_value, giving a corrected scalar a second
-      // durable home for its original — change_events.before_value was
+      // durable home for its original - change_events.before_value was
       // previously the only one.
       const originalMeta = isCorrection ? fieldMetadata.find(m => m.fieldId === key) : null;
       const originalRow = isCorrection ? (research?.found || []).find(r => r.field === key) : null;
@@ -3127,7 +3127,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         customerAction: isCorrection ? "corrected" : "entered",
         customerActionAt: submittedAt,
         // The pre-correction registry value + where it came from. Null for a
-        // plain gap entry — the AI never had a value to be corrected.
+        // plain gap entry - the AI never had a value to be corrected.
         agentValue: rawAgentValue === null || rawAgentValue === undefined
           ? null
           : (typeof rawAgentValue === "object" ? JSON.stringify(rawAgentValue) : String(rawAgentValue)),
@@ -3162,7 +3162,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       if (!list || list.length === 0) return;
       stakeholderPayload[result.field] = list.map((s) => {
         const fullEddCollected = needsStakeholderDetails(s, result.field, effectivelyListed);
-        // Corporate stakeholder — emit the KYB shape (businessName, businessType,
+        // Corporate stakeholder - emit the KYB shape (businessName, businessType,
         // businessRegistrationNumber, registeredCountry, sharePercentage,
         // positions[]) rather than the person EDD fields.
         if (s.is_company) {
@@ -3235,7 +3235,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       idvVerification: idvVerification || null,
       // Opaque Vault reference to the confirmed verified identity. Sensitive
       // extras (document number/expiry/gender/POB/address) live in the Vault, NOT
-      // on the submission — this is a reference only, no plaintext.
+      // on the submission - this is a reference only, no plaintext.
       verifiedIdentity: idvVerifiedFields || null,
     };
 
@@ -3278,7 +3278,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
           verifiedFillRate: Math.round(coverage.verifiedFillRate * 100),
         } : null,
       },
-      // DRS — document requirements collected at the dynamic documents step.
+      // DRS - document requirements collected at the dynamic documents step.
       documentRequirements: {
         submittedRequirements: drsSubmitted,
         flags: drsFlags,
@@ -3291,7 +3291,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
           || "manual",
         // Did the customer EXPLICITLY tick this low-confidence row, as opposed
         // to leaving it as it arrived? Every row starts ticked, so without this
-        // the two are indistinguishable in the record — and "the customer
+        // the two are indistinguishable in the record - and "the customer
         // confirmed an unverified value" is exactly the assertion an audit
         // needs. The server maps it onto customer_action.
         affirmed: !!affirmedFields[m.fieldId],
@@ -3306,7 +3306,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       // Which document was asked for, and which file answered it. Nothing
       // previously recorded this against the journey at all.
       amendmentDocuments: buildAmendmentDocumentTrail(),
-      // What the Confirm page showed at submit time — the four tiles and the
+      // What the Confirm page showed at submit time - the four tiles and the
       // pre-fill breakdown, so the numbers can be reconciled after the fact.
       confirmMetrics: {
         tiles: {
@@ -3356,7 +3356,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         headers: { "Content-Type": "application/json", ...getDossierAuthHeaders(tenantId) },
         body: JSON.stringify({
           // The idempotency key the ENTIRE pipeline is keyed on. Omitting it
-          // makes /api/submit 400 every submission (missing required field) —
+          // makes /api/submit 400 every submission (missing required field) -
           // it must be the stable getSubmissionId() value carried on the payload
           // so a retry re-POSTs the SAME id and dedupes.
           submissionId: payload.submissionId,
@@ -3394,8 +3394,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       });
       const result = await resp.json().catch(() => ({}));
       // Durable capture = HTTP 200 AND the server acknowledged saved|queued
-      // (both mean the bundle is safely in submission_inbox). Anything else —
-      // 503 capture_failed, a non-2xx status, or a malformed body — means the
+      // (both mean the bundle is safely in submission_inbox). Anything else -
+      // 503 capture_failed, a non-2xx status, or a malformed body - means the
       // bundle is NOT captured: we must NOT show a success screen and must NOT
       // clear the browser draft (the only remaining copy of their data).
       const captured = resp.ok && (result.status === "saved" || result.status === "queued");
@@ -3416,22 +3416,22 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         setDone(true);
         clearDraft();
       } else {
-        // Not durably captured — keep the draft, do NOT advance to the success
+        // Not durably captured - keep the draft, do NOT advance to the success
         // screen. The stable submissionId means clicking Submit again re-POSTs
         // the SAME id (idempotent), so a retry is safe and never duplicates.
         // eslint-disable-next-line no-console
         console.warn("[Submit] not durably captured:", resp.status, result);
         setSubmitStatus("retrying");
-        setError("We couldn't submit your application just now — your details are saved on this device. Please click Submit again.");
+        setError("We couldn't submit your application just now - your details are saved on this device. Please click Submit again.");
       }
     } catch (err) {
-      // The POST never reached a definite answer — the bundle is NOT confirmed
+      // The POST never reached a definite answer - the bundle is NOT confirmed
       // captured. Keep the draft and let the customer retry (or resume on next
       // load); never wipe the only copy of their data on an unknown outcome.
       // eslint-disable-next-line no-console
       console.error("[Submit] network error:", err);
       setSubmitStatus("retrying");
-      setError("We couldn't reach the server — your details are saved on this device. Please check your connection and click Submit again.");
+      setError("We couldn't reach the server - your details are saved on this device. Please check your connection and click Submit again.");
     }
   };
 
@@ -3439,7 +3439,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // request. Append a compensating REVERT event (workflow 'accept_silent'); the
   // original change event is NEVER deleted or mutated (append-only store).
   // deriveAmendmentDocuments reads the latest event per field, so this later
-  // non-doc event nets the document to "not owed" — the Fill Gaps card drops and
+  // non-doc event nets the document to "not owed" - the Fill Gaps card drops and
   // the Confirm notice clears (the dialogue isn't rendered once re-checked).
   // Only write a revert when a change was actually emitted for this field.
   // Same submissionId keying as the change write, so it works in both journeys.
@@ -3447,11 +3447,11 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // NOTE: the change AND this revert both remain in the append-only audit store
   // on purpose (a future rule may care that e.g. a UBO was changed then put
   // back). Materiality / which fields matter / MLRO-surfacing are pending Danny
-  // (CD-register) — do NOT infer materiality or surface anything here.
+  // (CD-register) - do NOT infer materiality or surface anything here.
   //
   // Extracted so both the individual ✓ undo (toggleCheck) and the "Confirm All"
   // shortcut (confirmAll, for the disputed rows it re-ticks) retract a stale
-  // dialogue identically — confirmAll batches its OWN setChecks/setFieldMetadata
+  // dialogue identically - confirmAll batches its OWN setChecks/setFieldMetadata
   // around this rather than calling toggleCheck N times, so this helper only
   // does the per-field dialogue/gap cleanup, not the checkbox/metadata state.
   const retractFieldChange = (item) => {
@@ -3478,7 +3478,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // Clear the dialogue snapshot so a later RE-uncheck starts a FRESH dialogue
     // that emits a new change event (R6: toggling re-adds the document each time).
     delete dialogueStateRef.current[item.field];
-    // Inline capture (commit 3): a re-check is an undo — drop the inline
+    // Inline capture (commit 3): a re-check is an undo - drop the inline
     // corrected value too. gapRef entries always win over accepted AI values
     // in submitApplication, so a stale correction left behind here would
     // silently override the value the customer just re-accepted.
@@ -3505,7 +3505,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     }
   };
 
-  // Record that the customer explicitly ticked this row. Additive only — it
+  // Record that the customer explicitly ticked this row. Additive only - it
   // does not touch `checks`, so nothing downstream (corrections, dialogue,
   // submit) changes; it exists so an untouched low-confidence row can be told
   // apart from one the customer actually agreed with. See confirmState.js.
@@ -3530,7 +3530,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
    *
    * Snapshots land in dialogueStateRef under that composite key, so the
    * documents list, the summary panel, the submit gate and the analyst strip
-   * all pick person documents up with no extra wiring — one pipeline, not two.
+   * all pick person documents up with no extra wiring - one pipeline, not two.
    */
   const emitPersonChange = ({ person, researchFieldId, attribute, value = null, nameCase = null, reason = null }) => {
     const type = resolvePersonType(person, researchFieldId);
@@ -3546,7 +3546,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         : null,
       // Threshold crossing, COMPUTED from the before/after percentages. It was
       // hardcoded 'unknown' on the grounds that the person-type stub cannot
-      // supply ownership data — but that is the wrong gap: the person TYPE is
+      // supply ownership data - but that is the wrong gap: the person TYPE is
       // stubbed, the shareholding PERCENTAGE is real (research returns it, and
       // the correction supplies the new one). ownershipCrossing still answers
       // 'unknown' for a registry band like "25-50%", where comparing a range to
@@ -3567,13 +3567,13 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // Provenance goes through the SAME deriveSource the company path uses.
     // change_events.source_tier is a SMALLINT, and a stakeholder carries the
     // string form ("tier1"); deriveSource normalises it to 1. Passing the raw
-    // string makes real Postgres reject the whole INSERT — invisible locally,
+    // string makes real Postgres reject the whole INSERT - invisible locally,
     // because the route always answers 200 and the fake DB never type-checks.
     const src = deriveSource({ sourceTier: person.sourceTier, source: person.source });
     const event = buildChangeEvent({
       field: {
         fieldId: compositeId,
-        // fieldClass stays inside the existing closed enum — person type maps
+        // fieldClass stays inside the existing closed enum - person type maps
         // onto 'director' / 'ubo', both already valid, so writeEvent's guard
         // passes with no schema or vocabulary change.
         fieldClass: type.personType === "director" ? "director" : "ubo",
@@ -3585,7 +3585,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       },
       jurisdiction: countryCode || "GB",
       // A superseding write must reuse the HEAD event's own submissionId, not
-      // whatever resolves "now" — saveDossier can populate dossierId AFTER the
+      // whatever resolves "now" - saveDossier can populate dossierId AFTER the
       // head event was written under onboardingSubmissionId, and writeEvent's
       // supersedesId lookup is scoped to submissionId (writeEvent.js ~93-99):
       // a mismatched submissionId makes the target read as "does not exist"
@@ -3593,7 +3593,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       submissionId: (prev && prev.event && prev.event.submissionId) || dossierId || onboardingSubmissionId,
       dossierId,
       // The stored vocabulary is add|remove|changed. An addition must record as
-      // 'add' — filing it as 'changed' would misdescribe it to an analyst
+      // 'add' - filing it as 'changed' would misdescribe it to an analyst
       // reading the trail, and deriveChangeType's presence semantics agree
       // (no prior value → add).
       storedChangeType:
@@ -3667,7 +3667,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     if (fieldKey && value != null) {
       updateStakeholderField(researchFieldId, person.id, fieldKey, value);
       // RE-TICK. Unticking is what opened this editor, and "unticked" is also
-      // what routes an attribute to Fill Gaps for correction — so leaving it
+      // what routes an attribute to Fill Gaps for correction - so leaving it
       // unticked after the customer had already corrected it here asked them
       // for the same value twice, on two pages. The attribute is resolved: it
       // carries a customer-supplied value and is settled.
@@ -3691,7 +3691,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   /**
    * Unticking a person attribute now OPENS the CD-03 correction flow instead of
    * silently routing the field to the next page. Re-ticking closes it. The
-   * existing stakeholderFieldChecks state is preserved exactly as before — this
+   * existing stakeholderFieldChecks state is preserved exactly as before - this
    * only adds the correction panel on top of it.
    */
   const togglePersonField = (item, s, f) => {
@@ -3717,7 +3717,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   /**
    * ADD A PERSON (commit 7). The customer states the type, so person type here
-   * is EXPLICIT — the created stakeholder carries real isDirector/isUBO flags,
+   * is EXPLICIT - the created stakeholder carries real isDirector/isUBO flags,
    * which is the interface personType.js assumes and the stub otherwise fakes.
    *
    * Emits the CD-03 events for an addition, each as its own person-scoped
@@ -3742,7 +3742,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       nationality: nationality || "",
       residential_country: residential_country || "",
       is_pep: is_pep === true ? true : is_pep === false ? false : null,
-      // The real person-type interface — stated, not inferred.
+      // The real person-type interface - stated, not inferred.
       isDirector,
       isUBO,
     });
@@ -3753,7 +3753,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // 1. The list document proving the person belongs (director → list of
     //    directors, UBO → ownership chart). Requesting it IS the analyst review.
     emit(PERSON_ATTRIBUTE.ADDED, full_name);
-    // 2. The person's own evidence — a no-op for a director-only person, whose
+    // 2. The person's own evidence - a no-op for a director-only person, whose
     //    rules resolve to accept_silent with no document.
     emit(PERSON_ATTRIBUTE.ADDED_POI, full_name);
     emit(PERSON_ATTRIBUTE.ADDED_POA, residential_country || full_name);
@@ -3774,9 +3774,9 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     setPersonRemoving(null);
   };
 
-  // Commit 3 (Option B core) — save handler for the inline correction editor.
+  // Commit 3 (Option B core) - save handler for the inline correction editor.
   // Two consistent destinations, in order:
-  //   1. gapRef["corrected_<field>"] — the SAME client-state key Fill Gaps
+  //   1. gapRef["corrected_<field>"] - the SAME client-state key Fill Gaps
   //      renders and submitApplication/allGapsFilled/field_provenance consume,
   //      so submit works unchanged and Fill Gaps shows the value pre-filled.
   //   2. A SUPERSEDING change-event carrying afterValue, cloned from the
@@ -3791,7 +3791,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     const snap = dialogueStateRef.current[fieldId];
     if (!snap || !snap.emitted || !snap.event) return; // nothing to supersede yet
     if (snap.lastSavedValue === value) return;         // idempotent double-save guard
-    // CD-03 EDD (commit 8) — re-run the SAME country check against the CORRECTED
+    // CD-03 EDD (commit 8) - re-run the SAME country check against the CORRECTED
     // value. The initial event was classified off the found value; a customer who
     // corrects "Registered Country" into a high-risk country has to raise the
     // flag, and the superseding event otherwise clones the original verbatim.
@@ -3802,7 +3802,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // Consume the head and clear the tail BEFORE the write lands: from here on
     // the only safe targets are the id this write returns, or null. Falling
     // back to an already-superseded row would throw in writeEvent, be swallowed
-    // as a 200 by the route, and lose the event — taking the registry original
+    // as a 200 by the route, and lose the event - taking the registry original
     // with it on any field where change_events is its only durable home.
     dialogueStateRef.current[fieldId] = {
       ...snap,
@@ -3824,7 +3824,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         .then((d) => {
           // Chain the lineage: a later re-edit supersedes THIS event, not the
           // head. The id is an OPAQUE token (the Neon driver may return a
-          // bigint as a string) — stored and passed back verbatim, never
+          // bigint as a string) - stored and passed back verbatim, never
           // compared numerically. A failed/no-id write leaves tailEventId null,
           // which is the safe un-linked path, not an error.
           const cur = dialogueStateRef.current[fieldId];
@@ -3943,7 +3943,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     </span>
   ) : null;
 
-  // Lookup the metadata entry for a given fieldId — used by the "When?"
+  // Lookup the metadata entry for a given fieldId - used by the "When?"
   // click-to-reveal badge so timestamps come from fieldMetadata, the
   // single source of truth.
   const metaFor = (fieldId) => fieldMetadata.find(m => m.fieldId === fieldId);
@@ -3951,7 +3951,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   /**
    * The pre-filled-fields table. Its render logic (the table, each row, and the
    * source badge) now lives in companyConfirm/FoundFieldsTable.jsx; what
-   * remains here is the wiring — App still owns this state, and hands it over
+   * remains here is the wiring - App still owns this state, and hands it over
    * explicitly instead of the component reaching into scope.
    *
    * Kept as a function with the same (items, title, subtitle) signature because
@@ -4001,12 +4001,12 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // Prevent "[object Object]" rendering when an object/array sneaks into a
   // field value (e.g. structured UBO data) where a string is expected.
 
-  // Render one row of the Confirm table — extracted so the section-grouped
+  // Render one row of the Confirm table - extracted so the section-grouped
   // and ungrouped paths share the same DOM.
   //
   // Layout: flex row with FIXED-width label (180px) and source-badge (180px)
   // cells and a flex:1 value cell with minWidth:0. The previous grid used
-  // fr-unit columns with whiteSpace:nowrap badges — a long source string
+  // fr-unit columns with whiteSpace:nowrap badges - a long source string
   // forced the source column to its content width and squeezed the value
   // column to near-zero, rendering values vertically.
   // PR-041: a stakeholder field whose value is an EMPTY array (e.g. a publicly
@@ -4026,7 +4026,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   // reads like the admin's schema layout.
 
   // One unified table grouped by source tier, sorted within group by
-  // schema research-field order — then wrapped into per-section blocks so
+  // schema research-field order - then wrapped into per-section blocks so
   // the customer sees a clear heading for each logical group (e.g.
   // Registered Address vs Business Address rather than interleaved rows).
 
@@ -4048,7 +4048,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
    * renderFoundRow), by meaning rather than by position:
    *   needs-confirming / disputed → ✓ ✕  ("is this right or wrong?")
    *   settled                     → ✓ ✎  (settled value; tweak it)
-   * A lone checkbox could only agree — there was no way to say "this is wrong,
+   * A lone checkbox could only agree - there was no way to say "this is wrong,
    * let me edit it", which the rows have always offered. ✕ and ✎ enter the same
    * flow: untick, and the value is corrected on the next page.
    *
@@ -4059,7 +4059,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   // Field labels that will land on the next page for this person/company: any
   // found field the customer unticked, plus any missing required field.
-  // `item` is optional — when supplied, an attribute the customer has ALREADY
+  // `item` is optional - when supplied, an attribute the customer has ALREADY
   // corrected inline is excluded, because it is finished here and listing it as
   // next-page work is a false promise.
   const stkNextPageFields = (s, ubo, item) =>
@@ -4073,8 +4073,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       .map((f) => f.label);
 
   // AI-returned fields the customer unticked on a person card to correct them
-  // (field-level correction). Strictly value-present fields — never the missing
-  // ones — so a listed-company person can only correct what was surfaced, not
+  // (field-level correction). Strictly value-present fields - never the missing
+  // ones - so a listed-company person can only correct what was surfaced, not
   // trigger new collection. Used to route a listed person's corrected values to
   // an editable card on Fill Gaps (mirrors the private side's per-field edit).
   const stkCorrectedFields = (s, ubo) =>
@@ -4085,7 +4085,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
   // Render a customer-added (pending) stakeholder card on Confirm. Commit 7:
   // a person added HERE arrives with their details and their CD-03 documents
-  // already requested, so the card names them and carries their evidence —
+  // already requested, so the card names them and carries their evidence -
   // rather than the old placeholder that only said "complete them next page".
 
   /**
@@ -4095,14 +4095,14 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
    */
 
   /**
-   * The People section. Its render logic — the section, each person's attribute
-   * rows, their documents, and a pending customer-added person — now lives in
+   * The People section. Its render logic - the section, each person's attribute
+   * rows, their documents, and a pending customer-added person - now lives in
    * companyConfirm/StakeholderConfirmSection.jsx; what remains here is the
    * wiring, because App still owns this state.
    *
    * Kept as a function with the same (item, idx) signature, which is how
-   * ConfirmStep's prop invokes it. (Two further call sites — the pre-boarding
-   * renderConfirmFields and renderStakeholderFallback — were deleted as
+   * ConfirmStep's prop invokes it. (Two further call sites - the pre-boarding
+   * renderConfirmFields and renderStakeholderFallback - were deleted as
    * superseded legacy, leaving ConfirmStep the only consumer.)
    *
    * The IMPURE helpers go across as props rather than moving, so one
@@ -4184,7 +4184,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       if (!isStakeholderField(result.field)) return;
       if (!Array.isArray(result.stakeholders) || result.stakeholders.length === 0) return;
       const list = getStakeholders(result.field);
-      // Registry exemption notices are not people — never validate them.
+      // Registry exemption notices are not people - never validate them.
       const validStakeholders = list.filter((s) => !isRegistryExemptionNotice(s));
       const ubo = isUboLikeField(result.field);
       const personLabel = ubo ? "beneficial owner" : "director";
@@ -4207,7 +4207,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       // everyone (so behaviour is unchanged).
       const toValidate = validStakeholders.filter((s) => needsStakeholderDetails(s, result.field, effectivelyListed));
 
-      // Listed company where no one needs details — nothing to validate.
+      // Listed company where no one needs details - nothing to validate.
       if (effectivelyListed && toValidate.length === 0) return;
 
       if (validStakeholders.length === 0) {
@@ -4260,7 +4260,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   const regularFound = sortedFound.filter(({ item }) => !hasRealStakeholders(item));
 
   // Confirm-page documents: persisted (server-derived) ∪ live dialogue
-  // outcomes, collapsed with the SCOPE-AWARE key (commit 6a) — per person for
+  // outcomes, collapsed with the SCOPE-AWARE key (commit 6a) - per person for
   // identity evidence, per type for company evidence. Feeds the inline row
   // card, the person cards, the summary panel and blocker kind (b): one list,
   // four surfaces, one satisfaction rule.
@@ -4276,12 +4276,12 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     return byId;
   })();
   // Field label by field id, so a per-field document request can name the field
-  // that asked for it — several 'Supporting Registration Document' requests
+  // that asked for it - several 'Supporting Registration Document' requests
   // share one title and are otherwise indistinguishable.
   const fieldLabelById = new Map(
     (research?.found || []).filter((r) => r && r.field).map((r) => [r.field, r.label || r.field])
   );
-  // Schema section per field — the group a document belongs to. One Notice of
+  // Schema section per field - the group a document belongs to. One Notice of
   // Change of Address covers the whole registered address however many of its
   // lines changed, but a second address section is a second address and a
   // second notice.
@@ -4300,7 +4300,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       docGroup: fieldSectionById.get(d.fieldId) || null,
     };
   });
-  // Persisted first, then live — canonicalDocs keeps first-occurrence order.
+  // Persisted first, then live - canonicalDocs keeps first-occurrence order.
   const rawAmendmentDocs = [
     ...withPersonName(persistedAmendmentDocs),
     ...withPersonName(docsNeededFrom(dialogueStateRef.current)),
@@ -4348,7 +4348,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
    *
    * `resolvableHere` is the load-bearing distinction: a FOUND attribute can be
    * ticked or corrected on this page, but an attribute research did not return
-   * has no input on the person card — it is collected on Fill Gaps, which is
+   * has no input on the person card - it is collected on Fill Gaps, which is
    * why the card tags it "collected on next page". Counting it is honest; blocking
    * on it would strand the customer with no control to clear it.
    */
@@ -4368,7 +4368,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
           stkConfirmFields(s, ubo).forEach((f) => {
             const found = stkFieldFound(s, f.key);
             // A low-confidence attribute needs an EXPLICIT tick, exactly as a
-            // low-confidence pre-filled row does — arriving pre-ticked is not
+            // low-confidence pre-filled row does - arriving pre-ticked is not
             // agreement. Same source, same standard, whether it renders as a
             // row or inside a person card.
             const corrected = isPersonAttributeCorrected(item, s, f);
@@ -4384,7 +4384,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
               personName: s.full_name || null,
               found,
               outstanding,
-              // A customer-supplied value is CORRECTED, not merely confirmed —
+              // A customer-supplied value is CORRECTED, not merely confirmed -
               // the same distinction the pre-filled rows draw.
               corrected: found && corrected,
               confirmed: found && settled && !corrected,
@@ -4397,11 +4397,11 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   })();
 
   // Confirm-page tile counts and the gate's blockers, from the ONE shared
-  // predicate. Computed during render — not memoised — because gapRef and
+  // predicate. Computed during render - not memoised - because gapRef and
   // dialogueStateRef are refs: a memo would serve stale values after an inline
   // save. Re-render is driven by the same setFormVersion bump the save fires.
   const confirmStateInput = {
-    // VITAL ROWS ONLY — the rows the customer can actually act on in the
+    // VITAL ROWS ONLY - the rows the customer can actually act on in the
     // pre-filled table, carrying their original research.found index (checks is
     // index-keyed). Stakeholder fields render as person cards with their own
     // affordances and are not gate-eligible until commit 6 wires per-person
@@ -4417,7 +4417,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   };
   const confirmCounts = computeConfirmCounts(confirmStateInput);
   // requiredGaps is deliberately EMPTY here. Every value the customer can
-  // supply on Confirm is already covered by kind (a) — a crossed row with no
+  // supply on Confirm is already covered by kind (a) - a crossed row with no
   // correction is an attention row. The remaining required gaps live on Fill
   // Gaps and are invisible from this page; blocking on a field the customer
   // cannot see would be an illegible trap, and allGapsFilled still enforces
@@ -4426,11 +4426,11 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   const confirmBlockerMessage = blockerSummary(confirmBlockers);
 
   /**
-   * "Confirm All" — the footer-level shortcut. Settles every confirmable
+   * "Confirm All" - the footer-level shortcut. Settles every confirmable
    * datapoint on the page in one click: every NEEDS_YOU vital row, plus every
    * stakeholder's outstanding attributes (via confirmAllPersonAttributes, the
    * exact function the per-person "✓ Confirm all" button already calls).
-   * Missing-document blockers are left alone — there's no confirm affordance
+   * Missing-document blockers are left alone - there's no confirm affordance
    * for a file upload.
    *
    * Rows are batched into ONE setChecks + ONE setAffirmedFields, the same
@@ -4454,7 +4454,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         needsYouRows.forEach(({ item }) => { next[item.field] = true; });
         return next;
       });
-      // The DISPUTED subset (checks[idx] === false) is being RE-TICKED here —
+      // The DISPUTED subset (checks[idx] === false) is being RE-TICKED here -
       // the same undo toggleCheck performs one row at a time. Replicate its
       // cleanup for these fields so a stale doc_required dialogue doesn't
       // survive the re-tick: without it, docsNeededFrom(dialogueStateRef) keeps
@@ -4463,7 +4463,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       // row the UI shows accepted. Batched into ONE setFieldMetadata (mirrors
       // toggleCheck's per-field stamp) instead of N; the dialogue/gap cleanup
       // and its best-effort revert POST are per-field via retractFieldChange
-      // (not awaited — same fire-and-forget discipline as toggleCheck).
+      // (not awaited - same fire-and-forget discipline as toggleCheck).
       const disputedRows = needsYouRows.filter(({ idx }) => checks[idx] === false);
       if (disputedRows.length > 0) {
         const at = new Date().toISOString();
@@ -4493,7 +4493,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
    * predicates live so what is stored is exactly what was shown.
    *
    * `agentValue` is the value RESEARCH returned and is read from the untouched
-   * research row, never from the edited copy — the same discipline the scalar
+   * research row, never from the edited copy - the same discipline the scalar
    * trail follows, so a corrected attribute keeps both values.
    */
   const buildStakeholderAttributeTrail = (stampedAt) => {
@@ -4569,7 +4569,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       };
     });
 
-  // Upload handler shared by the inline Confirm card and the Fill Gaps panel —
+  // Upload handler shared by the inline Confirm card and the Fill Gaps panel -
   // one store (amendmentUploads), keyed fieldId::docType, lifted here so blobs
   // survive Confirm↔Fill Gaps navigation and land in the dossier payload.
   const handleAmendmentUpload = async (file, doc) => {
@@ -4594,7 +4594,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   const tier3Count = (research?.found || []).filter(i => i.sourceTier === "tier3").length;
 
   /**
-   * How much research actually pre-filled, by source — counted in DATA POINTS.
+   * How much research actually pre-filled, by source - counted in DATA POINTS.
    *
    * A stakeholder row is one row but many values: three directors with five
    * known attributes each is fifteen pre-filled fields, not one. The old count
@@ -4621,9 +4621,9 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   );
 
   // 3-strict: no ?tenant= means no tenant, and a tenant the server does not
-  // know (404 tenant_not_found) is no tenant either — the browser must not
+  // know (404 tenant_not_found) is no tenant either - the browser must not
   // contradict the server by rendering a working flow for an id it rejected.
-  // This must come after every hook above (React rules-of-hooks — the last
+  // This must come after every hook above (React rules-of-hooks - the last
   // hook call in this component is ~3000 lines up, well before this point) but
   // before any of the normal header/flow renders below. In the !tenantId case
   // no fetch happened at all (see the config-loading effect's own guard).
@@ -4672,20 +4672,20 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
   }
 
   // ───────────────────────────────────────────────────────────────────────
-  // AGENT-SELECTION SCREEN — the front-door chooser: user picks the KYC
+  // AGENT-SELECTION SCREEN - the front-door chooser: user picks the KYC
   // Onboarding agent vs the Pre-boarding agent. Onboarding routes straight into
   // the wizard; Pre-boarding routes to the password gate (ARCH) first.
   //
-  // Currently PARKED — the call site is commented out in the agentType === null
+  // Currently PARKED - the call site is commented out in the agentType === null
   // routing block below ("hidden for stakeholder review weekend"). KEPT
   // deliberately: this is a real screen to be restored, not dead code. Nothing
-  // took over its job — it is switched off, not superseded, which is why it
+  // took over its job - it is switched off, not superseded, which is why it
   // survived the sweep that deleted the pre-boarding confirm/fill-gaps
   // renderers (those had live replacements; this does not).
   //
   // STAYS IN App.js BY DESIGN. It is the router ABOVE both flows, so it must
-  // NOT be moved into the pre-boarding component — or any single-flow component
-  // — as that would bury the both-flows chooser inside one of the flows it
+  // NOT be moved into the pre-boarding component - or any single-flow component
+  // - as that would bury the both-flows chooser inside one of the flows it
   // routes to.
   //
   // To restore: re-enable the commented call site. Do not delete without a
@@ -4869,7 +4869,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       .filter(dependsOnSatisfied)
       .filter((g) => !excludedGapFields.has(g.field));
 
-  // Every candidate gap field (excluded or not) — the interactive Customer
+  // Every candidate gap field (excluded or not) - the interactive Customer
   // Request list in the dossier renders all of these so the analyst can toggle
   // exclusions in place.
   const allRequestableGapFields = () =>
@@ -4902,7 +4902,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
     // Registry documents the analyst manually uploaded (captcha-blocked docs
     // that couldn't be auto-sourced). Fold them into required_documents.
-    // TODO(PR-034 — Vercel Blob): when blob storage is built, upload
+    // TODO(PR-034 - Vercel Blob): when blob storage is built, upload
     // `manualUploadFile` to Vercel Blob *here* and persist the permanent
     // `blobUrl` instead of the ephemeral `manualUploadUrl` (a browser-memory
     // blob: URL that does not survive a page reload).
@@ -4925,7 +4925,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     // Registration number carried onto the dossier for slice 2's confirmation
     // gate. Provenance distinguishes a customer-typed number (trusted) from a
     // system-retrieved one (shown for verification), and is taken from the
-    // EXPLICIT `regNumberSource` flag — not inferred from the string — so a
+    // EXPLICIT `regNumberSource` flag - not inferred from the string - so a
     // number restored from a loaded dossier (source null) is never re-persisted
     // as "customer". A system-retrieved number, when present, already lives in
     // the research output as the `registration_number` found field, so slice 2
@@ -4937,7 +4937,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
 
     return {
       // Upsert key: a dossier that already exists must be UPDATEd in place
-      // (api/save-dossier.js), never re-inserted — a blind insert would
+      // (api/save-dossier.js), never re-inserted - a blind insert would
       // duplicate the row and orphan any invite link already built on this id.
       dossierId,
       // Only a create carries the key; an update is keyed by dossierId.
@@ -4963,14 +4963,14 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       stakeholders: stakeholderData,
       requiredDocuments: [...(docSearchResults?.documents || []), ...manuallyUploadedDocs],
       costSummary,
-      // Bug 2 — fold ephemeral self-source results (incl. results[].files[]) into
+      // Bug 2 - fold ephemeral self-source results (incl. results[].files[]) into
       // the persisted rawResearch so the registry section + "Sourced automatically"
       // banners survive dossier → onboarding. Uses the existing raw_research JSONB
-      // column — no new column, no migration.
-      // PR-071 — also fold amendment-document uploads (permanent Vercel Blob
+      // column - no new column, no migration.
+      // PR-071 - also fold amendment-document uploads (permanent Vercel Blob
       // URLs from /api/upload-document) into rawResearch so they survive the
-      // dossier round-trip. Reuses the raw_research JSONB column — no migration.
-      // PR-043 — also fold docSearchResults (annual report / Wolfsberg internet
+      // dossier round-trip. Reuses the raw_research JSONB column - no migration.
+      // PR-043 - also fold docSearchResults (annual report / Wolfsberg internet
       // research docs) into rawResearch so the unified Documents Sourced panel
       // still shows them after a dossier → onboarding reload. Mirrors the
       // selfSourceResults persistence above; reuses the raw_research JSONB column.
@@ -4998,7 +4998,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       });
       const result = await response.json();
       if (response.status === 403 && result.error === "dossier_locked") {
-        // The dossier IS saved — under the customer, not lost. This is not a
+        // The dossier IS saved - under the customer, not lost. This is not a
         // save failure: switch to the read-only "customer has taken over" view
         // instead of the save-error banner (clearing any stale one from an
         // earlier failed attempt), and never offer a retry that can never
@@ -5017,7 +5017,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
         console.log(`[Dossier] ✅ Saved: ${result.dossierId}`);
       } else {
         // api/save-dossier.js always returns 200, even on failure (best-effort
-        // by design) — dossierId stays null here, so the analyst must be told
+        // by design) - dossierId stays null here, so the analyst must be told
         // explicitly rather than seeing what looks like a normal saved dossier.
         setDossierSaveError(
           result.warning
@@ -5064,7 +5064,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
     return p;
   };
 
-  // Agent routing — order matters. The existing onboarding flow (the main
+  // Agent routing - order matters. The existing onboarding flow (the main
   // return below) is reached only when agentType === "onboarding".
 
   if (agentType === null) {
@@ -5086,7 +5086,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       />
     );
   }
-  // Invite screen is the 4th pre-boarding screen — takes priority over the
+  // Invite screen is the 4th pre-boarding screen - takes priority over the
   // dossier view when showInviteScreen is set.
   if (agentType === "preboarding" && preboardingUnlocked && showInviteScreen) {
     return (
@@ -5108,7 +5108,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
       />
     );
   }
-  // Dossier view is the final pre-boarding screen — takes priority over the
+  // Dossier view is the final pre-boarding screen - takes priority over the
   // confirm/fill-gaps render below when showDossierView is set.
   if (agentType === "preboarding" && preboardingUnlocked && showDossierView) {
     return (
@@ -5176,7 +5176,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
           background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412",
           padding: "10px 16px", fontSize: 13, fontWeight: 600, textAlign: "center",
         }}>
-          Review only — the customer has taken over this application, so nothing here can be changed.
+          Review only - the customer has taken over this application, so nothing here can be changed.
         </div>
       )}
       {inPreview && (
@@ -5223,8 +5223,8 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
             let activeIdx = pb ? pbActive : step;
             // Dossier/invite journey: the customer landed via link, so Company &
             // Research (and Documents, on that journey) were done before they
-            // arrived. Hide every pre-Applicant pill and renumber the rest 1–N.
-            // DISPLAY ONLY — `step`/STEPS routing is untouched; we just slice the
+            // arrived. Hide every pre-Applicant pill and renumber the rest 1-N.
+            // DISPLAY ONLY - `step`/STEPS routing is untouched; we just slice the
             // labels and re-base the active index by the same offset so Applicant
             // reads as 1 of 5 here while staying 3 of 7 on the KYC/lookup journey.
             // Skipped for preboarding (analyst flow) and once a dispute reset
@@ -5762,7 +5762,7 @@ export default function KYCAgent({ previewMode = false, preboarding = false } = 
             <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 22px" }}>
               {submitStatus === "saved"
                 ? <>KYC onboarding for <strong>{research?.companyName || companyName}</strong> submitted successfully.</>
-                : <>KYC onboarding for <strong>{research?.companyName || companyName}</strong> received — we're saving it now and it will be finalized shortly.</>}
+                : <>KYC onboarding for <strong>{research?.companyName || companyName}</strong> received - we're saving it now and it will be finalized shortly.</>}
             </p>
             <div style={{ background: "#f5f7fa", borderRadius: 10, padding: 18, textAlign: "left", maxWidth: 480, margin: "0 auto 22px" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#1a3a4a80", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.08em" }}>Submission Summary</div>

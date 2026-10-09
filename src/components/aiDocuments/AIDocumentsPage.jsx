@@ -1,9 +1,9 @@
 /**
- * AIDocumentsPage.jsx — the Documents step of the ai_documents journey.
+ * AIDocumentsPage.jsx - the Documents step of the ai_documents journey.
  *
  * EXTRACTED FROM App.js as a PURE MOVE, zero behaviour change. The step was an
- * inline IIFE in App's return — {isAiDocs && step === STEPS.documents && (() =>
- * …)()} — so, like the Fill Gaps shell, there was no named render function to
+ * inline IIFE in App's return - {isAiDocs && step === STEPS.documents && (() =>
+ * …)()} - so, like the Fill Gaps shell, there was no named render function to
  * relocate: this extraction AUTHORS the component boundary. The body below is
  * the same text that ran in App.js, at its original indentation, so a diff shows
  * the move and nothing else. What changed is only how it gets its data: it used
@@ -14,7 +14,7 @@
  *
  * THE TWO UPLOAD HANDLERS CAME WITH IT. handleManualDocumentUpload and
  * handleManualDocumentRemove were hoisted function declarations parked ~1,350
- * lines from the render body, inside the pre-boarding block — but their only
+ * lines from the render body, inside the pre-boarding block - but their only
  * call sites are in this step, so they belong here. They are the one part of
  * this move a const-based scan would have missed entirely.
  *
@@ -26,11 +26,11 @@
  *   - acceptedDocTypes crosses as the LIVE Set, with setAcceptedDocTypes as a
  *     callback. It is NOT snapshotted: the accept toggle reads the current Set,
  *     and doResearch reads it too. This is the wiring behind the known
- *     auto-found-docs gap — moved byte-identical, deliberately NOT fixed here.
+ *     auto-found-docs gap - moved byte-identical, deliberately NOT fixed here.
  *   - docLoaderIdx is driven by an App-owned interval effect; hasRunRealAgent is
  *     reset by resetAll. Neither can live here.
  *   - setJourneyOpen is drilled for the "← Back" button. journeyOpen itself
- *     STAYS in App.js — the journey picker and ConfirmStep also consume it.
+ *     STAYS in App.js - the journey picker and ConfirmStep also consume it.
  *
  * The oracle is AIDocumentsPage.render.test.jsx (21 assertions), written against
  * the inline step BEFORE this move and green after it, UNCHANGED. If it goes
@@ -103,14 +103,14 @@ export function AIDocumentsPage({
     // re-selected after a Remove and we don't touch a reused event later.
     event.target.value = "";
 
-    // PR-034 — upload to Vercel Blob immediately and persist the permanent URL
+    // PR-034 - upload to Vercel Blob immediately and persist the permanent URL
     // rather than an ephemeral browser blob: URL (which does not survive a page
     // reload). The ephemeral URL is kept only as a local fallback for preview if
     // the upload fails.
     const localUrl = URL.createObjectURL(file);
     let blobUrl = null;
     // Store path within the Blob store, returned since the private-write fix.
-    // Persisted alongside the URL (raw_research JSONB — no migration) because
+    // Persisted alongside the URL (raw_research JSONB - no migration) because
     // signed-URL retrieval is keyed by pathname and addRandomSuffix makes it
     // unreconstructable. Null for uploads made before that change.
     let blobPathname = null;
@@ -178,7 +178,7 @@ export function AIDocumentsPage({
 
           const docs = docTypesForEntity(entityType, tenantConfig);
           const uploadedCount = docs.reduce((n, d) => n + (uploadedDocs[d.key] ? 1 : 0), 0);
-          // Section A (Document Intelligence) — auto-sourced documents from
+          // Section A (Document Intelligence) - auto-sourced documents from
           // the doc search agent. Only usable docs render as cards.
           const foundDocs = (docSearchResults?.documents || [])
             .filter(d => d.status === "downloaded" || d.status === "url_found");
@@ -223,13 +223,13 @@ export function AIDocumentsPage({
             return false;
           }
 
-          // PR-043 — unified "Documents Sourced" list. Merge three origins into
+          // PR-043 - unified "Documents Sourced" list. Merge three origins into
           // one deduped, labelled, sorted array so manual uploads and the annual
           // report sit in the same panel as the automated registry docs:
-          //   • registry  — selfSourceResults.results, status "retrieved"
-          //   • manual    — selfSourceResults.results, status "manually_uploaded"
+          //   • registry  - selfSourceResults.results, status "retrieved"
+          //   • manual    - selfSourceResults.results, status "manually_uploaded"
           //                 (carries a permanent blobUrl from PR-034)
-          //   • research  — docSearchResults.documents (annual report / Wolfsberg)
+          //   • research  - docSearchResults.documents (annual report / Wolfsberg)
           const SOURCE_LABELS = {
             registry: "Retrieved from registry",
             research: "Retrieved automatically",
@@ -250,7 +250,7 @@ export function AIDocumentsPage({
             // automated registry docs link to the registry page instead.
             //
             // Blobs are written PRIVATE, so a manual upload can no longer be an
-            // <a href> straight at the blob — a private blob is not fetchable by
+            // <a href> straight at the blob - a private blob is not fetchable by
             // URL. Route it through /api/get-document, which reads it with the
             // store token and streams the bytes back. Registry docs are ordinary
             // public web pages and are linked directly, unchanged.
@@ -306,7 +306,7 @@ export function AIDocumentsPage({
               timestamp: docSearchResults?.searchedAt || "",
             }));
 
-          // Dedup by document type — prefer an automated entry (registry/research)
+          // Dedup by document type - prefer an automated entry (registry/research)
           // over a manual upload of the same type; show the manual upload only as
           // a fallback. Empty doc types are never collapsed together.
           const isAuto = (e) => e.origin !== "manual";
@@ -416,7 +416,7 @@ export function AIDocumentsPage({
                     <div style={{ fontSize: 24, marginBottom: 16 }}>⏳</div>
                     <p style={{ fontWeight: 500 }}>{currentMessage}</p>
                     <p style={{ fontSize: 13, color: "#666", marginTop: 8 }}>
-                      This takes about 30–40 seconds
+                      This takes about 30-40 seconds
                     </p>
                   </div>
                 )}

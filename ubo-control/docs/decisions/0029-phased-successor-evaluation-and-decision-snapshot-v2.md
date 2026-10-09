@@ -1,4 +1,4 @@
-# ADR 0029 — Phased successor evaluation and DecisionSnapshot v2
+# ADR 0029 - Phased successor evaluation and DecisionSnapshot v2
 
 ## Status
 

@@ -1,7 +1,7 @@
 /**
  * Documents step, real agents (RERES-3 item 9): a researching customer starts
  * the paid document search + registry lookup with a button; analysts and plain
- * onboarding keep the automatic run. SHOW_TEST_TOOLS is forced off here — under
+ * onboarding keep the automatic run. SHOW_TEST_TOOLS is forced off here - under
  * Jest it is on, and test mode replaces both agents with dummy results.
  */
 import React from "react";

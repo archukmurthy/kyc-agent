@@ -62,7 +62,7 @@ test("an uppercase/differently-cased dossierId revokes by the CANONICAL id the l
   // Postgres's uuid type matches an uppercase/braced/hyphenless input to the
   // same row as its canonical lowercase form. Using the caller's spelling to
   // revoke would write dossier-token-revoked:<UPPER> while every minted token
-  // carries the lowercase id — so lowercase tokens would NOT be revoked, yet
+  // carries the lowercase id - so lowercase tokens would NOT be revoked, yet
   // the response still says success:true.
   let revokedFor = null;
   handler.__setDeps({

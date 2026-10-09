@@ -1,6 +1,6 @@
-// ── Nium API Lookup (test journey) — temporary demo wiring ──
+// ── Nium API Lookup (test journey) - temporary demo wiring ──
 // The Companies House name→registration-number resolver is parked while its API
-// key is sorted out (returns 401 — see project memory). The Nium eKYB preprod
+// key is sorted out (returns 401 - see project memory). The Nium eKYB preprod
 // sandbox returns dummy data for ANY registration number, so to keep the test
 // journey working end-to-end we hide the reg-number panel and send a fixed
 // placeholder. To restore the resolver: set SHOW_NIUM_REG_PANEL = true and have
@@ -8,7 +8,7 @@
 export const SHOW_NIUM_REG_PANEL = false;
 export const NIUM_DEMO_REG_NUMBER = "00445790";
 // The preprod sandbox fixture for that reg number only exists under SG, so the
-// demo lookup must query SG regardless of the country the analyst selected —
+// demo lookup must query SG regardless of the country the analyst selected -
 // otherwise a GB/US selection returns "Company not found".
 export const NIUM_DEMO_COUNTRY = "SG";
 
@@ -48,7 +48,7 @@ export const OWNERSHIP_ID_TO_DRS = {
    ═══════════════════════════════════════════ */
 // Testing-only affordances (Dummy Research, Demo mode, Fill with test data,
 // Upload-all). Shown automatically in local dev (`npm start`), and on the
-// deployed/production site ONLY when the URL carries ?test=1 — so normal
+// deployed/production site ONLY when the URL carries ?test=1 - so normal
 // customers never see them, but you can enable them on Vercel for QA by
 // visiting e.g. https://kyc-agent-deploy.vercel.app/?test=1
 export const TEST_FLAG =

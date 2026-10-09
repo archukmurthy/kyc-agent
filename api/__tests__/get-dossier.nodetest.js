@@ -32,7 +32,7 @@ const CUSTOMER = { kind: "customer", tenantId: "acme", dossierId: "d-1", reason:
 const req = (query = {}) => ({ method: "GET", query, headers: {}, url: "/api/get-dossier" });
 
 test("a DB failure reports a fixed code, never the raw error text", async () => {
-  const throwingSql = () => { throw new Error("relation entity_dossiers does not exist — internal schema detail"); };
+  const throwingSql = () => { throw new Error("relation entity_dossiers does not exist - internal schema detail"); };
   handler.__setDeps({ neon: () => throwingSql, access: accessWith(ANALYST) });
   const res = fakeRes();
   await handler(req({ id: "d-1", tenant: "acme" }), res);

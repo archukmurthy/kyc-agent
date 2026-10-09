@@ -1,9 +1,9 @@
 /**
- * buildChangeEvent.js — pure assembler: dialogue answers + engine output -> one
+ * buildChangeEvent.js - pure assembler: dialogue answers + engine output -> one
  * change_event object, shaped for the events DAL writeEvent.
  *
  * It produces the camelCase keys writeEvent consumes (which ARE the keys of the
- * events DAL's COLUMNS map — imported here, not redefined, so this stays locked
+ * events DAL's COLUMNS map - imported here, not redefined, so this stays locked
  * to the table shape). The output is whitelisted against COLUMNS so a stray key
  * can never reach the write path.
  *
@@ -13,7 +13,7 @@
  *    unchecked found field is 'changed' (the final value lands at Fill Gaps).
  *  - the engine is called with the post-split 'correct'|'update' (see
  *    dialogueContent.toEngineChangeType) and never sees 'changed'. That value is
- *    NOT stored — only its decision is, via engineResult.
+ *    NOT stored - only its decision is, via engineResult.
  *
  * after_value is null in capture mode: the customer's final value does not exist
  * yet on the Confirm page. When Fill Gaps commits, a later slice writes a
@@ -44,7 +44,7 @@ export function buildChangeEvent({
     // does not exist yet when the dialogue classifies), but it is a real
     // parameter, not a hardcoded null: the Confirm page's inline-capture save
     // passes the corrected value on the superseding event. supersedesId is the
-    // append-only lineage pointer — null is always a valid, non-throwing value
+    // append-only lineage pointer - null is always a valid, non-throwing value
     // (currency then resolves by max id), a stale one is NOT: writeEvent
     // rejects an already-superseded target and the route swallows the throw as
     // a 200, which would silently lose the event. Never guess it.
@@ -64,7 +64,7 @@ export function buildChangeEvent({
     customerRegistryClaim: registryStatus ?? null,
     registryRecheckResult: null, // filled later by the registry re-check slice
 
-    // engine output, recorded verbatim — this row is the audit of the decision
+    // engine output, recorded verbatim - this row is the audit of the decision
     workflow: engineResult.workflow ?? 'UNDECIDED',
     docType: engineResult.docType ?? null,
     eddFlag: engineResult.eddFlag ?? false,

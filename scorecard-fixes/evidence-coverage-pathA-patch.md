@@ -22,7 +22,7 @@ REPLACE WITH:
 ```js
   const tier1 = found.filter(f => f.sourceTier === 'tier1' || f.sourceTier === 'document').length;
   // #4 Evidence coverage (Path A): of the fields the agent FILLED, how many rest
-  // on a CREDIBLE source — tier-1 (authoritative registry / document) or tier-2
+  // on a CREDIBLE source - tier-1 (authoritative registry / document) or tier-2
   // (company-owned). tier-3 (aggregators, inferred) does NOT count as evidenced.
   // This is distinct from #1 coverage (how much was filled) and from tier1Share
   // (tier-1 only). The old presence-of-any-source check is retained as a floor.
@@ -58,7 +58,7 @@ REPLACE WITH:
     evidenceFloor:    { mean: mean(v('evidenceFloor')) },      // any-citation floor
 ```
 
-## 4. Console label (line ~318) — make the meaning explicit
+## 4. Console label (line ~318) - make the meaning explicit
 
 FIND:
 ```js
@@ -71,8 +71,8 @@ console.log(`  4. Evidence coverage ........ ${fp(overall.evidenceCoverage.mean)
 ```
 
 ## Notes
-- `tier1Share` (line 208) is left untouched — it remains the tier-1-ONLY view.
+- `tier1Share` (line 208) is left untouched - it remains the tier-1-ONLY view.
   You now have a clean ladder: evidenceFloor (any source) >= evidenceCoverage
   (tier1+2) >= tier1Share (tier1 only).
-- Runs over stored pilot output unchanged — no re-run needed, since sourceTier
+- Runs over stored pilot output unchanged - no re-run needed, since sourceTier
   is already present on every `found` field.

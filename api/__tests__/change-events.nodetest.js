@@ -16,7 +16,7 @@ function fakeSql(dossierRow, updateThrows = false, { recheckRaced = false } = {}
     const text = strings.join(" ");
     log.push({ text, values });
     // The analyst re-check-before-write query carries its own ownership
-    // clause — distinct from the gate lookup above it — so it can be raced
+    // clause - distinct from the gate lookup above it - so it can be raced
     // independently: dossierRow still looks analyst-owned at the gate, but a
     // simulated concurrent customer takeover makes this query match zero rows.
     if (/owned_by\s*<>\s*'customer'/i.test(text)) {
@@ -25,7 +25,7 @@ function fakeSql(dossierRow, updateThrows = false, { recheckRaced = false } = {}
     if (/SELECT[\s\S]*FROM entity_dossiers/i.test(text)) {
       // Mirror real Postgres: a `status != 'deleted'` clause in the query text
       // actually excludes a row whose status is 'deleted'. This is what makes
-      // the "gate lookup must not filter on status" test meaningful — the test
+      // the "gate lookup must not filter on status" test meaningful - the test
       // fails against the un-fixed route (which still carries the clause) and
       // passes once it's removed.
       if (dossierRow && dossierRow.status === "deleted" && /status\s*!=\s*'deleted'/i.test(text)) {
@@ -115,7 +115,7 @@ test("an analyst's write succeeds when the pre-write re-check still finds the do
   assert.strictEqual(wrote, true);
 });
 
-test("TOCTOU: a customer takeover races the analyst's write between the permission check and the insert — 403, write spy not called", async () => {
+test("TOCTOU: a customer takeover races the analyst's write between the permission check and the insert - 403, write spy not called", async () => {
   // The permission SELECT sees owned_by:'analyst' (so canWriteDossier
   // permits), but the dedicated pre-write re-check simulates a concurrent
   // customer takeover landing in between: it matches zero rows.
@@ -154,7 +154,7 @@ test("a customer's ownership UPDATE throws → no change record is written", asy
   assert.strictEqual(wrote, false, "expected no event written when ownership update fails");
 });
 
-test("a soft-deleted dossier's id still requires a credential — it is not a fresh application", async () => {
+test("a soft-deleted dossier's id still requires a credential - it is not a fresh application", async () => {
   let wrote = false;
   const sql = fakeSql({ ...ROW, status: "deleted" });
   handler.__setDeps(deps(sql, { kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" }, () => { wrote = true; }));
@@ -164,7 +164,7 @@ test("a soft-deleted dossier's id still requires a credential — it is not a fr
   assert.strictEqual(wrote, false);
 });
 
-test("a credentialed customer cannot write to a soft-deleted dossier — no write, no ownership flip", async () => {
+test("a credentialed customer cannot write to a soft-deleted dossier - no write, no ownership flip", async () => {
   let wrote = false;
   const sql = fakeSql({ ...ROW, status: "deleted" });
   handler.__setDeps(deps(sql, CUSTOMER, () => { wrote = true; }));

@@ -35,7 +35,7 @@ export default function EntityTypesModule({ config, patchConfig, markSaved }) {
     const ent = list[idx];
     if (!window.confirm(`Delete entity type "${ent.label}"?\n\nWarning: schemas keyed by ${ent.id}:* will also be removed.`)) return;
     setList((prev) => prev.filter((_, i) => i !== idx));
-    // Cascade-delete schemas using this entity type. We don't patch yet —
+    // Cascade-delete schemas using this entity type. We don't patch yet -
     // happens on Save.
     setSaved(false);
   }

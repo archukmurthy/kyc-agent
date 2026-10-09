@@ -42,7 +42,7 @@ async function askOwnershipStatements(rl, rootEntity) {
 async function main() {
   const rl = readline.createInterface({ input, output });
   try {
-    console.log("\nUBO Discovery Framework — local playground\n");
+    console.log("\nUBO Discovery Framework - local playground\n");
     const entityName = (await rl.question("Customer company name: ")).trim();
     const jurisdiction = (await rl.question("Customer company jurisdiction (e.g. GB): ")).trim().toUpperCase();
     if (!entityName || !jurisdiction) throw new Error("A company name and jurisdiction are required.");

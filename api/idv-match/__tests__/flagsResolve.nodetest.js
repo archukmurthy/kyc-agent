@@ -31,7 +31,7 @@ function deps(over = {}) {
       status: "Approved",
       decision: { session_id: "sess-1", status: "Approved", id_verifications: [{ status: "Approved", first_name: "John", last_name: "Smith", date_of_birth: "1985-05-24", document_type: "Passport" }], liveness_checks: [{ status: "Approved" }] },
     })),
-    // count: 1 mirrors reality — the default startScreening below succeeds, which
+    // count: 1 mirrors reality - the default startScreening below succeeds, which
     // means a row was created (count 0 with a completed start is the failure case
     // covered by its own dedicated test further down).
     hasScreeningHit: over.hasScreeningHit || (async () => ({ hit: false, pending: false, notProcessed: false, categories: {}, count: 1 })),
@@ -67,7 +67,7 @@ test("resolve maps the fresh decision and runs the pipeline -> Band A", async ()
   assert.ok(!("mrz" in r.verifiedFields));
 });
 
-test("resolve is idempotent — an existing decision is returned, pipeline not re-run", async () => {
+test("resolve is idempotent - an existing decision is returned, pipeline not re-run", async () => {
   process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
   const d = deps({ listByAttempt: async () => [{ band: "A", outcome_type: "auto_match" }] });
   const r = await resolveAttempt("att-1", d);
@@ -221,7 +221,7 @@ test("verify-only + NOT providerVerified -> IN_REVIEW, no screening started", as
   assert.strictEqual(d._decisions.length, 0);
 });
 
-test("resolve holds (needsRetry) while the Didit session is still in progress — selfie not done yet", async () => {
+test("resolve holds (needsRetry) while the Didit session is still in progress - selfie not done yet", async () => {
   process.env.IDV_DISCREPANCY_BANDS_ENABLED = "1";
   // Document step finished (fields present) but the overall session is still
   // In Progress (liveness/selfie pending) -> must NOT return the cells yet.

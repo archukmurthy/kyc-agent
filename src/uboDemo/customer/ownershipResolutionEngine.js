@@ -83,10 +83,10 @@ const EVIDENCE_RULES = Object.freeze({
 });
 
 const DIFFERENCE_OPTIONS = Object.freeze([
-  { value: OWNERSHIP_DIFFERENCE_REASON.SHARE_TRANSFER, label: "Yes — existing shares were transferred" },
-  { value: OWNERSHIP_DIFFERENCE_REASON.SHARE_ALLOTMENT, label: "Yes — new shares were issued" },
-  { value: OWNERSHIP_DIFFERENCE_REASON.REGISTRY_OUTDATED, label: "No — the registry information is outdated or incorrect" },
-  { value: OWNERSHIP_DIFFERENCE_REASON.DIFFERENT_CIRCUMSTANCES, label: "No — both are correct but refer to different circumstances" },
+  { value: OWNERSHIP_DIFFERENCE_REASON.SHARE_TRANSFER, label: "Yes - existing shares were transferred" },
+  { value: OWNERSHIP_DIFFERENCE_REASON.SHARE_ALLOTMENT, label: "Yes - new shares were issued" },
+  { value: OWNERSHIP_DIFFERENCE_REASON.REGISTRY_OUTDATED, label: "No - the registry information is outdated or incorrect" },
+  { value: OWNERSHIP_DIFFERENCE_REASON.DIFFERENT_CIRCUMSTANCES, label: "No - both are correct but refer to different circumstances" },
   { value: OWNERSHIP_DIFFERENCE_REASON.OTHER, label: "There is another explanation" },
   { value: OWNERSHIP_DIFFERENCE_REASON.NOT_SURE, label: "I'm not sure" },
 ]);

@@ -1,9 +1,9 @@
 /**
- * writeEvent.js — the ONLY write path into change_events.
+ * writeEvent.js - the ONLY write path into change_events.
  *
  * Appends one immutable event. It NEVER updates and NEVER deletes. Correcting a
  * prior event or reverting to the AI value are both expressed as a NEW row whose
- * `supersedesId` points at the row it replaces — the old row stays untouched, so
+ * `supersedesId` points at the row it replaces - the old row stays untouched, so
  * the audit trail can never shrink.
  *
  * `db` is the injected query surface (the neon HTTP client, or any object with
@@ -26,7 +26,7 @@ const { COLUMNS, WRITABLE_COLUMNS, JSONB_COLUMNS, CHANGE_TYPE_VALUES } = require
 
 // NOT NULL columns that carry a DB DEFAULT. Because writeEvent always lists
 // every writable column in the INSERT, an omitted value would send an explicit
-// NULL — which BYPASSES the column DEFAULT and violates NOT NULL. So we apply
+// NULL - which BYPASSES the column DEFAULT and violates NOT NULL. So we apply
 // the same defaults here in JS when the caller omits them.
 const NOT_NULL_DEFAULTS = {
   [COLUMNS.eddFlag]: false,
@@ -86,13 +86,13 @@ async function writeEvent(db, event = {}) {
   });
 
   // 4. Supersede validation: the target must exist AND still be current.
-  //    A concurrent edit (target already superseded) throws — last-write-wins is
+  //    A concurrent edit (target already superseded) throws - last-write-wins is
   //    the caller's call to make, not silently resolved here. (Open question O2.)
   const supersedesId = event.supersedesId ?? null;
   if (supersedesId !== null) {
     // Scoped to the SAME submission: an unscoped lookup lets an anonymous
     // POST with a fresh submissionId supersede another dossier's event by
-    // guessing its (sequential, BIGSERIAL) id — marking it superseded with
+    // guessing its (sequential, BIGSERIAL) id - marking it superseded with
     // no ownership check. A foreign-submission target must read as not found.
     const existing = await db.query(
       `-- @qid:get_by_id\nSELECT ${COLUMNS.id} FROM change_events WHERE ${COLUMNS.id} = $1 AND ${COLUMNS.submissionId} = $2`,

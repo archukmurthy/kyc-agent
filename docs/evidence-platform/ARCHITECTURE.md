@@ -1,4 +1,4 @@
-# Evidence Platform — Architecture and Design Authority
+# Evidence Platform - Architecture and Design Authority
 
 ## 1. Purpose
 
@@ -274,51 +274,51 @@ They are semantic ownership boundaries.
 
 # 5. Fundamental Invariants
 
-## INV-01 — Stable Evidence Identity
+## INV-01 - Stable Evidence Identity
 
 An Evidence Asset has durable identity independent of the workflow that currently references it.
 
-## INV-02 — Provenance Preservation
+## INV-02 - Provenance Preservation
 
 Evidence cannot lose its source/acquisition lineage as it travels through downstream processing.
 
-## INV-03 — Source vs Derived State
+## INV-03 - Source vs Derived State
 
 Source evidence, extracted observations, normalized assertions, and decisions remain distinguishable.
 
-## INV-04 — Historical Reconstruction
+## INV-04 - Historical Reconstruction
 
 Updating current state must not make material historical states impossible to reconstruct.
 
-## INV-05 — Integrity Semantics
+## INV-05 - Integrity Semantics
 
 Where an integrity fingerprint exists, its scope and meaning must be unambiguous.
 
-## INV-06 — Evidence Does Not Equal Requirement
+## INV-06 - Evidence Does Not Equal Requirement
 
 Evidence lifecycle and requirement lifecycle remain distinct.
 
-## INV-07 — Collection Does Not Own Truth
+## INV-07 - Collection Does Not Own Truth
 
 Collection acquires evidence. It does not determine final business truth merely because it captured something.
 
-## INV-08 — Interpretation Retains Lineage
+## INV-08 - Interpretation Retains Lineage
 
 Any material observation derived from evidence must be traceable to its supporting evidence.
 
-## INV-09 — Decisions Remain Explainable
+## INV-09 - Decisions Remain Explainable
 
 A material decision must ultimately be capable of being reconstructed through the facts/assertions and evidence available to the decision process.
 
-## INV-10 — Existing KYC Behavior Is Protected
+## INV-10 - Existing KYC Behavior Is Protected
 
 Introducing Evidence Platform capability does not implicitly authorize changes to established KYC behavior.
 
-## INV-11 — Auditability Is Architectural
+## INV-11 - Auditability Is Architectural
 
 Audit and reconstruction capabilities must emerge from the domain model rather than being bolted on after implementation.
 
-## INV-12 — Evidence Reuse Does Not Destroy Context
+## INV-12 - Evidence Reuse Does Not Destroy Context
 
 The same canonical Evidence Asset may potentially support multiple requirements or investigations without becoming owned by one of them.
 

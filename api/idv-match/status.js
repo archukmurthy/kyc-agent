@@ -1,6 +1,6 @@
 "use strict";
 
-// Read-only status for an attempt — this is what the applicant "refresh" hits.
+// Read-only status for an attempt - this is what the applicant "refresh" hits.
 // It never calls Didit, never writes, and never returns identity PII: only the
 // lifecycle status plus booleans. The identity result stays server-side.
 const attemptStore = require("./attemptStore");

@@ -141,7 +141,7 @@ test("an analyst must name the dossier to read", async () => {
 });
 
 test("a DB failure refuses the search (fail closed) with a fixed code", async () => {
-  const throwingSql = () => { throw new Error("connection terminated — internal detail"); };
+  const throwingSql = () => { throw new Error("connection terminated - internal detail"); };
   handler.__setDeps({ neon: () => throwingSql, access: accessWith(CUSTOMER) });
   const res = fakeRes();
   await handler(post(), res);

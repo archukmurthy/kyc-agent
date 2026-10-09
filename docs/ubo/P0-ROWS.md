@@ -1,11 +1,11 @@
 What is left: rows 4 and 12 need the demo's Vercel project and database
 (UBO-39, UBO-32; the UBO-only table setup, UBO-19, is ready for it); row 9 waits
 on the partner's definition (UBO-34); and row 13's last part is deferred by
-the owner (UBO-36).# The sixteen P0 rows — what is done, what is not
+the owner (UBO-36).# The sixteen P0 rows - what is done, what is not
 
 Your partner's production-readiness list for the UBO module: sixteen rows, all
 marked P0. This file exists because the list arrived as screenshots and lived
-only in a conversation — so "which rows are done" was a thing only one person
+only in a conversation - so "which rows are done" was a thing only one person
 could answer, and only until they forgot. That is the failure
 `docs/HOW-WE-BUILD.md` names: a finding that exists only in a conversation or a
 commit message.
@@ -24,15 +24,15 @@ as text, replace these titles with hers rather than keeping ours.
 finalises the flow. Her follow-up answers settled four things:
 
 - UBO gets **its own tables**, separate from the platform's.
-- UBO is **standalone** — *"just another microservice I should be able to call
+- UBO is **standalone** - *"just another microservice I should be able to call
   from my main code, otherwise there is no link"*. So no reference field
   pointing at platform data, in either direction.
-- The **audit row was hers** and not to be actioned by us — **reversed 2026-09-24**: the Production Readiness Solution Guide puts an append-only audit event ledger in scope (section 19).
+- The **audit row was hers** and not to be actioned by us - **reversed 2026-09-24**: the Production Readiness Solution Guide puts an append-only audit event ledger in scope (section 19).
 - **Retention is seven years**, hard-coded with a comment, nothing ever
   hard-deleted, and a backlog item to make it configurable later (UBO-RET-1).
 
 Status as at 2026-09-30, after the partner's POC was merged and hardened (branch `ubo/integrate`). Update this table in the same commit as the work, the
-way `CLAUDE.md` is updated — a stale status here is worse than none.
+way `CLAUDE.md` is updated - a stale status here is worse than none.
 
 | # | Row | Status | Where it stands |
 | --- | --- | --- | --- |

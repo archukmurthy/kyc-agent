@@ -1,5 +1,5 @@
 /**
- * ChangeDialogue.test.jsx — drives the component with react-dom + act (no
+ * ChangeDialogue.test.jsx - drives the component with react-dom + act (no
  * @testing-library dependency, which this repo does not install).
  */
 import fs from 'fs';
@@ -75,7 +75,7 @@ describe('ChangeDialogue - question flow + single emit', () => {
     // The REQUIREMENT rides on the event; the docType is what the upload card
     // and the submit gate read.
     expect(event.docType).toMatch(/Updated UBO Registry/);
-    // No notice for doc_required — the inline upload card beneath this names
+    // No notice for doc_required - the inline upload card beneath this names
     // the document and takes the file, on this page.
     expect(notice()).toBeNull();
   });
@@ -118,7 +118,7 @@ describe('ChangeDialogue - UNDECIDED and escalation both render neutral', () => 
     const event = onEvent.mock.calls[0][0];
     expect(event.workflow).toBe('UNDECIDED');
     expect(event.decided).toBe(false);
-    // Recorded, and nothing leaks to the customer — no notice at all, and the
+    // Recorded, and nothing leaks to the customer - no notice at all, and the
     // internal vocabulary never reaches the DOM.
     expect(notice()).toBeNull();
     expect(container.textContent).not.toMatch(/UNDECIDED|error/i);
@@ -147,12 +147,12 @@ describe('ChangeDialogue - verifiability fallback skips the registry question', 
         onEvent={onEvent}
       />,
     );
-    // Only the intent question — registry is skipped (no structured registry).
+    // Only the intent question - registry is skipped (no structured registry).
     expect(question()).toBeTruthy();
     expect(question().textContent).toMatch(/correcting/i);
     clickByText('Correcting what you found'); // ai_correction
 
-    // No second (registry) question — it finalised straight away.
+    // No second (registry) question - it finalised straight away.
     expect(question()).toBeNull();
     expect(notice()).toBeNull();
     expect(onEvent).toHaveBeenCalledTimes(1);
@@ -175,7 +175,7 @@ describe('ChangeDialogue - boundary: write-only, no Fill-Gaps coupling', () => {
     for (const line of importLines) {
       expect(line).not.toMatch(/fill[\s-]?gaps|gapRef|gapFields|setGap|FillGaps/i);
     }
-    // The destructured prop surface contains only the contract props — no
+    // The destructured prop surface contains only the contract props - no
     // onInjectDoc / onAddGap / setFillGaps style mutators.
     expect(componentSrc).not.toMatch(/onInjectDoc|onAddGap|setFillGaps|mutateGap|injectDocument/i);
   });

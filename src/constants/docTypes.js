@@ -7,7 +7,7 @@ import {
   AML_POLICY_EXTRACTION_PROMPT,
 } from "./extractionPrompts";
 
-/* DOC_TYPES — single source of truth for which
+/* DOC_TYPES - single source of truth for which
    document slots exist, their UI presentation, the
    accepted MIME types, the badge label, the human-
    readable source name shown on Confirm, and the

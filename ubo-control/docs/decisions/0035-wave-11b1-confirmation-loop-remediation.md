@@ -1,4 +1,4 @@
-# ADR 0035 — Wave 11B1 confirmation-loop remediation
+# ADR 0035 - Wave 11B1 confirmation-loop remediation
 
 Status: review-only correction on the open Wave 11B1 pull request.
 
@@ -29,7 +29,7 @@ At the fixed fixture timestamps, the regression pins this internal trace:
 
 | Item | Recorded value |
 | --- | --- |
-| Causal need | `ubo-information-need-v2:52dac3be7b992e0c62415b77da61af34` — `RELATIONSHIP_CURRENTNESS`, requiring `CURRENTNESS_STATE=CURRENT` |
+| Causal need | `ubo-information-need-v2:52dac3be7b992e0c62415b77da61af34` - `RELATIONSHIP_CURRENTNESS`, requiring `CURRENTNESS_STATE=CURRENT` |
 | Target relationship | `tdr-gp-a → bellis-finco`, `SIGNIFICANT_INFLUENCE_OR_CONTROL`, currentness `UNKNOWN` |
 | Initial group | `ubo-resolution-group-v1:a035131d4c4ca9ea23414284a3558a99` |
 | Initial customer bundle | `ubo-customer-work-bundle-v2:0b84ae559f2744424f9d16d9c703fa2e` |

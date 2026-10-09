@@ -5,7 +5,7 @@ const storage = require("../../lib/storage");
 const registry = require("../../lib/tenantRegistry");
 
 // 3-strict: api/config.js must refuse to seed/serve when no tenant resolves
-// at all (no ?tenant=, no x-tenant-id, no TENANT_ID env) — never silently
+// at all (no ?tenant=, no x-tenant-id, no TENANT_ID env) - never silently
 // fall back to "nium". This guard runs before any storage access, so it's
 // safe to exercise without a real KV/filesystem backend.
 
@@ -51,7 +51,7 @@ test("POST with no resolvable tenant also returns 400 before touching auth/stora
   assert.deepStrictEqual(res.body, { error: "tenant_required" });
 });
 
-test("?tenant=<id> resolves normally — the guard doesn't block a real tenant", async (t) => {
+test("?tenant=<id> resolves normally - the guard doesn't block a real tenant", async (t) => {
   // Distinctive, disposable tenant id so this doesn't collide with real dev
   // data in the local filesystem store fallback (.config-store.json), and
   // cleans up after itself either way.

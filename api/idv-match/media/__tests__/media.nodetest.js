@@ -52,7 +52,7 @@ test("store then authorized retrieve round-trips the exact bytes", async () => {
   assert.strictEqual(out.attemptId, "att-1");
 });
 
-test("the DB row holds ciphertext pointers only — no plaintext bytes", async () => {
+test("the DB row holds ciphertext pointers only - no plaintext bytes", async () => {
   const { deps } = makeDeps();
   const { mediaId } = await media.storeDocumentImage(
     { attemptId: "att-1", evidenceKind: "back", bytes: PLAINTEXT }, deps);

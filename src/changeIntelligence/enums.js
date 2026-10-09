@@ -1,9 +1,9 @@
 /**
- * enums.js — shared string enums for the Change Classification Engine.
+ * enums.js - shared string enums for the Change Classification Engine.
  *
  * These are the closed vocabularies the engine matches against. They are data,
  * not logic. Keep them in sync with the policy table and the upstream caller
- * (the Confirm-page intent dialogue — out of scope for this slice).
+ * (the Confirm-page intent dialogue - out of scope for this slice).
  *
  * CommonJS (the src/pipeline.js precedent): requireable by api/ Node functions
  * AND importable by webpack/babel-jest consumers (`import { FIELD_CLASS }`
@@ -29,7 +29,7 @@ const INTENT = ['ai_correction', 'genuine_update', 'different_entity', null];
 // Customer's claim about whether the official registry already reflects the change.
 const REGISTRY_STATUS = ['reflected', 'not_reflected', 'unknown'];
 
-// Property of the field's SOURCE — whether there is structured ground truth to
+// Property of the field's SOURCE - whether there is structured ground truth to
 // dispute against. Only 'structured_registry' may take a snapshot-compare path.
 const VERIFIABILITY = ['structured_registry', 'document', 'unverified'];
 

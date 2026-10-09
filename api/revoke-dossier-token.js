@@ -1,6 +1,6 @@
 // Revoke every outstanding customer link for a dossier.
 //
-// POST { dossierId } — analyst only. Tokens for this dossier issued at or before
+// POST { dossierId } - analyst only. Tokens for this dossier issued at or before
 // the call stop working immediately (lib/dossierToken.js); a fresh invite
 // afterwards issues a working one. There is no UI for this yet (backlog PREB-2).
 //
@@ -11,7 +11,7 @@ const dossierAccess = require("../lib/dossierAccess");
 const dossierToken = require("../lib/dossierToken");
 const { applyCors } = require("../lib/routeAuth");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { neon, access: dossierAccess, dossierToken };
 
 module.exports = async function handler(req, res) {

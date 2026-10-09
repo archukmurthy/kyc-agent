@@ -1,10 +1,10 @@
 /**
- * PreboardingUnavailable.jsx — shown instead of the access gate when the
+ * PreboardingUnavailable.jsx - shown instead of the access gate when the
  * server says pre-boarding isn't available for this tenant. Three reasons, all
  * answered by the server so the browser never has to guess:
- *   tenant_not_found      — the tenant id in the URL isn't registered
- *   tenant_inactive       — the tenant exists but is deactivated
- *   preboarding_disabled  — pre-boarding is switched off for this tenant
+ *   tenant_not_found      - the tenant id in the URL isn't registered
+ *   tenant_inactive       - the tenant exists but is deactivated
+ *   preboarding_disabled  - pre-boarding is switched off for this tenant
  *
  * Deliberately says nothing about which tenants DO exist: this is a public,
  * unauthenticated surface.

@@ -47,7 +47,7 @@ function protectedStore() {
     "tenant-registry": [{ tenantId: "acme", isProtected: true }],
     // "acme" is flagged protected but is NOT a platform tenant, and the
     // ADMIN_PASSWORD env fallback is platform-only (a static list in
-    // lib/tenantRegistry.js — it must not widen to every tenant when the
+    // lib/tenantRegistry.js - it must not widen to every tenant when the
     // registry is unreadable). So it authenticates with its own per-tenant
     // password, exactly like any real protected-but-not-platform tenant.
     // These tests are about the destructive GUARDS, not about auth.
@@ -88,7 +88,7 @@ test("DELETE is refused for a protected tenant and keeps every version", async (
 
 test("DELETE still works for an unprotected tenant", async (t) => {
   withAdmin(t);
-  // Non-platform tenants never got the ADMIN_PASSWORD env fallback — that
+  // Non-platform tenants never got the ADMIN_PASSWORD env fallback - that
   // path is, and always was, platform-only. It is gated by the static
   // PLATFORM_TENANT_IDS list rather than by isProtectedTenant, which fails
   // CLOSED and would hand the shared env password every tenant during a
@@ -176,7 +176,7 @@ test("versions handler with no resolvable tenant returns 400 tenant_required bef
   });
 
   // No query.tenant, no x-tenant-id header, no TENANT_ID env, and no auth
-  // header either — proves the tenant_required guard fires before the
+  // header either - proves the tenant_required guard fires before the
   // (would-be-401) auth check runs.
   const { req, res } = fakeReqRes({ method: "POST", body: { version: 3 } });
   await versionsHandler(req, res);
@@ -209,7 +209,7 @@ test("self-heal archives the broken config before overwriting it", async (t) => 
 // tenant, so the env fallback must key off the static platform list instead.
 const TENANT_PW = "acme-tenant-password";
 
-// A registry outage with the rest of the store still readable — the shape
+// A registry outage with the rest of the store still readable - the shape
 // that makes the two requirements pull in opposite directions.
 function registryDownStore(extra) {
   const data = {

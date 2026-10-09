@@ -1,5 +1,5 @@
 /**
- * Commit 8 — high-risk-country EDD generalised to ALL country fields.
+ * Commit 8 - high-risk-country EDD generalised to ALL country fields.
  *
  * Commit 6 flagged EDD for the person countries it edits (nationality, country
  * of birth, country of residence). This is the SAME ratified rule and the SAME

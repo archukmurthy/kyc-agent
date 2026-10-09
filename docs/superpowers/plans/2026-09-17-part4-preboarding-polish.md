@@ -1,4 +1,4 @@
-# Part 4 — Pre-boarding Polish Implementation Plan
+# Part 4 - Pre-boarding Polish Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -116,7 +116,7 @@ test("an update never touches creation_key", async () => {
 ```
 
 Run: `node --test api/__tests__/save-dossier.nodetest.js`
-Expected: FAIL — no `creation_key` in the INSERT.
+Expected: FAIL - no `creation_key` in the INSERT.
 
 - [ ] **Step 4: Implement in `api/save-dossier.js`**
 
@@ -145,7 +145,7 @@ Expected: FAIL — no `creation_key` in the INSERT.
 
 Run: `node --test api/__tests__/save-dossier.nodetest.js` and `npm run test:node`. Expected: PASS, 0 failures.
 
-Run (EXPLAIN only — plans the statement without executing it):
+Run (EXPLAIN only - plans the statement without executing it):
 
 ```bash
 node -e '
@@ -250,7 +250,7 @@ describe("dossier creation is idempotent", () => {
 If `driveToDossier` shows the dossier view only after the save resolves (so no save control is clickable during flight in the third test), read how `saveDossier` sets `setShowDossierView` and adjust ONLY the third test to call the save trigger that exists in that state; keep the "exactly one request while in flight" assertion.
 
 Run: `CI=true npx react-scripts test --watchAll=false src/components/preboarding/__tests__/Preboarding.render.test.jsx`
-Expected: FAIL — no `creationKey`; second concurrent call posts.
+Expected: FAIL - no `creationKey`; second concurrent call posts.
 
 - [ ] **Step 2: Implement in `src/App.js`**
 
@@ -378,7 +378,7 @@ describe("analyst resume", () => {
 Add `cleanup` to the `@testing-library/react` import at the top of the file if it is not already imported. If the resume banner is only rendered on a surface the gate hides, read `src/App.js` around the `resumeOffer &&` render and drive to it the way the real analyst would (gate unlock first); keep the three final assertions.
 
 Run: `CI=true npx react-scripts test --watchAll=false src/utils/__tests__/submissionDraft.test.js src/components/preboarding/__tests__/Preboarding.render.test.jsx`
-Expected: FAIL — helper missing; resume lands on the lookup page without registry documents.
+Expected: FAIL - helper missing; resume lands on the lookup page without registry documents.
 
 - [ ] **Step 2: Implement**
 
@@ -447,7 +447,7 @@ Use the Grep tool for `nium_invite_` across the repository (excluding `node_modu
 
 - [ ] **Step 2: Delete the effect**
 
-In `src/App.js` delete, as one block, the comment starting `// Customer invite landing. When the app is opened via an invite link` through the end of that `useEffect` (the `}, []);` after `trackEvent("invite_link_opened", { token: ref, ... })`), including `const inviteHydratedRef = useRef(false);`. This removes one unconditional `useRef` and one unconditional `useEffect` together — acceptable because hook order stays consistent across renders.
+In `src/App.js` delete, as one block, the comment starting `// Customer invite landing. When the app is opened via an invite link` through the end of that `useEffect` (the `}, []);` after `trackEvent("invite_link_opened", { token: ref, ... })`), including `const inviteHydratedRef = useRef(false);`. This removes one unconditional `useRef` and one unconditional `useEffect` together - acceptable because hook order stays consistent across renders.
 
 Then update comments that describe the removed path:
 - The `landedViaLink` state comment ("…invite link (?dossierId&journey=customer or ?ref)…", "…the ?ref hydration effect…") → describe the token link only.
@@ -457,7 +457,7 @@ Use the Grep tool for `?ref` and `inviteHydratedRef` in `src/App.js` afterwards.
 
 - [ ] **Step 3: Wire the lifecycle tests**
 
-Run first: `node --test dossierLifecycle/__tests__/*.test.js` — expected PASS (36 tests). If it fails, stop and report.
+Run first: `node --test dossierLifecycle/__tests__/*.test.js` - expected PASS (36 tests). If it fails, stop and report.
 
 In `package.json` change `test:node` to:
 
@@ -493,7 +493,7 @@ Run: `npm run test:node`, `CI=true npx react-scripts test --watchAll=false`, `CI
 Add under **Open dependencies** after DEP-5:
 
 ```markdown
-### DEP-6 — Part 4 deploy gate: migration 028
+### DEP-6 - Part 4 deploy gate: migration 028
 - **Category:** Deploy · **Priority:** P1 · **Status:** OPEN (manual step for the owner)
 - **What:** Apply `db/migrations/028_dossier_creation_key.sql` to each database (`node db/apply.js db/migrations/028_dossier_creation_key.sql`) BEFORE deploying Part 4.
 - **Why:** The dossier INSERT writes `creation_key` and uses `ON CONFLICT (tenant_id, creation_key)`; without the column and unique index every first save fails.

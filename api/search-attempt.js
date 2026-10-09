@@ -10,7 +10,7 @@
 // dossier id comes only from its signed token; an analyst names one with
 // ?dossierId= to read. POST is customer-only. The increment is a single
 // conditional UPDATE, so two concurrent clicks cannot both get the second
-// search, and it flips owned_by to 'customer' — spending a search is a
+// search, and it flips owned_by to 'customer' - spending a search is a
 // customer action, after which the analyst is read-only.
 //
 // An allowed POST also returns a one-time research grant (lib/researchGrant.js)

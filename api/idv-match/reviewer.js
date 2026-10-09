@@ -2,7 +2,7 @@
 
 // Reviewer access to a verification case (Phase E4). Sensitive values are MASKED
 // by default; the full value is released only through an explicit, authorized,
-// AUDITED reveal (never URL/possession — the Vault records every read). This is
+// AUDITED reveal (never URL/possession - the Vault records every read). This is
 // the server capability; a minimal read-only view (src/idv-match/ReviewerCase)
 // renders it. The full review-queue UI is a later phase.
 const attemptStore = require("./attemptStore");

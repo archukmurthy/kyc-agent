@@ -118,7 +118,7 @@ From the repository root:
 node ubo-control-ui/demo/server.js
 ```
 
-Open `http://127.0.0.1:4175/`. Switch between Customer journeys (CUI01–CUI17) and Graph renderer (UI01–UI12). Direct journey review URLs use `?mode=journey&fixture=CUI03&state=current`; CUI17 demonstrates the before/after host re-resolution cycle. The local demo uses committed deterministic public-contract fixtures and makes no API call.
+Open `http://127.0.0.1:4175/`. Switch between Customer journeys (CUI01-CUI17) and Graph renderer (UI01-UI12). Direct journey review URLs use `?mode=journey&fixture=CUI03&state=current`; CUI17 demonstrates the before/after host re-resolution cycle. The local demo uses committed deterministic public-contract fixtures and makes no API call.
 
 ## Fixtures and tests
 
@@ -128,4 +128,4 @@ node ubo-control-ui/fixtures/buildJourneyFixtures.js
 node --test ubo-control-ui/__tests__/*.nodetest.js
 ```
 
-The journey suite protects public-contract boundaries, minimal-field behavior, confirmation, coalescence, evidence intents, state handling, COMPANY/LLP semantics, validation, immutable submission, graph linkage, accessibility semantics and all CUI01–CUI17 renders. Browser acceptance evidence and its checklist are in `manual-acceptance/`.
+The journey suite protects public-contract boundaries, minimal-field behavior, confirmation, coalescence, evidence intents, state handling, COMPANY/LLP semantics, validation, immutable submission, graph linkage, accessibility semantics and all CUI01-CUI17 renders. Browser acceptance evidence and its checklist are in `manual-acceptance/`.

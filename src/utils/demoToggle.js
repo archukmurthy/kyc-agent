@@ -1,4 +1,4 @@
-// Visibility gate for the demo toggle — hidden on production end-customer URLs.
+// Visibility gate for the demo toggle - hidden on production end-customer URLs.
 // Surfaces only with ?demo=true in the URL or on localhost. Not on ?tenant=:
 // every real customer URL carries it now that tenant resolution is strict.
 export function isDemoToggleVisible({ search, hostname } = {}) {

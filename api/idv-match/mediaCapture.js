@@ -2,7 +2,7 @@
 
 // Capture Didit DOCUMENT images at result time (A1). Didit's document-image URLs
 // are short-lived presigned links, so we download + envelope-encrypt them into
-// our media store promptly. ONLY document images (front / back / portrait page) —
+// our media store promptly. ONLY document images (front / back / portrait page) -
 // never selfie / liveness / biometrics (those stay external references). Runs
 // best-effort: a media failure never blocks verification.
 const media = require("./media");

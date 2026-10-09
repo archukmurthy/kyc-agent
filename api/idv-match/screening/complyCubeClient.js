@@ -2,7 +2,7 @@
 
 // Thin wrapper over the official ComplyCube SDK for the two calls we need:
 // create a person client, then run an extensive AML screening check against it.
-// Server-side only — the API key never reaches the browser. A real ComplyCube
+// Server-side only - the API key never reaches the browser. A real ComplyCube
 // instance can be swapped for a stub in tests via deps.client.
 const { ComplyCube } = require("@complycube/api");
 const { randomUUID } = require("node:crypto");
@@ -25,7 +25,7 @@ function personEmail(person) {
 
 // DEMO-ONLY sandbox affordance: force a ComplyCube "attention"/hit outcome so a
 // demo can show the in-review path. Sandbox-only trigger word for last name.
-// Gated on BOTH screeningConfig().mode === "test" AND the env flag below — if
+// Gated on BOTH screeningConfig().mode === "test" AND the env flag below - if
 // mode is "live" this is ALWAYS ignored, no matter the flag. This can never
 // alter a live screening: it only changes the name string sent to ComplyCube
 // for matching, never the applicant's stored/verified identity.
@@ -41,7 +41,7 @@ async function createClient(person, deps = {}) {
   const demoHit = screeningConfig().mode === "test" && demoForceHitEnabled();
   const cc = deps.client || realClient();
   // Didit returns nationality as ISO-3 (e.g. "POL"); ComplyCube requires ISO-2
-  // and 400s on anything else — normalize and only send it when it's a code
+  // and 400s on anything else - normalize and only send it when it's a code
   // ComplyCube actually accepts, otherwise omit it rather than fail the call.
   const nationality = toComplyCubeNationality(person.nationality);
   return cc.client.create({

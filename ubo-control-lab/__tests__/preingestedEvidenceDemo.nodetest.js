@@ -471,7 +471,7 @@ test("Wave 11B2A browser and server boundaries expose no upload or deep Evidence
   const browser = fs.readFileSync(path.join(root, "ubo-control-lab/browser/lab.js"), "utf8");
   const server = fs.readFileSync(path.join(root, "ubo-control-lab/server/preingestedEvidenceDemo.js"), "utf8");
   assert.match(browser, /Use source-backed reviewed Bettercomms fixture/);
-  assert.match(browser, /REAL SOURCE IMAGE — MANUALLY REVIEWED FIXTURE/);
+  assert.match(browser, /REAL SOURCE IMAGE - MANUALLY REVIEWED FIXTURE/);
   assert.match(browser, /Historical Evidence-store linkage not yet revalidated/);
   assert.match(browser, /No fresh automated interpretation performed/);
   assert.match(browser, /Current qualification is indeterminate/);

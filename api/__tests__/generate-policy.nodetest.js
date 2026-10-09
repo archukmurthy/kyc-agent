@@ -123,7 +123,7 @@ describe("policy API", () => {
     assert.equal(body.model, "claude-sonnet-4-6");
     assert.equal(body.max_tokens, 8000);
     assert.match(body.system, /REGULATORY ACCURACY/);
-    assert.match(body.system, /Do not renumber fixed sections 12–15/);
+    assert.match(body.system, /Do not renumber fixed sections 12-15/);
     assert.deepEqual(body.messages, [{ role: "user", content: buildUserMessage(validatePolicyForm(validForm()).form) }]);
   });
 

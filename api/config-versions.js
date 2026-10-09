@@ -1,8 +1,8 @@
 // Version history endpoint for the admin platform.
 //
-// GET  — returns metadata for the most recent archived versions of the
+// GET  - returns metadata for the most recent archived versions of the
 //        current tenant's config. Empty array if KV/store has nothing.
-// POST — rollback. Body { version: number }. Fetches that archived version
+// POST - rollback. Body { version: number }. Fetches that archived version
 //        and re-publishes it as the new live config (incrementing version).
 //
 // Note: spec called for /api/config-versions/rollback as a separate route.
@@ -15,7 +15,7 @@ const tenantRegistry = require("../lib/tenantRegistry");
 const adminAuth = require("../lib/adminAuth");
 const { applyCors } = require("../lib/routeAuth");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { storage, registry: tenantRegistry };
 
 

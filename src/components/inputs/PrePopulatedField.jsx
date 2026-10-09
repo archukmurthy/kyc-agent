@@ -4,7 +4,7 @@ import { StableInput } from "./StableInput";
 
 // A field that was pre-populated from the AI research (e.g. nationality / date
 // of birth a director's registry record carried). Shown as a locked value with
-// a source badge — but, unlike the fully-locked name, the customer can click
+// a source badge - but, unlike the fully-locked name, the customer can click
 // "Edit" to override it. When the value is empty it falls straight through to
 // the editable input so nothing is pre-filled. Module-scoped so its `editing`
 // state survives parent re-renders (same reason StableInput lives out here).

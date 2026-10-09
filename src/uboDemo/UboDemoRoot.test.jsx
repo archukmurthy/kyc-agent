@@ -193,7 +193,7 @@ test("retry uses a new job and falls back to the same-company last successful re
   mockListSavedResearch.mockResolvedValue([{ caseId: saved.demoCase.demoCaseId, company: saved.demoCase.company, status: "PARTIAL", researchedAt: "2026-10-03T07:00:00.000Z" }]);
   mockLoadPocCase.mockResolvedValue({ projection: { researchResult: saved.researchResult } });
   fireEvent.click(screen.getByRole("button", { name: "Run again" }));
-  expect(await screen.findByText("CACHED FALLBACK — LIVE REFRESH FAILED")).toBeInTheDocument();
+  expect(await screen.findByText("CACHED FALLBACK - LIVE REFRESH FAILED")).toBeInTheDocument();
   expect(screen.getByText(/This cached result may be stale/)).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Ownership structure" })).toBeInTheDocument();
   const secondJobId = JSON.parse(window.fetch.mock.calls[1][1].body).jobId;
@@ -507,7 +507,7 @@ test("source-backed director-control assertions use right wording and no percent
     sourceDescription: "Recorded in Companies House PSC information",
   });
   expect(relationshipAssertionPresentation({ relationship: "FORMAL_CONTROL_RIGHT", evidenceReferences: [] })).toEqual(expect.objectContaining({
-    description: "Formal control right reported — details not available in this result",
+    description: "Formal control right reported - details not available in this result",
     measurement: null,
   }));
   expect(formatMeasurement({ type: "UNKNOWN" })).toBe("Value not established", "economic/voting unknown semantics stay unchanged");
@@ -701,7 +701,7 @@ test("saved research from this workspace starts a new case without a provider ca
   await waitFor(() => expect(option).toBeEnabled());
   fireEvent.click(option);
   fireEvent.change(screen.getByRole("combobox", { name: "Saved research" }), { target: { value: "case-ba" } });
-  fireEvent.click(screen.getByRole("button", { name: /Start from saved research — no provider call/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Start from saved research - no provider call/ }));
   await screen.findByRole("heading", { name: "Ownership structure" });
   expect(window.fetch).not.toHaveBeenCalled();
   expect(mockLoadPocCase).toHaveBeenCalledWith("case-ba");
@@ -723,7 +723,7 @@ test("two cases started from the same saved research each have it saved", async 
     await waitFor(() => expect(option).toBeEnabled());
     fireEvent.click(option);
     fireEvent.change(screen.getByRole("combobox", { name: "Saved research" }), { target: { value: "case-ba" } });
-    fireEvent.click(screen.getByRole("button", { name: /Start from saved research — no provider call/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Start from saved research - no provider call/ }));
     await screen.findByRole("heading", { name: "Ownership structure" });
     return JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).demoCase.demoCaseId;
   };
@@ -968,7 +968,7 @@ test("after a reload, failed live research still falls back to the workspace's s
   mockLoadPocCase.mockResolvedValue({ projection: { researchResult: { ...research, ownershipResolutionTrace: { fromTheOldCustomer: true } } } });
   window.fetch = jest.fn(async () => { const error = new Error("provider unavailable"); error.code = "PROVIDER_UNAVAILABLE"; throw error; });
   renderStart(); completeRequiredFields(); fireEvent.click(screen.getByRole("button", { name: /Start research/ }));
-  expect(await screen.findByText("CACHED FALLBACK — LIVE REFRESH FAILED")).toBeInTheDocument();
+  expect(await screen.findByText("CACHED FALLBACK - LIVE REFRESH FAILED")).toBeInTheDocument();
   expect(mockLoadPocCase).toHaveBeenCalledWith("case-acme");
   const session = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY));
   expect(session.researchResult.fallback).toEqual(expect.objectContaining({ savedAt: "2026-10-03T07:00:00.000Z" }));

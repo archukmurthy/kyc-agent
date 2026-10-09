@@ -1,27 +1,27 @@
-# Claude Code — Scorecard Fix Bundle (single pass)
+# Claude Code - Scorecard Fix Bundle (single pass)
 
 Apply ALL changes below in order, then regenerate the scorecard and recompute
-every metric over the existing stored pilot output (no re-running the agent —
+every metric over the existing stored pilot output (no re-running the agent -
 all required fields are already present in stored `found` / coverage objects).
 
 Strict header / autonomous mode. On Windows, run `powershell -File alert.ps1`
 when done.
 
 ## Context / files
-- `run.mjs` — the benchmark runner (metricsFor, aggregate, console + HTML).
+- `run.mjs` - the benchmark runner (metricsFor, aggregate, console + HTML).
 - The coverage object (`cov`: fillRate, populatedFields, totalResearchFields,
   verifiedFields, probableFields, indicativeFields, customerSuppliedFieldCount)
-  is produced elsewhere — locate that module (grep `populatedFields`,
+  is produced elsewhere - locate that module (grep `populatedFields`,
   `totalResearchFields`). Some changes below touch it; find it before editing.
-- Schema field definitions (research fields, tiers, searchHints) — locate the
+- Schema field definitions (research fields, tiers, searchHints) - locate the
   schema module (grep `searchHint`, `researchFieldCount`).
 
-Do NOT proceed to a change that depends on a file you cannot locate — stop and
+Do NOT proceed to a change that depends on a file you cannot locate - stop and
 report which file is missing instead of guessing.
 
 ---
 
-## CHANGE 1 — Schema fields: search hints + customerSupplied flags
+## CHANGE 1 - Schema fields: search hints + customerSupplied flags
 
 Source of truth: `benchmark/fi-schema-fields-patch.js` (already written).
 Merge its three groups into the live schema module:
@@ -29,9 +29,9 @@ Merge its three groups into the live schema module:
 - `researchableFields` (9): vat_number, additional_urls,
   is_business_address_same_as_registered, regulatory_enforcement_action,
   individual_customer_pct, corporate_customer_pct, top_corporate_industries,
-  deals_virtual_currencies, accepts_cash — each with its `searchHint`, tier as
+  deals_virtual_currencies, accepts_cash - each with its `searchHint`, tier as
   specified.
-- `researchableListFields` (2): top_countries_payin, top_countries_payout —
+- `researchableListFields` (2): top_countries_payin, top_countries_payout -
   searchHint says fill country LIST only, leave % split blank
   (`splitIsCustomerSupplied: true`).
 - `customerSuppliedFields` (18): all payout/collections %, expected
@@ -48,7 +48,7 @@ to auto-fill it. It is self-declaration only.
 
 ---
 
-## CHANGE 2 — Metric #1b: Form pre-fill rate (new, alongside coverage)
+## CHANGE 2 - Metric #1b: Form pre-fill rate (new, alongside coverage)
 
 Add a second coverage figure to `metricsFor()`:
 
@@ -61,11 +61,11 @@ Add a second coverage figure to `metricsFor()`:
 
 Aggregate both. In the HTML, show them as a matched pair:
 "Required-field coverage" and "Form pre-fill rate". Report pre-fill rate BY
-SEGMENT (never pooled — sole traders drag a pooled mean).
+SEGMENT (never pooled - sole traders drag a pooled mean).
 
 ---
 
-## CHANGE 3 — Metric #2: Questions avoided at DATA-POINT level
+## CHANGE 3 - Metric #2: Questions avoided at DATA-POINT level
 
 Source of truth: `benchmark/question-weight.mjs` (already written). Place it next
 to run.mjs and apply `run-mjs-questionsavoided-patch.md`:
@@ -84,7 +84,7 @@ to run.mjs and apply `run-mjs-questionsavoided-patch.md`:
 
 ---
 
-## CHANGE 4 — Metric #4: Evidence coverage = credible-source share (Path A)
+## CHANGE 4 - Metric #4: Evidence coverage = credible-source share (Path A)
 
 Apply `evidence-coverage-pathA-patch.md`:
 
@@ -96,7 +96,7 @@ Apply `evidence-coverage-pathA-patch.md`:
 
 ---
 
-## CHANGE 5 — Metrics #3 & #6: baseline as LOW/HIGH band
+## CHANGE 5 - Metrics #3 & #6: baseline as LOW/HIGH band
 
 Currently a single `--baseline` (default 25). Replace with a band so research
 reduction and speedup show best/worst case per the onboarding-expert range
@@ -109,15 +109,15 @@ reduction and speedup show best/worst case per the onboarding-expert range
   - researchReductionPctLow/High = (baseline - timeMin) / baseline
   - speedupLow/High              = baseline / timeMin
   - analystMinSavedLow/High      = baseline - timeMin
-- Display #3 and #6 as ranges, e.g. "97%–99%" and "38x–150x", and lead the
-  minutes-saved figure as a BAND: "≈29–119 min analyst research saved / entity".
+- Display #3 and #6 as ranges, e.g. "97%-99%" and "38x-150x", and lead the
+  minutes-saved figure as a BAND: "≈29-119 min analyst research saved / entity".
 - Keep the provisional baseline banner (`baseline-banner-patch.md`) but update
   its text to state the BAND and that it is an SME estimate, research/
   data-gathering only (excludes screening/EDD/QC), flat across segments.
 
 ---
 
-## CHANGE 6 — Confidence bar: readable legend
+## CHANGE 6 - Confidence bar: readable legend
 
 Apply `confidence-bar-legend-patch.md`:
 - In-bar % label only on segments >= 8% wide.
@@ -131,7 +131,7 @@ Apply `confidence-bar-legend-patch.md`:
 2. Regenerate `scorecard.html` and the console summary.
 3. Print a before/after table for the metrics that changed definition:
    questions-avoided (field-level vs data-point), evidence coverage (old 100%
-   vs new tier1+2), and the new form-pre-fill-rate column — so the deltas are
+   vs new tier1+2), and the new form-pre-fill-rate column - so the deltas are
    visible.
 4. Sanity-check: customerSupplied fields are excluded from coverage denominators;
    pre-fill rate is reported per segment; no metric reads a flat 100% across all
@@ -139,7 +139,7 @@ Apply `confidence-bar-legend-patch.md`:
 
 ---
 
-## DEFERRED — DO NOT IMPLEMENT IN THIS PASS
+## DEFERRED - DO NOT IMPLEMENT IN THIS PASS
 Deterministic confidence rule (source-tier + corroboration -> verificationStatus,
 to remove run-to-run grading wobble seen in the consistency repeats). We agreed
 to define the rule (corroboration definition, treatment of volatile fields like

@@ -1,20 +1,20 @@
 /**
- * states.js — single source of truth for the dossier lifecycle vocabulary.
+ * states.js - single source of truth for the dossier lifecycle vocabulary.
  *
  * Pure data: state names, event names, dispute kinds. No logic. CommonJS so
  * api/ (plain Node serverless functions) can require it, mirroring the DRS
  * (documentRequirements.js) precedent.
  *
- * This governs a STATUS FIELD on the dossier record only — never dossier
+ * This governs a STATUS FIELD on the dossier record only - never dossier
  * content (raw_research, stakeholders) and never journey_state.
  *
  * Design decisions (confirmed):
- *  C1. `re_researching` and `re_deriving` are kept as DISTINCT states — not
- *      collapsed into a single re-run — to preserve the audit distinction
+ *  C1. `re_researching` and `re_deriving` are kept as DISTINCT states - not
+ *      collapsed into a single re-run - to preserve the audit distinction
  *      between "research discarded" (identity-invalidating) and "research kept"
  *      (interpretation-invalidating).
  *  C2. `locked` is reached via JOURNEY_SUBMITTED, which the CALLER passes in.
- *      The machine never reaches into journey_state to detect submission —
+ *      The machine never reaches into journey_state to detect submission -
  *      dossier/journey separation is preserved.
  *  C3. The machine is RETRY-AGNOSTIC: it permits `failed → researching` on
  *      RETRY and says nothing about retry count or backoff (a caller concern).

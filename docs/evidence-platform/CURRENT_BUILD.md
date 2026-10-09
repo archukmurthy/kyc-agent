@@ -1,12 +1,12 @@
-# Evidence Platform — Current Build Brief
+# Evidence Platform - Current Build Brief
 
-# Stage A5b — Immutable Evidence Package
+# Stage A5b - Immutable Evidence Package
 
 ## Governance Status
 
 A5a Evidence Ledger / Reconstruction was accepted and implemented at `851a029dff6a66e75c94f323007061c645cb7483` under approved ADR-019. It is a deterministic, read-only point-in-time projection and introduced no migration.
 
-This A5b brief is **APPROVED — IMPLEMENTED AND ACCEPTED** at `4602d763bd728f36b16de335cdd85cd6abced55d`. Architecture Authority approved and accepted the complete-reconstruction freeze boundary, immutable Package identity and manifest, bounded polymorphic membership, member-by-member authorization, operation-key idempotency, neutral predecessor lineage, and additive migration 019. Export, signing, KYC/UBO integration, arbitrary member selection, and changes to existing Evidence history remain unauthorized.
+This A5b brief is **APPROVED - IMPLEMENTED AND ACCEPTED** at `4602d763bd728f36b16de335cdd85cd6abced55d`. Architecture Authority approved and accepted the complete-reconstruction freeze boundary, immutable Package identity and manifest, bounded polymorphic membership, member-by-member authorization, operation-key idempotency, neutral predecessor lineage, and additive migration 019. Export, signing, KYC/UBO integration, arbitrary member selection, and changes to existing Evidence history remain unauthorized.
 
 ---
 
@@ -32,7 +32,7 @@ Later collection, interpretation, evaluation, or assessment does not change P1. 
 
 ## 2. Observed repository capability
 
-A5a already projects the authoritative A1–A4b/R1–R4 records from migrations 010–018 and applies current authorization before returning safe metadata. It supplies:
+A5a already projects the authoritative A1-A4b/R1-R4 records from migrations 010-018 and applies current authorization before returning safe metadata. It supplies:
 
 * trusted tenant, context, and subject scope;
 * versioned record-availability rules and deterministic order;
@@ -257,7 +257,7 @@ No failure may fabricate a Package, omit a member while claiming the same digest
 
 ## 13. Authorized migration 019
 
-One additive forward-only migration after 018 is authorized. Migrations 010–018 remain immutable and no historical backfill is permitted.
+One additive forward-only migration after 018 is authorized. Migrations 010-018 remain immutable and no historical backfill is permitted.
 
 ### `evidence_packages`
 
@@ -370,7 +370,7 @@ This bounded A5b Package capability and migration 019 are implemented and accept
 
 ## 17. Evidence Core V1 closure candidate
 
-The accepted A0–A5b, A4a/A4b, and R1–R4 sequence now demonstrates the independent Evidence lifecycle through immutable Package without entering KYC, UBO, IDV, risk, or operative-value decisioning. The exact accepted inventory, characterization baseline, readiness verdicts, blockers, and deferred register are consolidated in `V1_READINESS.md`. Stable producer/consumer contract candidates and downstream handoffs are consolidated in `V1_CONTRACTS.md`.
+The accepted A0-A5b, A4a/A4b, and R1-R4 sequence now demonstrates the independent Evidence lifecycle through immutable Package without entering KYC, UBO, IDV, risk, or operative-value decisioning. The exact accepted inventory, characterization baseline, readiness verdicts, blockers, and deferred register are consolidated in `V1_READINESS.md`. Stable producer/consumer contract candidates and downstream handoffs are consolidated in `V1_CONTRACTS.md`.
 
 Architecture Authority accepts:
 
@@ -382,13 +382,13 @@ This is a governance/readiness conclusion, not authorization to expose Evidence 
 
 ---
 
-# Prior Accepted Build Brief — Stage A5a — Evidence Ledger / Reconstruction
+# Prior Accepted Build Brief - Stage A5a - Evidence Ledger / Reconstruction
 
 ## Governance Status
 
 A4b was accepted and implemented at `e0dd4d85be47cfb851d86f41778a9c3a20286b16` under approved ADR-018.
 
-ADR-019 and this A5a brief are **APPROVED — IMPLEMENTED**. Architecture Authority approved the A5a/A5b split and the record-type availability rules. A5a was accepted and implemented at `851a029dff6a66e75c94f323007061c645cb7483` without a migration. A5b was subsequently authorized under the current build brief above.
+ADR-019 and this A5a brief are **APPROVED - IMPLEMENTED**. Architecture Authority approved the A5a/A5b split and the record-type availability rules. A5a was accepted and implemented at `851a029dff6a66e75c94f323007061c645cb7483` without a migration. A5b was subsequently authorized under the current build brief above.
 
 ---
 
@@ -414,11 +414,11 @@ It does not create a KYC/UBO decision or rationale that no downstream system rec
 
 ## 2. Proposed stage boundary
 
-### A5a — Evidence Ledger / Reconstruction
+### A5a - Evidence Ledger / Reconstruction
 
 A5a is a read-only, point-in-time projection over existing Evidence source-of-truth records. The word `Ledger` describes the reconstructable chronology; it does not authorize a duplicate general event table.
 
-### A5b — Immutable Evidence Package
+### A5b - Immutable Evidence Package
 
 A5b deliberately freezes an authorized A5a result using a durable package identity, exact membership, canonical manifest, manifest fingerprint, and optional supersession lineage. This is a new persistent aggregate and is separately governed.
 
@@ -589,7 +589,7 @@ They are not Evidence records and must not be imported as package members or tre
 
 * **A5a:** no migration proposed for the minimum projection.
 * **A5b:** likely one additive forward-only migration after 018 for package identity, exact membership, canonical manifest/fingerprint, and supersession lineage.
-* **Existing migrations:** 010–018 remain immutable.
+* **Existing migrations:** 010-018 remain immutable.
 
 No migration is authorized by this proposed brief.
 
@@ -640,13 +640,13 @@ A5a was implemented and accepted at `851a029dff6a66e75c94f323007061c645cb7483`. 
 
 ---
 
-# Prior Accepted Build Brief — Stage A4b — Evidence Coverage, Completeness, and Conflict Assessment
+# Prior Accepted Build Brief - Stage A4b - Evidence Coverage, Completeness, and Conflict Assessment
 
 ## Governance Status
 
 R4 Typed Relational Facts was accepted and implemented at `450ae41e2871a5145667b8fec906a84d5b5bbc93` under approved ADR-017.
 
-ADR-018 and this A4b brief are **APPROVED — IMPLEMENTED**. Architecture Authority approved the bounded/versioned Assessment Specification, immutable assessment-run model, separate outcome dimensions, typed set-assertion extension, deterministic comparator boundary, and one additive migration after 017. A4b was accepted and implemented at `e0dd4d85be47cfb851d86f41778a9c3a20286b16`. KYC/UBO integration and changes to existing behavior remain outside scope.
+ADR-018 and this A4b brief are **APPROVED - IMPLEMENTED**. Architecture Authority approved the bounded/versioned Assessment Specification, immutable assessment-run model, separate outcome dimensions, typed set-assertion extension, deterministic comparator boundary, and one additive migration after 017. A4b was accepted and implemented at `e0dd4d85be47cfb851d86f41778a9c3a20286b16`. KYC/UBO integration and changes to existing behavior remain outside scope.
 
 ---
 
@@ -952,7 +952,7 @@ comparable-disagreement linkage/finding
   result/reason/limitations
 ```
 
-Migration 018 is authorized for the minimum assessment-run, candidate-contribution, comparability/disagreement, and typed set-assertion persistence. It must be additive and forward-only, must not modify migrations 010–017, and must not backfill historical rows.
+Migration 018 is authorized for the minimum assessment-run, candidate-contribution, comparability/disagreement, and typed set-assertion persistence. It must be additive and forward-only, must not modify migrations 010-017, and must not backfill historical rows.
 
 Existing rows require no automatic backfill. Historical A4a evaluations remain valid and may be included only in a new explicit A4b assessment.
 
@@ -1007,7 +1007,7 @@ Stop for Architecture Authority before implementation if the design would requir
 
 ---
 
-# Prior Accepted Build Brief — Evidence Consumer Readiness R4 — Typed Relational Facts
+# Prior Accepted Build Brief - Evidence Consumer Readiness R4 - Typed Relational Facts
 
 ## Governance Status
 
@@ -1230,7 +1230,7 @@ The source wording remains reconstructable. A relationship card must be able to 
 
 ```text
 source wording:
-  ownership of shares — more than 25% but not more than 50%
+  ownership of shares - more than 25% but not more than 50%
 
 typed form:
   ECONOMIC_OWNERSHIP
@@ -1261,7 +1261,7 @@ Provider/model-produced typed output must pass a versioned Evidence-owned schema
 
 * allowed party types and required bounded party structure;
 * supported relationship code or qualified other/unknown handling;
-* subject–relationship–object direction;
+* subject-relationship-object direction;
 * exact/range/qualitative/unknown value shape;
 * numeric bounds, inclusivity, unit, and count-of-total consistency;
 * temporal fields and source precision;
@@ -1308,7 +1308,7 @@ Opaque `evidence_facts.fact_value` JSONB alone is not sufficient typed integrity
 
 The authorized minimum is one forward-only additive relationship extension after migration 016, keyed one-to-one by `fact_id`. Critical relationship, direction, value-kind, measure, and temporal invariants use typed columns and database checks where practical. Bounded party snapshots, source-specific metadata, qualifiers, and source precision may use deterministically validated JSONB.
 
-Migration 017 is authorized as the next migration. Do not modify migrations 010–016. Exact table/property names and the final typed-column/validated-JSON split remain reversible implementation details within the approved architecture.
+Migration 017 is authorized as the next migration. Do not modify migrations 010-016. Exact table/property names and the final typed-column/validated-JSON split remain reversible implementation details within the approved architecture.
 
 ---
 
@@ -1356,7 +1356,7 @@ R4 does not authorize:
 * A2 Companies House producer changes;
 * automatic A4a evaluation;
 * raw provider exchange persistence;
-* changes to migrations 010–016; or
+* changes to migrations 010-016; or
 * changes to existing KYC, Pre-boarding, or UBO behavior.
 
 Stop for Architecture Authority before implementation if R4 requires a parallel Fact identity, ambiguous provider-directed edges, implicit entity merging, uncertain source-code mapping, inferred currentness, numeric invention, weakening Fact support/locator lineage, A4a/A4b redesign, or downstream policy conclusions.
@@ -1365,7 +1365,7 @@ Architecture Authority approved ADR-017, the one-to-one extension model, the ini
 
 ---
 
-# Prior Accepted Build Brief — R3 PDF/Image Interpretation + Durable Evidence Locators
+# Prior Accepted Build Brief - R3 PDF/Image Interpretation + Durable Evidence Locators
 
 ## Governance Status
 
@@ -1596,7 +1596,7 @@ Each row should contain only the applicable bounded fields from:
 * locator method/qualification metadata; and
 * created time.
 
-The row must reference an existing Fact-to-Artifact support pair. Several locators may support the same Fact from the same Artifact. Existing migrations 010–015 must not be modified.
+The row must reference an existing Fact-to-Artifact support pair. Several locators may support the same Fact from the same Artifact. Existing migrations 010-015 must not be modified.
 
 ---
 
@@ -1782,7 +1782,7 @@ R3 does not authorize:
 * `isUbo`, `qualifies`, or effective indirect ownership;
 * A4a auto-execution, A4b, satisfaction, winner, or operative-value selection;
 * KYC/Onboarding/UBO contract changes; or
-* changes to migrations 010–015.
+* changes to migrations 010-015.
 
 Stop for Architecture Authority if implementation requires weakening access isolation, bypassing SHA verification, sending storage references to a provider, creating cross-Asset bundles, silently transforming preserved media, inventing locators, persisting raw provider exchanges, or solving R4 to represent a result.
 
@@ -1814,7 +1814,7 @@ R4/A4b/downstream decision: NOT PERFORMED
 
 ---
 
-# Prior Accepted Build Brief — R2 Targeted Interpretation Boundary
+# Prior Accepted Build Brief - R2 Targeted Interpretation Boundary
 
 ## Governance Status
 
@@ -2086,7 +2086,7 @@ new operationKey
 
 The canonical fingerprint includes trusted tenant/context scope, authoritative resolved Artifact order, neutral requested concepts/descriptions/bounded Evidence linkage, validated extraction context, opaque correlation, and persisted trusted caller metadata. Provider/model/instruction configuration is excluded. The actual execution configuration remains persisted lineage.
 
-R2 is authorized to add migration 015 as one forward-only interpretation-operation table with atomic scoped uniqueness, request fingerprint, bounded correlation, status, optional run reference, bounded failure, and timestamps. Migrations 010–014 remain immutable. No general workflow engine is authorized.
+R2 is authorized to add migration 015 as one forward-only interpretation-operation table with atomic scoped uniqueness, request fingerprint, bounded correlation, status, optional run reference, bounded failure, and timestamps. Migrations 010-014 remain immutable. No general workflow engine is authorized.
 
 ---
 
@@ -2165,11 +2165,11 @@ Stop for Architecture Authority if R2 requires:
 * automatic A4a evaluation;
 * UBO/controller or KYC satisfaction logic;
 * A4b; or
-* rewriting migrations 010–014.
+* rewriting migrations 010-014.
 
 ---
 
-# Prior Accepted Build Brief — R1 Private Artifact Ingestion
+# Prior Accepted Build Brief - R1 Private Artifact Ingestion
 
 The remainder of this file preserves the previously approved R1 brief for governance history. R1 was implemented at `0bd62ee351b6a1ac0ca2f882ac338d790657f313` and is not reopened by the proposed R2 governance.
 
@@ -2509,14 +2509,14 @@ Storage provider selection remains an infrastructure configuration. It must not 
 
 The minimum R1 model is representable without a new migration:
 
-* Collection Operation — migration 011;
-* Acquisition, Asset, access scope, and Artifact — migration 010;
-* media type and original filename — existing Artifact columns;
-* actor/source provenance — existing Acquisition columns and producer metadata;
-* source-effective date — canonical `artifact_metadata.sourceEffectiveDate`, distinct from capture time; and
-* SHA-256, byte size, capture time, and storage lineage — existing Artifact columns.
+* Collection Operation - migration 011;
+* Acquisition, Asset, access scope, and Artifact - migration 010;
+* media type and original filename - existing Artifact columns;
+* actor/source provenance - existing Acquisition columns and producer metadata;
+* source-effective date - canonical `artifact_metadata.sourceEffectiveDate`, distinct from capture time; and
+* SHA-256, byte size, capture time, and storage lineage - existing Artifact columns.
 
-Implementation must not rewrite migrations 010–014.
+Implementation must not rewrite migrations 010-014.
 
 If repository implementation shows a new typed column or state is necessary to preserve these semantics, stop for Architecture Authority. Any approved migration must be additive and forward-only. R1 must not overload extraction or A4a tables.
 
@@ -2589,7 +2589,7 @@ Stop and report before R1 implementation proceeds if it would require:
 * reporting an extraction/no-facts conclusion for an ingestion failure;
 * exposing private storage references or credentials;
 * using memory/fixture storage as a production fallback;
-* rewriting migrations 010–014;
+* rewriting migrations 010-014;
 * implementing A4b, R2, R3, or R4; or
 * changing normal KYC/Pre-boarding/UBO behavior.
 

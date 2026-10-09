@@ -24,7 +24,7 @@ test("durable Vault: store encrypted, read by allowlist, audit, correction prese
     reference = await vault.storeExtractedIdentity({ sessionId, tenantId: "nium", subjectId: sessionId, attributes: attrs() });
     assert.match(reference, /^[0-9a-f-]{36}$/);
 
-    // stored ciphertext only — no plaintext in the row
+    // stored ciphertext only - no plaintext in the row
     const raw = await sql`SELECT ciphertext, attribute_concept FROM idv_vault_attributes WHERE secure_identity_reference = ${reference}`;
     const blob = JSON.stringify(raw);
     for (const secret of [PII.name, PII.dob, PII.docNo]) assert.ok(!blob.includes(secret), `plaintext ${secret} in row`);

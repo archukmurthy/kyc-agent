@@ -1,9 +1,9 @@
-# Doc Search Sub-Agent — Handoff Prompt
+# Doc Search Sub-Agent - Handoff Prompt
 # For use in: main KYC agent system prompt or agent orchestration layer
 # Owner: [assign to developer]
 # Last updated: 2026-06-07
 
-> ⚠ PRODUCTION READINESS — PR-001
+> ⚠ PRODUCTION READINESS - PR-001
 > The ownership type mapping in
 > agents/docSearchAgentCall.js is
 > hardcoded. If new entity types or
@@ -19,7 +19,7 @@
 
 You have access to a separate document search sub-agent (`docSearchAgent`).
 Its sole job is to locate, verify, and download official compliance and financial
-documents for a target company. You do not perform document searches yourself —
+documents for a target company. You do not perform document searches yourself -
 you delegate that entirely to this agent.
 
 ---
@@ -90,7 +90,7 @@ effectivelyListed =
 
 ---
 
-## Document retrieval logic (handled inside the agent — do not re-implement)
+## Document retrieval logic (handled inside the agent - do not re-implement)
 
 | ownershipType | Documents the agent retrieves |
 |---|---|
@@ -194,7 +194,7 @@ If `document.status === "not_found"` for a required document type:
 
 1. Flag it in the dossier under `kycDossier.gaps`.
 2. Log the `searchAttempts` array so the reviewer knows where the agent looked.
-3. Do NOT retry automatically — the developer who owns the doc search agent
+3. Do NOT retry automatically - the developer who owns the doc search agent
    is responsible for improving search coverage. Raise a task for them.
 4. For Wolfsberg specifically: if not found, note it as a manual follow-up
    item for the MLRO. It should not block the dossier from progressing.
@@ -206,7 +206,7 @@ If `document.status === "not_found"` for a required document type:
 - Do not implement your own document search logic. All document retrieval goes
   through `docSearchAgent`.
 - Do not hardcode document URLs. The agent handles source discovery.
-- Do not modify files inside `./agents/docSearchAgent.js` — that file is owned
+- Do not modify files inside `./agents/docSearchAgent.js` - that file is owned
   by a separate developer. Raise issues via your team's task tracker.
 
 ---
@@ -217,18 +217,18 @@ The file you own is: `./agents/docSearchAgent.js`
 
 Your interface contract with the main agent is:
 - **Input**: `{ companyName, country, ownershipType, niumEntityType, outputDir? }`
-- **Output**: the `docResult` shape shown above — do not change field names or
+- **Output**: the `docResult` shape shown above - do not change field names or
   remove fields without coordinating with the main agent developer.
 
-The `PRICING` constants and `CostTracker` class are exported from the file —
+The `PRICING` constants and `CostTracker` class are exported from the file -
 update `PRICING` if the model or rates change.
 
 Backlog of improvements to build out:
 - [ ] Retry logic with exponential backoff on download failure
-- [ ] Caching layer — skip re-search if document already downloaded for this company within N days
+- [ ] Caching layer - skip re-search if document already downloaded for this company within N days
 - [ ] Wolfsberg Group API integration if one becomes available
 - [ ] SEC EDGAR direct API integration for US-registered companies
 - [ ] Support for additional document types (e.g. SOC 2, PCI DSS certificate)
-- [ ] Batch mode — process multiple companies in one run at 50% API cost discount
-- [ ] Confidence scoring improvements — cross-validate URL against company domain
+- [ ] Batch mode - process multiple companies in one run at 50% API cost discount
+- [ ] Confidence scoring improvements - cross-validate URL against company domain
 - [ ] Webhook/callback support so main agent can be notified async when docs are ready

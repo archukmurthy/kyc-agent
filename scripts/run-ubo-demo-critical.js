@@ -31,7 +31,7 @@ function run(label, args) {
   if (result.status !== 0) process.exit(result.status || 1);
 }
 
-run("DEMO-01, 02, 07-11, 14-15 — browser journey, replay, graph, calculation and handoff", [
+run("DEMO-01, 02, 07-11, 14-15 - browser journey, replay, graph, calculation and handoff", [
   require.resolve("react-scripts/scripts/test"),
   "--watchAll=false",
   "--testMatch=**/*.test.{js,jsx}",
@@ -63,7 +63,7 @@ run("DEMO-01, 02, 07-11, 14-15 — browser journey, replay, graph, calculation a
   })}`,
 ]);
 
-run("DEMO-03-10, 12-13 — deterministic discovery, projection and Evidence chart intake", [
+run("DEMO-03-10, 12-13 - deterministic discovery, projection and Evidence chart intake", [
   "--test",
   "ubo-control-lab/__tests__/uboDemoDevAssets.nodetest.js",
   "ubo-control-lab/__tests__/demoAutoReview.nodetest.js",
@@ -90,4 +90,4 @@ run("DEMO-03-10, 12-13 — deterministic discovery, projection and Evidence char
   "evidence/customerOwnershipJobs/__tests__/service.nodetest.js",
 ]);
 
-console.log("\n[UBO_DEMO_CRITICAL] PASS — DEMO-01 through DEMO-15; provider credentials withheld");
+console.log("\n[UBO_DEMO_CRITICAL] PASS - DEMO-01 through DEMO-15; provider credentials withheld");

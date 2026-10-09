@@ -5,7 +5,7 @@ import { SHOW_TEST_TOOLS } from "../constants/appConstants";
 
 // Inline identity verification for the discrepancy-bands flow (Section B). Starts
 // a server-authoritative idv-match attempt bound to the selected officer, shows
-// the Didit QR/link, and — once the applicant reports completion — resolves the
+// the Didit QR/link, and - once the applicant reports completion - resolves the
 // band server-side and renders the outcome via BandResultView. The Band B dialogue
 // answers post to /api/idv-match/explain. Only mounted when the flag is on.
 async function postJson(url, body) {
@@ -28,7 +28,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
   const [error, setError] = useState(null);
   const Button = Btn || ((props) => <button {...props} />);
 
-  // Auto-start: create the session and show the QR the moment the step opens —
+  // Auto-start: create the session and show the QR the moment the step opens -
   // no "Start verification" click. Guarded so it fires exactly once. The manual
   // button remains as a fallback if the auto-start errored.
   const startedRef = useRef(false);
@@ -52,7 +52,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
       try {
         const res = await postJson("/api/idv-match/resolve", { attemptId });
         if (cancelled) return;
-        // Ignore "not complete yet" (needsRetry) and transient errors — keep
+        // Ignore "not complete yet" (needsRetry) and transient errors - keep
         // polling. Any terminal outcome renders immediately.
         if (res && !res.error && !res.needsRetry) applyResult(res);
       } catch (_) { /* keep polling; manual button still available */ }
@@ -63,7 +63,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attemptId, result]);
 
-  // Record the result, and — for any terminal (non-dialogue) outcome — report a
+  // Record the result, and - for any terminal (non-dialogue) outcome - report a
   // compact summary up so the journey can persist the IDV reference on the
   // submission (attempt id + band + outcome; never PII).
   function applyResult(res) {
@@ -89,7 +89,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
     if (!attemptId) return;
     setBusy(true); setError(null);
     try {
-      // Resolve pulls the decision from Didit directly (works locally — no webhook
+      // Resolve pulls the decision from Didit directly (works locally - no webhook
       // needed). If the check isn't complete yet, it comes back needs-retry.
       const res = await postJson("/api/idv-match/resolve", { attemptId });
       if (res && res.error) { setStatus("waiting for verification…"); return; }
@@ -180,7 +180,7 @@ export default function IdvMatchVerification({ applicationId, officerCandidate, 
       {/* DEV ONLY (SHOW_TEST_TOOLS, off in production): skip the Didit session and
           inject a synthetic verified pass so you can click through to later pages
           without scanning the QR / doing the selfie every time. Screening is NOT
-          run on this path — use the real flow to test screening/bands. */}
+          run on this path - use the real flow to test screening/bands. */}
       {SHOW_TEST_TOOLS && !result && (
         <button
           type="button"

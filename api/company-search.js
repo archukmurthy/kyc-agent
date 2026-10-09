@@ -15,7 +15,7 @@
  *   - { error }                                    on misconfig / upstream error
  *
  * Auth: HTTP Basic with the Companies House REST API key as the USERNAME and an
- * empty password. Set COMPANIES_HOUSE_API_KEY (free — register an application at
+ * empty password. Set COMPANIES_HOUSE_API_KEY (free - register an application at
  * https://developer.company-information.service.gov.uk/). No key in the repo.
  *
  * Registered in src/setupProxy.js so it also works under local `npm start`.
@@ -43,7 +43,7 @@ module.exports = async function handler(req, res) {
   }
 
   // Companies House is the UK registry only. For other jurisdictions there's no
-  // free name search here — surface that clearly rather than pretending.
+  // free name search here - surface that clearly rather than pretending.
   if (country !== "GB") {
     return res.status(200).json({
       results: [],
@@ -62,7 +62,7 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // Basic auth: base64("<apiKey>:") — key as username, empty password.
+  // Basic auth: base64("<apiKey>:") - key as username, empty password.
   const auth = Buffer.from(`${apiKey}:`).toString("base64");
   const url = `${CH_BASE}/search/companies?q=${encodeURIComponent(q)}&items_per_page=5`;
 

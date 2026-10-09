@@ -6,7 +6,7 @@
 //   - text evidence (text-layer PDF read client-side, or a typed transcription)
 //     is tokenized deterministically here;
 //   - image-only documents need an OCR provider adapter (tesseract.js is a free
-//     local option; a cloud OCR is paid) — that adapter is BANDS-1 and, until it
+//     local option; a cloud OCR is paid) - that adapter is BANDS-1 and, until it
 //     exists, an image with no text yields no tokens -> the case routes to review
 //     (never a false pass).
 const { normalizeToken } = require("./matching/normalize");

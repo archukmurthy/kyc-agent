@@ -3,7 +3,7 @@
 // Server-authoritative start of a verification attempt. Freezes the selected
 // officer, creates the attempt row, then creates a Didit session bound to that
 // attempt via vendor_data = attempt id. The browser never creates or modifies
-// this binding — it only receives the attempt id + hosted URL to open.
+// this binding - it only receives the attempt id + hosted URL to open.
 const { createSession } = require("../../lib/didit/diditClient");
 const { buildOfficerSnapshot, buildAutoMatchSnapshot } = require("./officerSnapshot");
 const attemptStore = require("./attemptStore");
@@ -30,7 +30,7 @@ async function startVerificationAttempt({ applicationId, officerCandidate, offic
   const attemptId = await attemptStore.createAttempt({ applicationId, selectedOfficer: snapshot });
 
   const session = await createSession({
-    vendorData: attemptId, // server-generated binding — not browser-supplied
+    vendorData: attemptId, // server-generated binding - not browser-supplied
     callbackUrl: callbackUrl || process.env.DIDIT_CALLBACK_URL,
   });
 
@@ -39,7 +39,7 @@ async function startVerificationAttempt({ applicationId, officerCandidate, offic
     diditSessionId: session.providerSessionId,
   });
 
-  // Domain history — best-effort, never blocks the flow. No provider time yet,
+  // Domain history - best-effort, never blocks the flow. No provider time yet,
   // so occurredAt stays absent (receivedAt is the receipt of our own action).
   await safeAppendLifecycleEvent({
     attemptId, type: LIFECYCLE_EVENTS.IDV_SESSION_CREATED,

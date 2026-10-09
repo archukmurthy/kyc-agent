@@ -1,16 +1,16 @@
 /**
- * AnalystSignalStrip.jsx — the build-time "test view" strip (commit 5).
+ * AnalystSignalStrip.jsx - the build-time "test view" strip (commit 5).
  *
  * NAMED to differ from analystSignals.js by more than case. Module resolution
  * tries `.js` before `.jsx`, and on a case-insensitive filesystem (Windows,
  * macOS) an `AnalystSignals.jsx` component would silently resolve to the
- * `analystSignals.js` helper — rendering a plain function as a component, which
+ * `analystSignals.js` helper - rendering a plain function as a component, which
  * returns null and makes the whole strip vanish with no error. Keep the two
  * names distinct.
  *
  * Shows what the change engine actually decided for a row: the registry
  * mismatch, the workflow and matched rule, any document/escalation/EDD flag,
- * and — for field classes with no machinery behind them — an explicit "no
+ * and - for field classes with no machinery behind them - an explicit "no
  * automated consequence" placeholder rather than a fabricated signal.
  *
  * SILENCE-LATER IS THE CONTRACT: this component renders NOTHING unless `show`

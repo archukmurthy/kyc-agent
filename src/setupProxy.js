@@ -2,7 +2,7 @@
 // registers the middleware on the webpack-dev-server Express instance.
 // Mirrors api/research.js, api/config.js, and api/admin-auth.js so the same
 // endpoints work locally as on Vercel in production. This file is NOT
-// bundled into the React app — it only runs in the dev server process.
+// bundled into the React app - it only runs in the dev server process.
 //
 // Requires ANTHROPIC_API_KEY and ADMIN_PASSWORD in .env.local. There is no
 // TENANT_ID: tenant resolution is strict, so every local URL carries its own
@@ -205,7 +205,7 @@ module.exports = function (app) {
     });
   });
 
-  // Research — the real handler (server-built prompts, rate limit, cache).
+  // Research - the real handler (server-built prompts, rate limit, cache).
   app.post("/api/research", (req, res) => {
     let raw = "";
     req.setEncoding("utf8");
@@ -262,7 +262,7 @@ module.exports = function (app) {
     });
   });
 
-  // DRS — document requirements service. POST; parse the JSON body the dev
+  // DRS - document requirements service. POST; parse the JSON body the dev
   // server doesn't auto-parse (mirrors the Nium POST route above).
   app.post("/api/document-requirements", (req, res) => {
     let raw = "";
@@ -295,7 +295,7 @@ module.exports = function (app) {
     });
   });
 
-  // Doc search agent (Step 2 — Document Intelligence). POST; parse the JSON
+  // Doc search agent (Step 2 - Document Intelligence). POST; parse the JSON
   // body the dev server doesn't auto-parse (mirrors the routes above).
   app.post("/api/doc-search", (req, res) => {
     let raw = "";
@@ -311,7 +311,7 @@ module.exports = function (app) {
     });
   });
 
-  // Self-source registry agent (Step 2 — registry retrieval). POST; parse the
+  // Self-source registry agent (Step 2 - registry retrieval). POST; parse the
   // JSON body the dev server doesn't auto-parse (mirrors the routes above).
   app.post("/api/self-source", (req, res) => {
     let raw = "";
@@ -440,7 +440,7 @@ module.exports = function (app) {
       adapt(idvMatchReviewerHandler)(req, res);
     });
   });
-  // ComplyCube screening webhook — needs the RAW body for signature verification.
+  // ComplyCube screening webhook - needs the RAW body for signature verification.
   app.post("/api/idv-match/screening/webhook", (req, res) => {
     let raw = "";
     req.setEncoding("utf8");
@@ -532,7 +532,7 @@ module.exports = function (app) {
     });
   });
 
-  // Change Intelligence — append-only change_events write. POST; parse the JSON
+  // Change Intelligence - append-only change_events write. POST; parse the JSON
   // body the dev server doesn't auto-parse (mirrors the routes above).
   app.post("/api/change-events", (req, res) => {
     let raw = "";
@@ -550,12 +550,12 @@ module.exports = function (app) {
 
   // Blob upload + retrieval. These were the only /api routes NOT mounted here,
   // so every local upload 404'd, landed as uploadFailed:true, and the submit
-  // gate correctly refused to open — which made the whole amendment-document
+  // gate correctly refused to open - which made the whole amendment-document
   // flow untestable locally without stubbing fetch in the page.
   //
   // Dynamic-imported because both handlers are ESM (they `import` @vercel/blob
   // and formidable), unlike the CommonJS handlers required at the top. Same
-  // pathToFileURL treatment as researchCache above — a bare import() of a
+  // pathToFileURL treatment as researchCache above - a bare import() of a
   // Windows path fails.
   //
   // The multipart stream must reach formidable untouched, so there is no body
@@ -600,7 +600,7 @@ module.exports = function (app) {
   });
   app.get("/api/get-document", esmHandler("get-document.js"));
 
-  // Self-serve re-research — dossier lifecycle reseed decision (full vs derive).
+  // Self-serve re-research - dossier lifecycle reseed decision (full vs derive).
   // POST; parse the JSON body the dev server doesn't auto-parse.
   app.post("/api/dossier-reseed", (req, res) => {
     let raw = "";
@@ -640,13 +640,13 @@ module.exports = function (app) {
   // change_events). GET only.
   app.get("/api/change-intelligence-metrics", adapt(changeIntelligenceMetricsHandler));
 
-  // Evidence Platform Stage A0 — isolated server-boundary availability check.
+  // Evidence Platform Stage A0 - isolated server-boundary availability check.
   app.get("/api/evidence/status", adapt(evidenceStatusHandler));
 
-  // Evidence Platform Stage A1 — fixture-only domain and lineage demonstration.
+  // Evidence Platform Stage A1 - fixture-only domain and lineage demonstration.
   app.get("/api/evidence/a1-fixture", adapt(evidenceA1FixtureHandler));
 
-  // Evidence Platform Stage A2 — isolated Companies House producer/Lab route.
+  // Evidence Platform Stage A2 - isolated Companies House producer/Lab route.
   app.post("/api/evidence/a2-collect", (req, res) => {
     let raw = "";
     req.setEncoding("utf8");
@@ -662,7 +662,7 @@ module.exports = function (app) {
     req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(evidenceA2ExistingHandler)(req, res); });
   });
 
-  // Evidence Platform Stage A3 — isolated fixture interpretation demonstration.
+  // Evidence Platform Stage A3 - isolated fixture interpretation demonstration.
   app.get("/api/evidence/a3-fixture", adapt(evidenceA3FixtureHandler));
   app.get("/api/evidence/a3-config", adapt(evidenceA3ConfigHandler));
   app.post("/api/evidence/a3-interpret", (req, res) => {
@@ -678,7 +678,7 @@ module.exports = function (app) {
     let raw = ""; req.setEncoding("utf8"); req.on("data", (chunk) => { raw += chunk; });
     req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(evidenceA3HistoryHandler)(req, res); });
   });
-  // Evidence Platform Stage A4a — isolated Fact-to-Information-Need evaluation.
+  // Evidence Platform Stage A4a - isolated Fact-to-Information-Need evaluation.
   app.get("/api/evidence/a4a-fixture", adapt(evidenceA4aFixtureHandler));
   app.get("/api/evidence/a4a-config", adapt(evidenceA4aConfigHandler));
   for (const [route, handler] of [["/api/evidence/a4a-options", evidenceA4aOptionsHandler], ["/api/evidence/a4a-evaluate", evidenceA4aEvaluateHandler], ["/api/evidence/a4a-history", evidenceA4aHistoryHandler]]) {
@@ -687,7 +687,7 @@ module.exports = function (app) {
       req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(handler)(req, res); });
     });
   }
-  // Evidence Platform Stage A4b — immutable coverage/completeness/conflict assessment.
+  // Evidence Platform Stage A4b - immutable coverage/completeness/conflict assessment.
   app.get("/api/evidence/a4b-config", adapt(evidenceA4bConfigHandler));
   for (const [route, handler] of [["/api/evidence/a4b-options", evidenceA4bOptionsHandler], ["/api/evidence/a4b-assess", evidenceA4bAssessHandler], ["/api/evidence/a4b-history", evidenceA4bHistoryHandler]]) {
     app.post(route, (req, res) => {
@@ -695,14 +695,14 @@ module.exports = function (app) {
       req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(handler)(req, res); });
     });
   }
-  // Evidence Platform Stage A5a — read-only point-in-time reconstruction.
+  // Evidence Platform Stage A5a - read-only point-in-time reconstruction.
   app.get("/api/evidence/a5a-config", adapt(evidenceA5aConfigHandler));
   app.get("/api/evidence/a5a-options", adapt(evidenceA5aOptionsHandler));
   app.post("/api/evidence/a5a-reconstruct", (req, res) => {
     let raw = ""; req.setEncoding("utf8"); req.on("data", (chunk) => { raw += chunk; });
     req.on("end", () => { try { req.body = raw ? JSON.parse(raw) : {}; } catch (_) { req.body = {}; } adapt(evidenceA5aReconstructHandler)(req, res); });
   });
-  // Evidence Platform Stage A5b — immutable Package freeze, reopen and verification.
+  // Evidence Platform Stage A5b - immutable Package freeze, reopen and verification.
   app.get("/api/evidence/a5b-config", adapt(evidenceA5bConfigHandler));
   for (const [route, handler] of [["/api/evidence/a5b-freeze", evidenceA5bFreezeHandler], ["/api/evidence/a5b-list", evidenceA5bListHandler], ["/api/evidence/a5b-reopen", evidenceA5bReopenHandler], ["/api/evidence/a5b-verify", evidenceA5bVerifyHandler]]) {
     app.post(route, (req, res) => {

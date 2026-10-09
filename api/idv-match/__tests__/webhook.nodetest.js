@@ -3,7 +3,7 @@ const assert = require("node:assert");
 const { processWebhook } = require("../webhook");
 
 // Build injectable deps with sensible defaults; override per test. The webhook's
-// job is routing/dedup/stale-guard/trust — the map->Vault->store work lives
+// job is routing/dedup/stale-guard/trust - the map->Vault->store work lives
 // behind the injectable persistDecision seam (tested separately).
 function makeDeps(over = {}) {
   const calls = { persist: null, pulled: false };

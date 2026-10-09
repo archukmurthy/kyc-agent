@@ -18,7 +18,7 @@ function fakeRes() {
 //
 // `snapshotUpdateResults`, when given, is a queue consumed one entry per
 // call to the combined WITH-snapshot/UPDATE statement: each entry is either
-// `{ rows }` (resolve) or `{ error }` (reject) — the last entry repeats once
+// `{ rows }` (resolve) or `{ error }` (reject) - the last entry repeats once
 // the queue is exhausted. Lets tests drive the 23505-retry path without a
 // real database.
 function fakeSql({ lookupRow = null, updateRows = [{ id: "d-1" }], insertId = "d-new", snapshotUpdateResults = null } = {}) {
@@ -64,7 +64,7 @@ test("a DB failure reports a fixed code, never the raw error text", async () => 
   const throwingSql = (strings) => {
     const text = strings.join(" ");
     if (/INSERT INTO tenants/i.test(text)) return Promise.resolve([]);
-    throw new Error("connection terminated unexpectedly — internal detail");
+    throw new Error("connection terminated unexpectedly - internal detail");
   };
   handler.__setDeps({ neon: () => throwingSql, access: accessWith(ANALYST) });
   const res = fakeRes();
@@ -113,7 +113,7 @@ test("an analyst updates its own analyst-owned dossier in place", async () => {
   assert.strictEqual(res.statusCode, 200);
   assert.strictEqual(res.body.dossierId, "d-1");
   assert.deepStrictEqual(sql.kinds(), ["lookup", "tenants_upsert", "snapshot_update"]);
-  // The UPDATE itself must re-check ownership (TOCTOU guard) — not just the
+  // The UPDATE itself must re-check ownership (TOCTOU guard) - not just the
   // earlier permission SELECT. Removing this clause from the SQL must fail
   // this test.
   const update = sql.log.find((l) => l.kind === "snapshot_update");
@@ -131,7 +131,7 @@ test("an analyst cannot update a customer-owned dossier", async () => {
   assert.ok(!sql.kinds().includes("insert"));
 });
 
-test("TOCTOU: the row flips to customer-owned between the permission SELECT and the UPDATE — analyst gets 403 dossier_locked, never falls through to INSERT", async () => {
+test("TOCTOU: the row flips to customer-owned between the permission SELECT and the UPDATE - analyst gets 403 dossier_locked, never falls through to INSERT", async () => {
   // The permission SELECT sees owned_by:'analyst' (so canWriteDossier
   // permits), but a concurrent customer write flips owned_by before this
   // UPDATE runs. The re-check clause on the UPDATE's WHERE must then match
@@ -146,7 +146,7 @@ test("TOCTOU: the row flips to customer-owned between the permission SELECT and 
   assert.ok(!sql.kinds().includes("insert"), "must never fall through to INSERT after a raced UPDATE");
 });
 
-test("TOCTOU: a customer's dossier vanishes/locks between the permission SELECT and the UPDATE — 404, never an INSERT", async () => {
+test("TOCTOU: a customer's dossier vanishes/locks between the permission SELECT and the UPDATE - 404, never an INSERT", async () => {
   const sql = fakeSql({ lookupRow: { id: "d-1", tenant_id: "acme", owned_by: "analyst" }, updateRows: [] });
   handler.__setDeps({ neon: () => sql, access: accessWith(CUSTOMER) });
   const res = fakeRes();
@@ -387,7 +387,7 @@ test("two version-number collisions (23505 twice) report save_conflict, not save
 test("a non-23505 error on the combined statement reports save_failed with no retry", async () => {
   const sql = fakeSql({
     lookupRow: { id: "d-1", tenant_id: "acme", owned_by: "analyst" },
-    snapshotUpdateResults: [{ error: new Error("connection terminated unexpectedly — internal detail") }],
+    snapshotUpdateResults: [{ error: new Error("connection terminated unexpectedly - internal detail") }],
   });
   handler.__setDeps({ neon: () => sql, access: accessWith(ANALYST) });
   const res = fakeRes();

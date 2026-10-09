@@ -3,7 +3,7 @@
 // Computes "questions avoided" at the DATA-POINT level rather than the
 // schema-field level. A `directors` field that returns 15 people with name,
 // role, nationality, DOB and residential country is ~75 data points an analyst
-// would otherwise type — not 1.
+// would otherwise type - not 1.
 //
 // Confidence treatment (agreed):
 //   - verified + probable  -> counted as AVOIDED   (analyst spared entirely)
@@ -11,10 +11,10 @@
 //   Reported as two separate numbers, never collapsed.
 //
 // Two modes, sharing one core:
-//   (a) retroactive  — weight derived purely from what's present in `found`,
+//   (a) retroactive  - weight derived purely from what's present in `found`,
 //                      so it recomputes over already-stored pilot output with
 //                      no schema change.
-//   (b) schema-driven — optional per-field overrides (weightKeys / fixedWeight)
+//   (b) schema-driven - optional per-field overrides (weightKeys / fixedWeight)
 //                      from the field schema, used for new runs where the schema
 //                      knows the canonical attribute set. Falls back to (a) when
 //                      no override is present.
@@ -38,7 +38,7 @@ export const STAKEHOLDER_FORM_ATTRS = [
 // Address sub-fields are already split in the data; each non-empty one is a box.
 // (Used only when an address arrives as a single object rather than pre-split
 // fields. In the current pipeline addresses already arrive pre-split, so each
-// counts as its own scalar found-field and needs no special handling — this is
+// counts as its own scalar found-field and needs no special handling - this is
 // here for the schema-driven path and future-proofing.)
 const ADDRESS_SUBFIELDS = [
   "line1", "line2", "city", "state", "postcode", "country",

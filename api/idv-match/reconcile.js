@@ -2,7 +2,7 @@
 
 // Server-side reconciliation (the polling fallback for when a webhook never
 // arrives). Pulls the current decision by session id and stores it. This is
-// server-initiated only — it is never reachable from the browser, so the
+// server-initiated only - it is never reachable from the browser, so the
 // applicant can never cause a state change.
 const { getDecision } = require("../../lib/didit/diditClient");
 const { persistDecision } = require("./persistDecision");

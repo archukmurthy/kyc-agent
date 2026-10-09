@@ -1,22 +1,22 @@
 "use strict";
 
 /**
- * Companies House Officers API — Layer 1 (deterministic) director source.
+ * Companies House Officers API - Layer 1 (deterministic) director source.
  *
  * Fetches ALL active directors / officers for a UK company straight from the
- * authenticated Companies House REST API — NOT web-search snippets. This is the
+ * authenticated Companies House REST API - NOT web-search snippets. This is the
  * deterministic backstop for the director_names / directors research field on UK
  * (GB) companies, replacing the snippet-scraping path that returned only the
  * handful of officers visible in a single search result (see the Tesco PLC
  * "1 director" bug).
  *
- * Auth: HTTP Basic, API key as username, empty password — IDENTICAL to
+ * Auth: HTTP Basic, API key as username, empty password - IDENTICAL to
  * agents/ubo/companiesHouseOwnershipAdapter.js.
  *
  * Endpoint: GET /company/{number}/officers?items_per_page=100&start_index=N
  *   - The plain officers listing returns active + resigned officers; we filter
  *     to active only (no `resigned_on`). We deliberately do NOT use
- *     register_view=true / register_type=directors — that view only works for
+ *     register_view=true / register_type=directors - that view only works for
  *     companies that elected to keep their register at Companies House and
  *     returns empty/4xx for most PLCs.
  *   - Pagination handled automatically via start_index / total_results.
@@ -100,7 +100,7 @@ async function fetchActiveOfficers(companyNumber) {
       if (res.status === 401 || res.status === 403) {
         // eslint-disable-next-line no-console
         console.error(
-          `[CH Officers] ${res.status} — COMPANIES_HOUSE_API_KEY rejected. It is ` +
+          `[CH Officers] ${res.status} - COMPANIES_HOUSE_API_KEY rejected. It is ` +
             "invalid or not a REST API key. Register a REST key at " +
             "https://developer.company-information.service.gov.uk/"
         );
@@ -108,7 +108,7 @@ async function fetchActiveOfficers(companyNumber) {
       }
       if (res.status === 404) {
         // eslint-disable-next-line no-console
-        console.warn(`[CH Officers] 404 — no officers record for company: ${companyNumber}`);
+        console.warn(`[CH Officers] 404 - no officers record for company: ${companyNumber}`);
         return [];
       }
       if (!res.ok) {
@@ -126,7 +126,7 @@ async function fetchActiveOfficers(companyNumber) {
       if (items.length === 0 || startIndex >= totalResults) break;
     }
 
-    // Active officers only — drop anyone with a resignation date.
+    // Active officers only - drop anyone with a resignation date.
     return allItems.filter((o) => !o.resigned_on);
   } catch (err) {
     // eslint-disable-next-line no-console

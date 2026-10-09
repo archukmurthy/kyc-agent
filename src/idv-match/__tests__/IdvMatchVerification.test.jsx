@@ -41,7 +41,7 @@ test("dev skip button (SHOW_TEST_TOOLS) injects a verified pass without Didit", 
   render(<IdvMatchVerification applicationId="app-1" officerCandidate={{ name: "SMITH, John" }} onResolved={onResolved} />);
   const skip = await screen.findByText(/Skip verification \(test\)/);
   fireEvent.click(skip);
-  // Renders the synthetic Band A pass — no /resolve or /status call needed.
+  // Renders the synthetic Band A pass - no /resolve or /status call needed.
   await screen.findByText("Identity verified (test skip)");
   expect(onResolved).toHaveBeenCalledWith(expect.objectContaining({ band: "A", outcomeType: "auto_match" }));
 });
@@ -75,7 +75,7 @@ test("screening hold (needsRetry/pending, e.g. screening_pending) keeps the auto
       "/api/idv-match/session": () => ({ attemptId: "att-1", hostedVerificationUrl: "https://verify.didit.me/s/z" }),
       "/api/idv-match/resolve": () => {
         resolveCalls += 1;
-        // First tick: screening still running — same needsRetry/pending shape as
+        // First tick: screening still running - same needsRetry/pending shape as
         // the pre-existing verification_in_progress hold. Second tick: terminal.
         if (resolveCalls === 1) {
           return { enabled: true, needsRetry: true, pending: true, reasons: ["screening_pending"] };
@@ -88,14 +88,14 @@ test("screening hold (needsRetry/pending, e.g. screening_pending) keeps the auto
     await act(async () => { await Promise.resolve(); }); // let auto-start's session call land
     await screen.findByText("https://verify.didit.me/s/z");
 
-    // First poll tick: hold response — must NOT render a terminal result and must
+    // First poll tick: hold response - must NOT render a terminal result and must
     // keep the QR/link screen up so the interval fires again.
     await act(async () => { jest.advanceTimersByTime(4000); await Promise.resolve(); await Promise.resolve(); });
     expect(resolveCalls).toBe(1);
     expect(screen.queryByText("Identity verified")).not.toBeInTheDocument();
     expect(screen.getByText("https://verify.didit.me/s/z")).toBeInTheDocument();
 
-    // Second poll tick: terminal band arrives — same interval, no extra click.
+    // Second poll tick: terminal band arrives - same interval, no extra click.
     await act(async () => { jest.advanceTimersByTime(4000); await Promise.resolve(); await Promise.resolve(); });
     expect(resolveCalls).toBe(2);
     await screen.findByText("Identity verified");
@@ -107,7 +107,7 @@ test("screening hold (needsRetry/pending, e.g. screening_pending) keeps the auto
 test("session error surfaces, no crash", async () => {
   global.fetch = mockFetch({ "/api/idv-match/session": () => ({ error: "not_enabled" }) });
   render(<IdvMatchVerification applicationId="app-1" officerCandidate={{ name: "X" }} />);
-  // Auto-start hits the error path — surfaced, no crash.
+  // Auto-start hits the error path - surfaced, no crash.
   await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
 });
 
@@ -122,7 +122,7 @@ test("savedResult restores the view instantly with no new /session call", async 
 
   render(<IdvMatchVerification applicationId="app-1" officerCandidate={{ name: "SMITH, John" }} savedResult={savedResult} />);
 
-  // Restored result view shows immediately — no QR/session round trip.
+  // Restored result view shows immediately - no QR/session round trip.
   expect(await screen.findByText("Identity verified")).toBeInTheDocument();
   expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining("/api/idv-match/session"), expect.anything());
 });

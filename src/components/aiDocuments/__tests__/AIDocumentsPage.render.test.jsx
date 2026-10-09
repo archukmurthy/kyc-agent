@@ -1,22 +1,22 @@
 /**
- * AIDocumentsPage.render.test.jsx — CHARACTERISATION of the AI-Documents step
+ * AIDocumentsPage.render.test.jsx - CHARACTERISATION of the AI-Documents step
  * while it is still inline JSX in App.js.
  *
  * WHY NOW: extraction A lifts the `documents` step of the ai_documents journey
  * into components/aiDocuments/AIDocumentsPage.jsx. Like the Fill Gaps shell,
- * this page is an inline IIFE — {isAiDocs && step === STEPS.documents && (() =>
- * …)()} — so there is no named render function to relocate. A AUTHORS the
+ * this page is an inline IIFE - {isAiDocs && step === STEPS.documents && (() =>
+ * …)()} - so there is no named render function to relocate. A AUTHORS the
  * boundary rather than inheriting one, which is precisely the move a net has to
  * cover: "I moved a function" is checkable by eye, "I invented a boundary" is
  * not.
  *
  * A also moves two hoisted handlers that live ~1,350 lines away from the render
- * body — handleManualDocumentUpload / handleManualDocumentRemove. Those are the
+ * body - handleManualDocumentUpload / handleManualDocumentRemove. Those are the
  * likeliest thing to be dropped or mis-wired by the move, so the round-trip
  * through them is pinned explicitly below.
  *
  * THE HARNESS REACHES THIS STEP, unlike pre-boarding. The step is in the step
- * switch, and SHOW_TEST_TOOLS is `NODE_ENV !== "production"` — true under Jest —
+ * switch, and SHOW_TEST_TOOLS is `NODE_ENV !== "production"` - true under Jest -
  * so the entry effect takes its DEMO branch (buildDemoDocSearchResults +
  * buildDemoSelfSourceResults) and renders deterministically with NO network.
  * A consequence worth stating rather than being surprised by: the test-only
@@ -38,7 +38,7 @@
  *
  * CHARACTERISATION, not specification: these assert what the step does TODAY.
  * A surprising assertion is a recorded fact. After A's move this file must stay
- * green UNCHANGED — editing it to make the move pass defeats the point.
+ * green UNCHANGED - editing it to make the move pass defeats the point.
  */
 
 import React from "react";
@@ -55,7 +55,7 @@ beforeEach(() => {
   fetchRoutes = {};
   // /api/config, track-event and ipify fire on mount. Rejecting them makes the
   // app fall back to buildLocalDefaultConfig(), which ships the Corporate:GB
-  // schema — deterministic, no network. Mirrors the other nets.
+  // schema - deterministic, no network. Mirrors the other nets.
   global.fetch = jest.fn((url, opts) => {
     const key = Object.keys(fetchRoutes).find((k) => String(url).includes(k));
     if (key) return fetchRoutes[key](url, opts);
@@ -104,7 +104,7 @@ function fillCompanyForm() {
     target: { value: "Corporate" },
   });
   pickOption("🏛 Corporate");
-  // SearchableSelect opens on FOCUS, not click — fireEvent.click does not focus
+  // SearchableSelect opens on FOCUS, not click - fireEvent.click does not focus
   // in jsdom.
   fireEvent.focus(screen.getByPlaceholderText(/Select ownership type/i));
   pickOption("Private Limited Company");
@@ -132,7 +132,7 @@ async function driveToDocuments() {
   clickContinue(); // opens the journey picker
   await settle(0);
 
-  // Card A is a clickable div, not a button — address it by its visible copy.
+  // Card A is a clickable div, not a button - address it by its visible copy.
   const cardA = screen.getByText(/Upload documents & let AI fill the rest/i);
   fireEvent.click(cardA.parentElement);
   await settle(0);
@@ -224,7 +224,7 @@ describe("merged Documents Sourced list", () => {
       text.indexOf("Retrieved automatically")
     );
     expect(firstAutomated).toBeGreaterThan(-1);
-    // With no manual uploads present, "Uploaded manually" is absent entirely —
+    // With no manual uploads present, "Uploaded manually" is absent entirely -
     // the manual-last ordering is asserted against real data in the round-trip
     // block below, where a manual entry actually exists.
     expect(text.indexOf("Uploaded manually")).toBe(-1);
@@ -293,7 +293,7 @@ describe("test-mode affordances", () => {
     fireEvent.click(buttonsWithText(/^Run real agent$/)[0]);
     await settle(0);
     // setHasRunRealAgent(true) removes the toggle; the network calls themselves
-    // reject offline, which is fine — this pins the wiring, not the outcome.
+    // reject offline, which is fine - this pins the wiring, not the outcome.
     expect(buttonsWithText(/^Run real agent$/).length).toBe(0);
     expect(buttonsWithText(/^Use demo data$/).length).toBe(0);
   });
@@ -373,7 +373,7 @@ describe("manual upload / remove round-trip", () => {
 
     fetchRoutes["/api/self-source"] = () =>
       Promise.resolve({ ok: true, json: () => Promise.resolve(captchaFixture) });
-    // runRealDocSearch fires alongside and is left offline on purpose — the
+    // runRealDocSearch fires alongside and is left offline on purpose - the
     // research half of the panel is already covered above.
 
     fireEvent.click(buttonsWithText(/^Run real agent$/)[0]);

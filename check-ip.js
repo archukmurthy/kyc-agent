@@ -47,7 +47,7 @@ async function check() {
   })
   console.log('\n=== Sessions whose IP is OUTSIDE the UK ===')
   if (nonUK.length === 0) {
-    console.log('None — every geolocatable IP resolves to GB (or could not be geolocated).')
+    console.log('None - every geolocatable IP resolves to GB (or could not be geolocated).')
   } else {
     nonUK.forEach(r => {
       const g = geo[r.ip_address]

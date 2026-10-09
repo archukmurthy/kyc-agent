@@ -32,7 +32,7 @@ describe("buildSupersedingEvent", () => {
     expect(ev.customerRegistryClaim).toBe("not_reflected");
   });
 
-  // Commit 8 — the corrected value gets its own high-risk-country check, and the
+  // Commit 8 - the corrected value gets its own high-risk-country check, and the
   // flag only ever goes up.
   describe("CD-03 EDD flag on the corrected value", () => {
     it("raises the flag when the correction moves INTO a high-risk country", () => {

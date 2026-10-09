@@ -115,7 +115,7 @@ if (UBO_HIDDEN && path.startsWith("/ubo-")) {
   title = "KYC Onboarding Agent | Super Admin";
 } else if (path === "/insights" || path.startsWith("/insights/")) {
   // Internal, read-only Change Intelligence dashboard (gated by the admin token).
-  // Not one of the three labelled surfaces — bare product name.
+  // Not one of the three labelled surfaces - bare product name.
   tree = <ChangeIntelligenceRoot />;
   title = "KYC Onboarding Agent";
 } else if (path === "/admin" || path.startsWith("/admin/")) {

@@ -1,6 +1,6 @@
 // Vercel serverless function: calls the doc search sub-agent
 // (agents/docSearchAgent.js) and returns its results to the React frontend
-// (Step 2 — Document Intelligence, Section A).
+// (Step 2 - Document Intelligence, Section A).
 //
 // CommonJS (module.exports) rather than ESM so src/setupProxy.js can
 // require() it for local dev, mirroring api/config.js and friends.
@@ -43,7 +43,7 @@ module.exports = async function handler(req, res) {
   try {
     // Lazy require: the agent instantiates the Anthropic SDK client at module
     // scope (which throws if ANTHROPIC_API_KEY is unset), so only load it
-    // when a request actually arrives — not at dev-server startup.
+    // when a request actually arrives - not at dev-server startup.
     const { docSearchAgent } = require("../agents/docSearchAgent");
 
     // Generate case ID for download folder

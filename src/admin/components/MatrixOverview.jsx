@@ -2,7 +2,7 @@ import React from "react";
 import { adminColors } from "../adminDesign";
 import { flagFor } from "../countries";
 
-// EntityType × Licence schema-coverage grid. Each cell shows ✅/⚠/— and the
+// EntityType × Licence schema-coverage grid. Each cell shows ✅/⚠/- and the
 // field counts when configured. onCellClick fires for any clickable cell
 // (configured ones jump to editor; gaps open the add-schema mini-wizard).
 export default function MatrixOverview({ config, onCellClick }) {

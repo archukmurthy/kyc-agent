@@ -1,6 +1,6 @@
 /**
- * appMounts.test.jsx — characterization safety net for the modular refactor.
- * Mounts the full KYCAgent tree with react-dom + act (no @testing-library —
+ * appMounts.test.jsx - characterization safety net for the modular refactor.
+ * Mounts the full KYCAgent tree with react-dom + act (no @testing-library -
  * this repo does not install it) and asserts the landing page renders. Any
  * extraction that breaks an import, a hook order, or top-level module init
  * fails this test immediately.
@@ -16,7 +16,7 @@ let container;
 let root;
 
 beforeEach(() => {
-  // /api/config, track-event and ipify all fire on mount — stub fetch so the
+  // /api/config, track-event and ipify all fire on mount - stub fetch so the
   // component falls back to buildLocalDefaultConfig() deterministically.
   global.fetch = jest.fn(() => Promise.reject(new Error('offline test')));
   container = document.createElement('div');

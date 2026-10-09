@@ -1,5 +1,5 @@
 /**
- * LinkUnavailable.jsx — shown to a customer whose onboarding link cannot be
+ * LinkUnavailable.jsx - shown to a customer whose onboarding link cannot be
  * used. The server decides why; this only chooses the words. It deliberately
  * reveals nothing about the dossier or the tenant's other applications.
  */

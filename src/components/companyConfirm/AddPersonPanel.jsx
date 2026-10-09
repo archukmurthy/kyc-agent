@@ -1,13 +1,13 @@
 /**
- * AddPersonPanel.jsx — "add a person the research missed" (commit 7, CD-03).
+ * AddPersonPanel.jsx - "add a person the research missed" (commit 7, CD-03).
  *
  * Adding is its own action, deliberately NOT folded into a name edit: editing a
  * person is always about that person, and the name three-way's "this isn't the
  * right person" branch removes them rather than swapping in someone new.
  *
  * THE TYPE QUESTION IS THE POINT. Everything downstream is keyed off person
- * type — which list document proves the addition, and whether the person needs
- * POI/POA at all — so we ask it outright. This is the one place person type is
+ * type - which list document proves the addition, and whether the person needs
+ * POI/POA at all - so we ask it outright. This is the one place person type is
  * STATED by the customer rather than inferred by the stub in personType.js.
  *
  * CONTROLLED + PRESENTATIONAL: collects the answers and hands them up. It

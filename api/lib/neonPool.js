@@ -1,7 +1,7 @@
 // api/lib/neonPool.js
 "use strict";
 
-// Pool (WebSocket) driver for INTERACTIVE transactions — the HTTP `neon()` driver
+// Pool (WebSocket) driver for INTERACTIVE transactions - the HTTP `neon()` driver
 // cannot BEGIN/COMMIT across statements that chain on RETURNING ids, which the
 // 11-table finalize needs. One shared Pool per process (Fluid Compute reuses the
 // instance across invocations, so we do NOT end() it per request).

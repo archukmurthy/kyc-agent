@@ -89,7 +89,7 @@ normalized PASS/FAIL/REVIEW observation and a score-available boolean remain.
 
 Reads require explicit concepts and may optionally restrict attribute IDs.
 Audit records contain tenant, actor, subject, purpose, action, field categories,
-outcome, correlation ID, and time—never identity values. `safeLogger` allowlists
+outcome, correlation ID, and time-never identity values. `safeLogger` allowlists
 operational identifiers and discards arbitrary fields.
 
 ## Retention and deletion

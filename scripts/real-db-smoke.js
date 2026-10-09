@@ -8,7 +8,7 @@ const { neon } = require("@neondatabase/serverless");
 const { buildRealShapedJourneyFixture } = require("./fixtures/real-shaped-journey");
 const { appRequire } = require("./lib/esm-require");
 
-// Pure CJS app modules — the engine, the read DAL, and the amendment-document
+// Pure CJS app modules - the engine, the read DAL, and the amendment-document
 // derivation. Safe to load before DATABASE_URL is repointed: none of them
 // connect to anything.
 const { classifyChange } = require("../src/changeIntelligence/classifyChange");
@@ -106,7 +106,7 @@ async function invoke(handler, req) {
  * THE RULE THIS HARNESS IS BUILT AROUND.
  *
  * /api/change-events and /api/submit answer 200 even when Postgres REJECTED the
- * write — capture must never block a customer, so the rejection is reported as
+ * write - capture must never block a customer, so the rejection is reported as
  * `{ success: false, warning }` in the body. Asserting on statusCode alone is
  * therefore worthless, and that blind spot is precisely what hid the
  * `invalid input syntax for type smallint: "tier1"` failure while the UI looked
@@ -117,7 +117,7 @@ function assertWritten(res, label) {
   assert.equal(
     res.body?.success,
     true,
-    `${label}: handler reported failure — ${res.body?.warning || res.body?.error || "no warning given"}`,
+    `${label}: handler reported failure - ${res.body?.warning || res.body?.error || "no warning given"}`,
   );
   return res.body;
 }
@@ -129,7 +129,7 @@ function pass(assertionName) {
 }
 
 /**
- * ASSERTION 5 — the guard fails LOUDLY without a real, separate test database.
+ * ASSERTION 5 - the guard fails LOUDLY without a real, separate test database.
  *
  * A smoke test that silently no-ops is worse than no smoke test: both handlers
  * degrade to a 200 when DATABASE_URL is unset, so an unguarded run would print
@@ -174,11 +174,11 @@ function assertGuardRefusesUnsafeRuns() {
     assert.notEqual(
       result.status,
       0,
-      `Guard did not fail for "${testCase.label}" — a no-op run would have reported success`,
+      `Guard did not fail for "${testCase.label}" - a no-op run would have reported success`,
     );
     assert.match(output, testCase.expect, `Guard failed for the wrong reason on "${testCase.label}"`);
   }
-  pass("Assertion 5 — guard refuses to run without a real, separate test database (3 unsafe cases, all non-zero exit)");
+  pass("Assertion 5 - guard refuses to run without a real, separate test database (3 unsafe cases, all non-zero exit)");
 }
 
 async function queryOne(sql, text, params, label) {
@@ -330,7 +330,7 @@ async function main() {
     assert.equal(eventRow.after_value, "20 Example Street, London, EC1A 1AB");
     console.log("✓ Confirm-style change event persisted with its Fill-Gaps document decision");
 
-    // ── ASSERTION 1 — source_tier reaches a SMALLINT column as a NUMBER ──
+    // ── ASSERTION 1 - source_tier reaches a SMALLINT column as a NUMBER ──
     //
     // The fixture event above hardcodes `sourceTier: 1`, so on its own it can
     // never catch the real defect: a stakeholder object carries the STRING form
@@ -381,7 +381,7 @@ async function main() {
     assert.equal(
       typeof companyRow.source_tier,
       "number",
-      `source_tier persisted as ${typeof companyRow.source_tier} (${JSON.stringify(companyRow.source_tier)}) — a string here is the bug`,
+      `source_tier persisted as ${typeof companyRow.source_tier} (${JSON.stringify(companyRow.source_tier)}) - a string here is the bug`,
     );
     assert.equal(companyRow.source_tier, 1);
     assert.equal(companyRow.source_provider, "Companies House");
@@ -389,15 +389,15 @@ async function main() {
     // JSONB round-trip: an object in is the same object out, not a string.
     assert.deepEqual(companyRow.before_value, companyBefore);
     pass(
-      `Assertion 1 — company correction: source_tier persisted as ${observed.companySourceTierType} (${companyRow.source_tier}), before_value JSONB round-tripped`,
+      `Assertion 1 - company correction: source_tier persisted as ${observed.companySourceTierType} (${companyRow.source_tier}), before_value JSONB round-tripped`,
     );
 
-    // ── ASSERTION 2 — person composite fieldId + two-person document keying ──
+    // ── ASSERTION 2 - person composite fieldId + two-person document keying ──
     //
     // Mirrors App.js#emitPersonChange exactly: resolvePersonType -> personFieldId
     // -> classifyChange(personScope) -> deriveSource -> buildChangeEvent. Two
     // DIFFERENT stakeholders both correct a nationality, so both owe a Proof of
-    // Identity — the cross-person under-collection defect was one upload
+    // Identity - the cross-person under-collection defect was one upload
     // satisfying both, and the DB-observable half of that is whether the two
     // events stay independently addressable.
     const people = [
@@ -476,13 +476,13 @@ async function main() {
       assert.equal(
         typeof row.source_tier,
         "number",
-        `${row.field_id}: source_tier persisted as ${typeof row.source_tier} — this is the exact person-path bug`,
+        `${row.field_id}: source_tier persisted as ${typeof row.source_tier} - this is the exact person-path bug`,
       );
     }
 
     // The DB-observable half of cross-person collection: two people, two
     // documents. "Uploading one satisfies only one" is pure client state and is
-    // covered by confirmState's unit tests — deliberately not asserted here.
+    // covered by confirmState's unit tests - deliberately not asserted here.
     const derivedDocs = deriveAmendmentDocuments(allEvents);
     const personDocKeys = derivedDocs
       .filter((doc) => String(doc.fieldId).includes("::"))
@@ -495,14 +495,14 @@ async function main() {
     ]);
     assert.equal(new Set(personDocKeys).size, 2, "Two people collapsed into one document request");
     pass(
-      `Assertion 2 — person events kept distinct: ${observed.personFieldIds.join(" / ")} -> ${personDocKeys.join(" / ")}`,
+      `Assertion 2 - person events kept distinct: ${observed.personFieldIds.join(" / ")} -> ${personDocKeys.join(" / ")}`,
     );
 
-    // ── ASSERTION 4 — supersede chain resolves with OPAQUE STRING ids ──
+    // ── ASSERTION 4 - supersede chain resolves with OPAQUE STRING ids ──
     //
     // change_events.id is BIGSERIAL and the Neon HTTP driver returns it as a JS
     // STRING ("282"), not a number. Anything doing a numeric === on it breaks
-    // the chain silently, and a stale supersedesId makes writeEvent throw —
+    // the chain silently, and a stale supersedesId makes writeEvent throw -
     // which the route swallows as a 200, losing the event.
     const chainFieldId = "smoke.chain.tradingName";
     const chainEngine = classifyChange({
@@ -541,7 +541,7 @@ async function main() {
     assert.equal(
       observed.returnedIdType,
       "string",
-      `Returned id is ${observed.returnedIdType} — the driver's BIGSERIAL contract changed; numeric comparisons downstream are now suspect`,
+      `Returned id is ${observed.returnedIdType} - the driver's BIGSERIAL contract changed; numeric comparisons downstream are now suspect`,
     );
 
     const tailBody = assertWritten(
@@ -563,7 +563,7 @@ async function main() {
     assert.equal(current.after_value, "Second Value");
     assert.equal(String(current.supersedes), String(headBody.id));
     pass(
-      `Assertion 4 — supersede chain resolved with ${observed.returnedIdType} ids: head ${headBody.id} -> tail ${tailBody.id}, current = tail`,
+      `Assertion 4 - supersede chain resolved with ${observed.returnedIdType} ids: head ${headBody.id} -> tail ${tailBody.id}, current = tail`,
     );
 
     const submitRes = await invoke(submit, {
@@ -629,13 +629,13 @@ async function main() {
     assert.equal(declaration.user_agent, "Codex real-DB smoke test");
     console.log("✓ Full submission persisted session, journey, declaration, and provenance");
 
-    // ── ASSERTION 3 — scalar field_provenance keeps the THREE-WAY distinction ──
+    // ── ASSERTION 3 - scalar field_provenance keeps the THREE-WAY distinction ──
     //
     // agent_value is the AI/registry ORIGINAL and must never be overwritten
     // with the customer's value. This is the only durable second home for a
     // corrected value besides change_events.before_value, and it was silently
     // NULL for every scalar until fieldMetadata was threaded through submit's
-    // destructure AND its persistJourneyModel call — a two-sided seam where
+    // destructure AND its persistJourneyModel call - a two-sided seam where
     // either half alone still yields NULL, and both halves' unit tests passed.
     const scalarOf = (fieldName) => {
       const row = provenanceRows.find((r) => r.field_name === fieldName);
@@ -643,7 +643,7 @@ async function main() {
       return row;
     };
 
-    // 1. CORRECTED — the original and the customer's value both survive, distinct.
+    // 1. CORRECTED - the original and the customer's value both survive, distinct.
     const corrected = scalarOf("registeredAddress");
     assert.equal(corrected.agent_value, "10 Example Street, London, EC1A 1AA");
     assert.equal(corrected.customer_value, "20 Example Street, London, EC1A 1AB");
@@ -651,11 +651,11 @@ async function main() {
     assert.notEqual(
       corrected.agent_value,
       corrected.customer_value,
-      "A corrected scalar lost its original — agent_value was overwritten with the customer's value",
+      "A corrected scalar lost its original - agent_value was overwritten with the customer's value",
     );
     assert.equal(corrected.customer_action, "corrected");
 
-    // 2. UNTOUCHED — agent value and final value coincide.
+    // 2. UNTOUCHED - agent value and final value coincide.
     const untouched = scalarOf("businessRegistrationNumber");
     assert.equal(untouched.agent_value, "12345678");
     assert.equal(untouched.final_value, "12345678");
@@ -666,7 +666,7 @@ async function main() {
     );
     assert.equal(untouched.customer_action, "kept");
 
-    // 3. CUSTOMER-ENTERED GAP — no agent value at all. Claiming the AI sourced a
+    // 3. CUSTOMER-ENTERED GAP - no agent value at all. Claiming the AI sourced a
     //    value it never saw is worse than a null.
     const gap = scalarOf("natureOfBusiness");
     assert.equal(gap.agent_value, null, "A customer-entered gap must not claim an agent_value");
@@ -678,7 +678,7 @@ async function main() {
       untouched: `agent=${untouched.agent_value} == final=${untouched.final_value} | action=${untouched.customer_action}`,
       gap: `agent=${gap.agent_value} | final=${gap.final_value} | action=${gap.customer_action}`,
     };
-    pass("Assertion 3 — field_provenance three-way: corrected keeps the original, untouched coincides, gap is NULL");
+    pass("Assertion 3 - field_provenance three-way: corrected keeps the original, untouched coincides, gap is NULL");
   } catch (error) {
     primaryError = error;
   } finally {

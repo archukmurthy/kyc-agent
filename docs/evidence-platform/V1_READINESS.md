@@ -1,4 +1,4 @@
-# Evidence Platform Core V1 — Closure and Readiness
+# Evidence Platform Core V1 - Closure and Readiness
 
 **Audit date:** 8 September 2026
 
@@ -46,7 +46,7 @@ Evidence Core V1 is **CLOSED / MAINTENANCE**. No additional Evidence Core domain
 | R1 | Generic private PDF/PNG/JPEG ingestion and authorized byte-exact reopen using existing Artifact/storage/access primitives | Implemented and accepted; **PROVISIONAL** service candidate with **LAB ONLY** HTTP adapter |
 | R2 | Provider-neutral targeted interpretation request, operation idempotency, authorized options/preflight, explicit execution, and no-provider history | Implemented and accepted; **PROVISIONAL** service candidate requiring trusted host authorization |
 | R3 | PDF/image interpretation within explicit limits plus durable Fact-to-Artifact locators; no fabricated image coordinates | Implemented and accepted; internal multimodal extension |
-| R4 | Typed subject–relationship–object Facts with exact/range/qualitative/unknown measures, temporal state, parties, and locator lineage | Implemented and accepted; internal relational extension |
+| R4 | Typed subject-relationship-object Facts with exact/range/qualitative/unknown measures, temporal state, parties, and locator lineage | Implemented and accepted; internal relational extension |
 | A4b | Provisional coverage, collection completeness, legitimate-empty-set, comparable-disagreement, temporal-applicability, and limitation dimensions | Implemented and accepted; internal assessment core; no KYC decision |
 | A5a | Authorized deterministic point-in-time reconstruction over canonical Evidence records, including known availability limitations | Implemented and accepted; internal read service and Lab-only HTTP adapter |
 | A5b | Immutable canonical Evidence Packages with ordered canonical membership, separate manifest SHA-256, member-level authorization, reopen, and verification | Implemented and accepted; internal service and Lab-only HTTP adapter |
@@ -104,7 +104,7 @@ The Evidence branch was built from inspected base `454a04075f12d119efec88ddc5458
 | 018 | A4b typed set assertions and coverage assessments |
 | 019 | A5b immutable Packages and ordered membership |
 
-Migrations 010–019 are additive and forward-only. Accepted migrations are immutable; future changes require a new sequential migration.
+Migrations 010-019 are additive and forward-only. Accepted migrations are immutable; future changes require a new sequential migration.
 
 ## Capability classification
 
@@ -158,7 +158,7 @@ At A5b closure:
 
 * complete Evidence Node test suite: **246/246 passed**;
 * existing KYC regression: **24 suites / 475 tests passed**;
-* disposable PostgreSQL: migrations **010–019** and A5b smoke passed;
+* disposable PostgreSQL: migrations **010-019** and A5b smoke passed;
 * production build, Evidence Lab/server JavaScript parse, `git diff --check`, and secret scan passed; and
 * final verification made no Companies House or paid provider request.
 
@@ -189,7 +189,7 @@ Fixtures and successful manual examples prove the integration mechanics, not gen
 
 | Readiness area | Classification | Required condition or rationale |
 |---|---|---|
-| Intentional public consumer façade | **COMPLETE — FROZEN IN-PROCESS** | `evidence/consumer/v1/index.js` is the only supported import and has protecting contract tests. Production activation still requires a trusted host and does not make Lab HTTP routes public. |
+| Intentional public consumer façade | **COMPLETE - FROZEN IN-PROCESS** | `evidence/consumer/v1/index.js` is the only supported import and has protecting contract tests. Production activation still requires a trusted host and does not make Lab HTTP routes public. |
 | Authentication | **V1 pilot blocker** | Integrate with a real host identity/session; never use Lab environment defaults as caller proof. |
 | Authorization enforcement | **V1 pilot blocker** | Map authenticated caller/actor/purpose to trusted tenant, context, subject, and Asset scopes; add negative integration tests. Existing service checks remain the enforcement core. |
 | API versioning | **Production blocker** | Publish versioned request/response/error envelopes and compatibility policy before multiple consumers depend on HTTP contracts. |
@@ -252,7 +252,7 @@ Architecture Authority has closed Evidence Core V1 into maintenance after it:
 
 1. accepted the Core V1 baseline through `4602d763bd728f36b16de335cdd85cd6abced55d`, governance commit `9d8ba6fbd808b1306b628371867f3e68b43485ea`, and façade implementation `c55354aeb334c7c99201ade7a5b3d96e030d3266`;
 2. approved this inventory, contract document, and the three readiness verdicts;
-3. froze migrations 010–019 and the accepted ADRs as immutable history;
+3. froze migrations 010-019 and the accepted ADRs as immutable history;
 4. confirmed no further generic Evidence domain feature is required before producer/consumer integration;
 5. assigned the blockers above to the appropriate platform, security, operations, producer, and consumer control rooms; and
 6. required every future Evidence change to enter through a versioned contract, new ADR where material, additive migration, characterization coverage, and KYC regression gate.

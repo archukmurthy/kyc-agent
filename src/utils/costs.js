@@ -1,6 +1,6 @@
 // ── API pricing (Anthropic, June 2026) ──
 // Unit prices used to calculate ACTUAL cost from REAL token counts. Token
-// counts come from response.usage on every Anthropic API call — these are
+// counts come from response.usage on every Anthropic API call - these are
 // not estimates. Mirrors lib/persist.js#estimateCostUsd ($3 / $15 per Mtok)
 // so the live submit path and the benchmark path price tokens identically.
 // PLAT-5: this said claude-sonnet-4-20250514 while every call site used

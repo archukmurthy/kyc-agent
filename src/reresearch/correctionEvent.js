@@ -1,5 +1,5 @@
 /**
- * correctionEvent.js — log a successful customer correction of the foundational
+ * correctionEvent.js - log a successful customer correction of the foundational
  * facts (spec §6.2 step 6) as one change_event, beside the failure flag.
  *
  * Same shape and posting rules as failureFlag.js: an audit data point

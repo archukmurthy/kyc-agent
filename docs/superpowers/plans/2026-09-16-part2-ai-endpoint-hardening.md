@@ -1,4 +1,4 @@
-# Part 2 — AI-Endpoint Hardening Implementation Plan
+# Part 2 - AI-Endpoint Hardening Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -18,10 +18,10 @@
 - **Constant-time comparison** (`crypto.timingSafeEqual`) for every secret/signature comparison (reuse `lib/auth.js#verifyEnvBearer` / `api/config.js#authorizeAdmin`; do not hand-roll `===` on a new secret).
 - **Tenant resolution stays 3-strict**: no `"nium"` fallback anywhere, client or server.
 - **Inline styles only** in React; match the surrounding file's conventions (the policy simulator uses its existing Tailwind class names).
-- **Refs, not state, for gap/stakeholder form values** — do not lift to `useState`. `src/App.js` hook order is load-bearing: do not add, remove or reorder hooks.
+- **Refs, not state, for gap/stakeholder form values** - do not lift to `useState`. `src/App.js` hook order is load-bearing: do not add, remove or reorder hooks.
 - **Never call a real paid API in tests.** Every Anthropic call is behind an injected fake or an unset `ANTHROPIC_API_KEY`.
 - **`client_prompt_not_allowed`**: `prompt`, `messages`, `model`, `tools`, `max_tokens` in a `/api/research` body → `400 { error: "client_prompt_not_allowed" }`.
-- **Rate-limit defaults (per hour, env-tunable):** research 40 (`RATE_LIMIT_RESEARCH`), doc-search 40 (`RATE_LIMIT_DOC_SEARCH`), self-source 40 (`RATE_LIMIT_SELF_SOURCE`), ubo-discovery 20 (`RATE_LIMIT_UBO_DISCOVERY`), generate-policy 10 (`RATE_LIMIT_GENERATE_POLICY`), analyst bucket 200 (`RATE_LIMIT_ANALYST`). Exceeded → `429 { error: "rate_limited", retryAfterSeconds }` + `Retry-After`. Client copy: `Too many requests — please try again in N minutes`.
+- **Rate-limit defaults (per hour, env-tunable):** research 40 (`RATE_LIMIT_RESEARCH`), doc-search 40 (`RATE_LIMIT_DOC_SEARCH`), self-source 40 (`RATE_LIMIT_SELF_SOURCE`), ubo-discovery 20 (`RATE_LIMIT_UBO_DISCOVERY`), generate-policy 10 (`RATE_LIMIT_GENERATE_POLICY`), analyst bucket 200 (`RATE_LIMIT_ANALYST`). Exceeded → `429 { error: "rate_limited", retryAfterSeconds }` + `Retry-After`. Client copy: `Too many requests - please try again in N minutes`.
 - **Storage keys** `ratelimit:<bucket>:<key>:<windowStart>` with a TTL of one window.
 - **Research response shape unchanged** (`content`, `usage`, `_fromCache`, `_cachedAt`) so `src/App.js` cost tracking keeps working.
 - **Research cache key:** `tenant | companyName | jurisdiction | entityType | ownershipType | registrationNumber`.
@@ -30,13 +30,13 @@
 ### Refinements over the spec (controller decisions, binding)
 
 1. **No `lib/configStore.js` extraction.** Part 5 already made `api/config.js#readConfigForTenant` the one shared reader (benchmark uses it). This plan also exports `authorizeAdminForTenant` from `api/config.js` rather than moving code.
-2. **Tenant travels as `X-Tenant-Id`** (via `getDossierAuthHeaders(tenant)`), resolved by `lib/tenant.js#getTenantIdFromRequest`, not as a body field — same as every other endpoint.
+2. **Tenant travels as `X-Tenant-Id`** (via `getDossierAuthHeaders(tenant)`), resolved by `lib/tenant.js#getTenantIdFromRequest`, not as a body field - same as every other endpoint.
 3. **`countryName` is accepted** as prompt copy (trimmed, ≤100 chars, control characters stripped); the server has no country-name table and the prompt text must stay identical.
 4. **Admin credential for preview travels as `X-Admin-Token`**, so `Authorization` stays free for the analyst/customer credential that picks the rate-limit bucket. `draftConfig` is used only when `authorizeAdminForTenant(tenant, token)` is true; otherwise it is silently ignored.
 5. **Draft-config research never reads or writes the research cache** (the cache key does not include config version, so a draft must not poison live results).
 6. **Rate-limit identity comes only from a VERIFIED credential** (`lib/dossierAccess.js#resolveDossierActor`). Analyst key = `analyst:<tenantId>` (one shared password, so the tenant is the discriminator); customer key = `dossier:<dossierId>`; anything else (no credential, invalid, expired) = `ip:<first x-forwarded-for entry>` → `x-real-ip` → socket address.
 7. **The rate limiter fails open** on a storage error (logged). It controls spend, not access; a KV blip must not stop onboarding.
-8. **Gap recovery sends field ids**; the server maps them onto the tenant schema's `researchFields` (unknown ids dropped). Upgradeable targets therefore carry schema labels and search hints instead of the AI's row labels — an intended small prompt change.
+8. **Gap recovery sends field ids**; the server maps them onto the tenant schema's `researchFields` (unknown ids dropped). Upgradeable targets therefore carry schema labels and search hints instead of the AI's row labels - an intended small prompt change.
 9. **The shared policy module lives at `src/policySimulator/policyConfig.js`** (CommonJS in `src/`, the `src/pipeline.js` precedent), because CRA forbids importing from outside `src/`.
 10. **`scripts/tests/policy-simulator-api.test.js` moves to `api/__tests__/generate-policy.nodetest.js`** so `npm run test:node` runs it.
 
@@ -247,7 +247,7 @@ test("a bare res (statusCode + end) still receives a JSON 429", async () => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node --test lib/__tests__/rateLimit.nodetest.js`
-Expected: FAIL — `Cannot find module '../rateLimit'`.
+Expected: FAIL - `Cannot find module '../rateLimit'`.
 
 - [ ] **Step 3: Implement `lib/rateLimit.js`**
 
@@ -257,7 +257,7 @@ Expected: FAIL — `Cannot find module '../rateLimit'`.
 // Callers are identified only by a VERIFIED credential (lib/dossierAccess.js):
 // a pre-boarding analyst shares one bucket per tenant, a customer link shares
 // one bucket per dossier, and everyone else is bucketed by client IP. An
-// unverifiable credential never earns its own bucket — otherwise a random
+// unverifiable credential never earns its own bucket - otherwise a random
 // Bearer value per request would dodge the limit.
 //
 // Spend control, not access control: a storage failure is logged and the
@@ -299,7 +299,7 @@ async function check({ bucket, key, limit, windowSeconds = WINDOW_SECONDS }) {
   const current = Number(await _deps.storage.get(storageKey)) || 0;
   if (current >= limit) return { allowed: false, remaining: 0, retryAfterSeconds };
 
-  // ponytail: fixed-window read-modify-write, not atomic — concurrent requests
+  // ponytail: fixed-window read-modify-write, not atomic - concurrent requests
   // at the limit edge can overshoot by a few. Swap for an atomic INCR if that
   // ever matters.
   await _deps.storage.set(storageKey, current + 1, { ttlSeconds: windowSeconds });
@@ -434,7 +434,7 @@ test("the server lookup has exactly one prompt per document slot, identical to t
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/constants/__tests__/extractionPrompts.test.js`
-Expected: FAIL — `EXTRACTION_PROMPT_BY_DOC_KEY` is undefined.
+Expected: FAIL - `EXTRACTION_PROMPT_BY_DOC_KEY` is undefined.
 
 - [ ] **Step 3: Convert `src/constants/extractionPrompts.js` to CommonJS**
 
@@ -702,7 +702,7 @@ test("extract_document: bad doc key, media type or file are refused", () => {
 - [ ] **Step 6: Run to verify it fails**
 
 Run: `node --test lib/__tests__/researchPrompts.nodetest.js`
-Expected: FAIL — `Cannot find module '../researchPrompts'`.
+Expected: FAIL - `Cannot find module '../researchPrompts'`.
 
 - [ ] **Step 7: Implement `lib/researchPrompts.js`**
 
@@ -934,7 +934,7 @@ module.exports = {
 - [ ] **Step 8: Run to verify it passes**
 
 Run: `node --test lib/__tests__/researchPrompts.nodetest.js`
-Expected: PASS, 12 tests. If the golden test fails, diff the two strings — the fix is in `lib/researchPrompts.js`, never in the legacy copy inside the test.
+Expected: PASS, 12 tests. If the golden test fails, diff the two strings - the fix is in `lib/researchPrompts.js`, never in the legacy copy inside the test.
 
 Run: `npm run test:node`
 Expected: PASS, 0 failures.
@@ -1041,7 +1041,7 @@ test("no DATABASE_URL throws so the caller can fall through to the live API", as
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node --test lib/__tests__/researchCache.nodetest.js`
-Expected: FAIL — the ESM file cannot be required (`Unexpected token 'export'` or `__setDeps is not a function`).
+Expected: FAIL - the ESM file cannot be required (`Unexpected token 'export'` or `__setDeps is not a function`).
 
 - [ ] **Step 3: Rewrite `lib/researchCache.js`**
 
@@ -1055,7 +1055,7 @@ Expected: FAIL — the ESM file cannot be required (`Unexpected token 'export'` 
 //
 // Backed by the research_cache table (db/migrations/006_research_cache.sql).
 // Every exported function may throw; callers MUST treat a cache failure as a
-// miss and fall through to the live API — never block a research run because
+// miss and fall through to the live API - never block a research run because
 // the cache is unavailable.
 //
 // The key covers everything that changes the prompt or its answer: tenant
@@ -1093,7 +1093,7 @@ async function getCachedResearch(parts) {
   `;
   if (rows.length === 0) return null;
 
-  // Increment hit counter (fire and forget — don't await).
+  // Increment hit counter (fire and forget - don't await).
   sql`
     UPDATE research_cache
     SET hit_count = hit_count + 1, last_hit_at = NOW()
@@ -1171,15 +1171,15 @@ git commit -m "feat(research): tenant-aware research cache key; cache module to 
 - Produces:
   - `api/config.js` exports `authorizeAdminForTenant(tenant, token)` → `Promise<boolean>`.
   - `POST /api/research` (headers: `X-Tenant-Id` required; `Authorization` optional analyst/customer credential; `X-Admin-Token` optional, only meaningful with `draftConfig`):
-    - `400 { error: "tenant_required" }` — no tenant
-    - `400 { error: "client_prompt_not_allowed" }` — any of `prompt|messages|model|tools|max_tokens`
+    - `400 { error: "tenant_required" }` - no tenant
+    - `400 { error: "client_prompt_not_allowed" }` - any of `prompt|messages|model|tools|max_tokens`
     - `429 { error: "rate_limited", retryAfterSeconds }`
     - `404 { error: "tenant_not_found" }`
     - `400 { error: <ResearchInputError code> }`
     - `500 { error: "Server API key not configured" }`
     - Anthropic non-OK → same status, `{ error: "Claude API error", details }`
-    - `500 { error: "research_failed" }` — anything unexpected (no raw message)
-    - `200` — the Anthropic response, plus `_fromCache/_cachedAt/_cacheHits` on a cache hit
+    - `500 { error: "research_failed" }` - anything unexpected (no raw message)
+    - `200` - the Anthropic response, plus `_fromCache/_cachedAt/_cacheHits` on a cache hit
   - `module.exports.__setDeps({ fetch, cache, officersLayer, enforceRateLimit, readConfigForTenant, authorizeAdmin })`.
 
 - [ ] **Step 1: Export the admin check from `api/config.js`**
@@ -1455,12 +1455,12 @@ test("non-POST methods are refused", async () => {
 - [ ] **Step 3: Run to verify it fails**
 
 Run: `node --test api/__tests__/research.nodetest.js`
-Expected: FAIL — the ESM `api/research.js` cannot be required / `__setDeps is not a function`.
+Expected: FAIL - the ESM `api/research.js` cannot be required / `__setDeps is not a function`.
 
 - [ ] **Step 4: Rewrite `api/research.js`**
 
 ```js
-// POST /api/research — every Claude call for the onboarding research flow.
+// POST /api/research - every Claude call for the onboarding research flow.
 //
 // The browser sends structured input (a mode plus company facts). This handler
 // resolves the tenant, rate-limits the caller, loads the tenant's stored
@@ -1549,7 +1549,7 @@ module.exports = async function handler(req, res) {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "Server API key not configured" });
 
-    // LAYER 1 — Companies House officers (deterministic) for the main research
+    // LAYER 1 - Companies House officers (deterministic) for the main research
     // call only; null on non-GB, missing key or failure, and injection is then
     // a no-op.
     const chOfficers = built.officers ? await _deps.officersLayer.fetchOfficersLayer(built.officers) : null;
@@ -1607,7 +1607,7 @@ const researchHandler = require(path.join(__dirname, "..", "api", "research.js")
 2. Replace the whole `app.post("/api/research", (req, res) => { ... });` block (the hand-copied research logic, from `app.post("/api/research"` down to its closing `});`) with:
 
 ```js
-  // Research — the real handler (server-built prompts, rate limit, cache).
+  // Research - the real handler (server-built prompts, rate limit, cache).
   app.post("/api/research", (req, res) => {
     let raw = "";
     req.setEncoding("utf8");
@@ -1651,8 +1651,8 @@ git commit -m "feat(security): /api/research refuses client prompts and builds e
 **Interfaces:**
 - Consumes: Task 4 `POST /api/research` contract; `src/utils/dossierCredential.js#getDossierAuthHeaders(tenantId)` → `{ Authorization?, "X-Tenant-Id" }`; App state `tenantId`, `preboardingTenantId`, `inPreview`, `tenantConfig`.
 - Produces:
-  - `rateLimitMessage(retryAfterSeconds)` → `"Too many requests — please try again in N minutes"` (`N = max(1, ceil(seconds/60))`, singular "minute" when N is 1; missing/invalid seconds → 1 minute).
-  - `extractFromDoc(docType, file, schema, flow, fetchTs, { headers } = {})` — same return shape as today.
+  - `rateLimitMessage(retryAfterSeconds)` → `"Too many requests - please try again in N minutes"` (`N = max(1, ceil(seconds/60))`, singular "minute" when N is 1; missing/invalid seconds → 1 minute).
+  - `extractFromDoc(docType, file, schema, flow, fetchTs, { headers } = {})` - same return shape as today.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1662,14 +1662,14 @@ Create `src/utils/__tests__/rateLimitMessage.test.js`:
 import { rateLimitMessage } from "../rateLimitMessage";
 
 test("rounds up to whole minutes", () => {
-  expect(rateLimitMessage(120)).toBe("Too many requests — please try again in 2 minutes");
-  expect(rateLimitMessage(121)).toBe("Too many requests — please try again in 3 minutes");
+  expect(rateLimitMessage(120)).toBe("Too many requests - please try again in 2 minutes");
+  expect(rateLimitMessage(121)).toBe("Too many requests - please try again in 3 minutes");
 });
 
 test("never says zero and uses the singular for one minute", () => {
-  expect(rateLimitMessage(5)).toBe("Too many requests — please try again in 1 minute");
-  expect(rateLimitMessage(undefined)).toBe("Too many requests — please try again in 1 minute");
-  expect(rateLimitMessage("nonsense")).toBe("Too many requests — please try again in 1 minute");
+  expect(rateLimitMessage(5)).toBe("Too many requests - please try again in 1 minute");
+  expect(rateLimitMessage(undefined)).toBe("Too many requests - please try again in 1 minute");
+  expect(rateLimitMessage("nonsense")).toBe("Too many requests - please try again in 1 minute");
 });
 ```
 
@@ -1755,17 +1755,17 @@ describe("research request shape (server-built prompts)", () => {
     await driveToResearchKickoff();
     await settle(0);
 
-    expect(screen.getAllByText(/Too many requests — please try again in 2 minutes/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Too many requests - please try again in 2 minutes/).length).toBeGreaterThan(0);
   });
 });
 ```
 
-If the 429 test cannot find the text, read how `error` renders on the step `doResearch` returns to (`setStep(S.input)`) and assert against that element — do not weaken the assertion to "anything rendered".
+If the 429 test cannot find the text, read how `error` renders on the step `doResearch` returns to (`setStep(S.input)`) and assert against that element - do not weaken the assertion to "anything rendered".
 
 - [ ] **Step 2: Run to verify they fail**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/utils/__tests__/rateLimitMessage.test.js src/workflows/__tests__/documentWorkflow.test.js src/__tests__/demoGuard.test.jsx`
-Expected: FAIL — `rateLimitMessage` module missing; extraction body still has `messages`/`model`; research body has `prompt`.
+Expected: FAIL - `rateLimitMessage` module missing; extraction body still has `messages`/`model`; research body has `prompt`.
 
 - [ ] **Step 3: Create `src/utils/rateLimitMessage.js`**
 
@@ -1775,7 +1775,7 @@ Expected: FAIL — `rateLimitMessage` module missing; extraction body still has 
 export function rateLimitMessage(retryAfterSeconds) {
   const seconds = Number(retryAfterSeconds);
   const minutes = Math.max(1, Math.ceil((Number.isFinite(seconds) ? seconds : 0) / 60));
-  return `Too many requests — please try again in ${minutes} minute${minutes === 1 ? "" : "s"}`;
+  return `Too many requests - please try again in ${minutes} minute${minutes === 1 ? "" : "s"}`;
 }
 ```
 
@@ -1823,7 +1823,7 @@ import { rateLimitMessage } from "./utils/rateLimitMessage";
       try {
         const adminToken = sessionStorage.getItem("admin_token");
         if (adminToken) headers["X-Admin-Token"] = adminToken;
-      } catch (_) { /* storage blocked — preview falls back to the live config */ }
+      } catch (_) { /* storage blocked - preview falls back to the live config */ }
     }
     return headers;
   };
@@ -2072,7 +2072,7 @@ test("the UBO lab's live run draws from the caller's ubo-discovery bucket", asyn
 - [ ] **Step 2: Run to verify they fail**
 
 Run: `node --test api/__tests__/benchmark.nodetest.js api/__tests__/agent-rate-limits.nodetest.js`
-Expected: FAIL — benchmark has no auth / no `__setDeps`; handlers are not rate limited; `invokeLegacyDiscovery` is not exported.
+Expected: FAIL - benchmark has no auth / no `__setDeps`; handlers are not rate limited; `invokeLegacyDiscovery` is not exported.
 
 - [ ] **Step 3: Admin auth in `api/benchmark.js`**
 
@@ -2113,7 +2113,7 @@ module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };
 1. Add below the flags comment block (after `//   --out <dir>         default benchmark/out`):
 
 ```js
-// Env: BENCHMARK_ADMIN_TOKEN — the tenant's admin password; /api/benchmark
+// Env: BENCHMARK_ADMIN_TOKEN - the tenant's admin password; /api/benchmark
 // requires it. Put the tenant in --endpoint (…/api/benchmark?tenant=<id>).
 ```
 
@@ -2128,7 +2128,7 @@ module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };
 
 - [ ] **Step 5: Rate limit the agent endpoints**
 
-`api/doc-search.js` — add at the top (after the header comment):
+`api/doc-search.js` - add at the top (after the header comment):
 
 ```js
 const { enforceRateLimit } = require("../lib/rateLimit");
@@ -2140,19 +2140,19 @@ and insert immediately after the `Missing required fields` 400 block, before `tr
   if (!(await enforceRateLimit(req, res, "doc-search"))) return undefined;
 ```
 
-`api/self-source.js` — same require at the top, and immediately after its `Missing required fields` 400 block:
+`api/self-source.js` - same require at the top, and immediately after its `Missing required fields` 400 block:
 
 ```js
   if (!(await enforceRateLimit(req, res, "self-source"))) return undefined;
 ```
 
-`api/ubo-discovery.js` — add `const { enforceRateLimit } = require("../lib/rateLimit");` below the other requires, and insert after the `discoveryThreshold` validation line and before `const streaming = ...`:
+`api/ubo-discovery.js` - add `const { enforceRateLimit } = require("../lib/rateLimit");` below the other requires, and insert after the `discoveryThreshold` validation line and before `const streaming = ...`:
 
 ```js
   if (!(await enforceRateLimit(req, res, "ubo-discovery"))) return undefined;
 ```
 
-`api/ubo-control-lab.js` — replace `function invokeLegacyDiscovery(body) {` and its `const request = ...` line with:
+`api/ubo-control-lab.js` - replace `function invokeLegacyDiscovery(body) {` and its `const request = ...` line with:
 
 ```js
 // Caller identity headers the rate limiter reads; forwarded so a live lab run
@@ -2379,7 +2379,7 @@ describe("policy API", () => {
     assert.equal(body.model, "claude-sonnet-4-6");
     assert.equal(body.max_tokens, 8000);
     assert.match(body.system, /REGULATORY ACCURACY/);
-    assert.match(body.system, /Do not renumber fixed sections 12–15/);
+    assert.match(body.system, /Do not renumber fixed sections 12-15/);
     assert.deepEqual(body.messages, [{ role: "user", content: buildUserMessage(validatePolicyForm(validForm()).form) }]);
   });
 
@@ -2438,10 +2438,10 @@ In `src/policySimulator/PolicySimulator.test.jsx`, add `import { rateLimitMessag
 - [ ] **Step 3: Run to verify they fail**
 
 Run: `node --test api/__tests__/generate-policy.nodetest.js`
-Expected: FAIL — `Cannot find module '../../src/policySimulator/policyConfig'`.
+Expected: FAIL - `Cannot find module '../../src/policySimulator/policyConfig'`.
 
 Run: `CI=true npx react-scripts test --watchAll=false src/policySimulator`
-Expected: FAIL — body still carries `prompt`; 429 shows `rate_limited`.
+Expected: FAIL - body still carries `prompt`; 429 shows `rate_limited`.
 
 - [ ] **Step 4: Create `src/policySimulator/policyConfig.js`**
 
@@ -2739,9 +2739,9 @@ Expected: `Compiled successfully.`
 - [ ] **Step 4: No client still authors a prompt**
 
 Use the Grep tool (not `npx rg`, which creates a stray README.md on this machine):
-- pattern `prompt:` in `src/App.js`, `src/workflows/documentWorkflow.js`, `src/policySimulator/PolicySimulator.jsx` — expected: no request body sets `prompt`.
-- pattern `max_tokens|RESEARCH_TOOLS` in `src/` excluding `src/pipeline.js` and test files — expected: no matches.
-- pattern `enforceRateLimit` in `api/` — expected: `research.js`, `doc-search.js`, `self-source.js`, `ubo-discovery.js`, `generate-policy.js`.
+- pattern `prompt:` in `src/App.js`, `src/workflows/documentWorkflow.js`, `src/policySimulator/PolicySimulator.jsx` - expected: no request body sets `prompt`.
+- pattern `max_tokens|RESEARCH_TOOLS` in `src/` excluding `src/pipeline.js` and test files - expected: no matches.
+- pattern `enforceRateLimit` in `api/` - expected: `research.js`, `doc-search.js`, `self-source.js`, `ubo-discovery.js`, `generate-policy.js`.
 
 - [ ] **Step 5: Document the env vars**
 
@@ -2774,9 +2774,9 @@ In `docs/BACKLOG.md`, append to the existing **PLAT-6** entry:
 Add under **Open dependencies** (after DEP-3):
 
 ```markdown
-### DEP-4 — Part 2 deploy notes: rate-limit storage + research cache reset
+### DEP-4 - Part 2 deploy notes: rate-limit storage + research cache reset
 - **Category:** Deploy · **Priority:** P2 · **Status:** OPEN (manual step for the owner)
-- **What:** (1) Rate-limit counters live in `lib/storage.js`; on Vercel without KV/Redis they fall back to per-instance `/tmp`, so limits are per instance, not global — provision KV/Redis (same as PREB-6). (2) The research cache key now includes tenant, ownership type and registration number, so every existing `research_cache` row stops matching; the first research per company after deploy is a live (paid) call. (3) `benchmark/run.mjs` needs `BENCHMARK_ADMIN_TOKEN` and a `?tenant=` in `--endpoint`.
+- **What:** (1) Rate-limit counters live in `lib/storage.js`; on Vercel without KV/Redis they fall back to per-instance `/tmp`, so limits are per instance, not global - provision KV/Redis (same as PREB-6). (2) The research cache key now includes tenant, ownership type and registration number, so every existing `research_cache` row stops matching; the first research per company after deploy is a live (paid) call. (3) `benchmark/run.mjs` needs `BENCHMARK_ADMIN_TOKEN` and a `?tenant=` in `--endpoint`.
 - **Why:** Behaviour changes that are correct by design but surprise on first deploy.
 ```
 
@@ -2791,10 +2791,10 @@ git commit -m "docs: Part 2 rate-limit env vars and deploy notes"
 
 ## Manual QA checklist (owner)
 
-1. `npm start`, open `/?tenant=nium`, run a real research (confirm the paid prompt) — Confirm step populates exactly as before; browser dev tools show the `/api/research` body has `mode: "research"` and no `prompt`.
-2. Upload a certificate on the AI-documents journey — extraction still fills fields; the request body has `mode: "extract_document"`.
-3. Set `RATE_LIMIT_RESEARCH=1` in `.env.local`, restart, run research twice — the second shows "Too many requests — please try again in N minutes".
+1. `npm start`, open `/?tenant=nium`, run a real research (confirm the paid prompt) - Confirm step populates exactly as before; browser dev tools show the `/api/research` body has `mode: "research"` and no `prompt`.
+2. Upload a certificate on the AI-documents journey - extraction still fills fields; the request body has `mode: "extract_document"`.
+3. Set `RATE_LIMIT_RESEARCH=1` in `.env.local`, restart, run research twice - the second shows "Too many requests - please try again in N minutes".
 4. `curl -X POST localhost:3000/api/research -H 'X-Tenant-Id: nium' -H 'Content-Type: application/json' -d '{"prompt":"hi"}'` → `400 client_prompt_not_allowed`.
-5. Admin → edit a schema field label → Preview → run research — the prompt uses the draft (label visible in the server log if logged) and no cache row is written.
+5. Admin → edit a schema field label → Preview → run research - the prompt uses the draft (label visible in the server log if logged) and no cache row is written.
 6. `curl localhost:3000/api/benchmark?tenant=nium` → `401`.
 7. Policy simulator at `/policy-simulator` still generates a policy.

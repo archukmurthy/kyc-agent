@@ -54,7 +54,7 @@ async function check() {
       `  ${r.field}: ` +
       `"${r.agent_said}" → ` +
       `"${r.customer_said}" ` +
-      `(source: ${r.source || '—'})`
+      `(source: ${r.source || '-'})`
     )
     console.log()
   })

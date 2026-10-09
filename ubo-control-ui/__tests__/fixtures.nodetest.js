@@ -9,7 +9,7 @@ test("committed fixtures exactly equal fresh DecisionSnapshot → projection out
   assert.deepEqual(buildProjectionFixtures(), committed);
 });
 
-test("fixture catalogue is exactly UI01–UI12 and UI12 has before/after projections", () => {
+test("fixture catalogue is exactly UI01-UI12 and UI12 has before/after projections", () => {
   assert.deepEqual(committed.fixtures.map(({ id }) => id), Array.from({ length: 12 }, (_, index) => `UI${String(index + 1).padStart(2, "0")}`));
   assert.deepEqual(committed.fixtures.find(({ id }) => id === "UI12").states.map(({ id }) => id), ["before", "after"]);
   committed.fixtures.flatMap(({ states }) => states).forEach(({ projection }) => {

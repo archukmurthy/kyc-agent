@@ -1,5 +1,5 @@
 /**
- * policyTable.js — the decision table as DATA, not logic.
+ * policyTable.js - the decision table as DATA, not logic.
  *
  * An ordered array of rules. Each rule is { id, when, then }:
  *   when: a PARTIAL match pattern. Any enum field omitted from `when` is a
@@ -16,9 +16,9 @@
  *
  * Notes:
  * - PEP and the verifiability guard are HARD RULES in classifyChange that run
- *   BEFORE this table — they are deliberately not rows here.
+ *   BEFORE this table - they are deliberately not rows here.
  * - No row sets eddFlag. EDD triggering conditions were never specified
- *   (open question O2) — every EDD path is UNDECIDED and must NOT be defaulted.
+ *   (open question O2) - every EDD path is UNDECIDED and must NOT be defaulted.
  *   The 'edd' workflow value is therefore currently unreachable, by design.
  */
 
@@ -35,7 +35,7 @@ const BASE_RULES = [
     then: { workflow: 'ops_review' },
   },
   {
-    // name/dob correction — the AI read an existing director wrong. Any registry.
+    // name/dob correction - the AI read an existing director wrong. Any registry.
     id: 'DIR-CORRECT',
     when: { fieldClass: 'director', changeType: 'correct', intent: 'ai_correction' },
     then: { workflow: 'ops_review' },
@@ -86,7 +86,7 @@ const BASE_RULES = [
     then: { workflow: 'doc_required', docType: 'Notice of Change of Address' },
   },
 
-  // ── Factual ID — BRN / VAT / Licence Number. No dialogue, no intent needed. ──
+  // ── Factual ID - BRN / VAT / Licence Number. No dialogue, no intent needed. ──
   // docType is a single placeholder pending per-field mapping (open question O3).
   {
     id: 'FACTUALID-CORRECT',
@@ -99,7 +99,7 @@ const BASE_RULES = [
     then: { workflow: 'doc_required', docType: 'Supporting Registration Document' },
   },
 
-  // ── Generic ops-review fields — annualRevenue, employees, website, etc. ──
+  // ── Generic ops-review fields - annualRevenue, employees, website, etc. ──
   // Any change, any intent: ops review, no doc, silent to the customer.
   {
     id: 'GENERIC',
@@ -107,7 +107,7 @@ const BASE_RULES = [
     then: { workflow: 'ops_review', silent: true },
   },
 
-  // ── Structural — classification-only in this slice. ──
+  // ── Structural - classification-only in this slice. ──
   // 'different_entity' = a different company entirely → identity-invalidating → restart.
   {
     id: 'STRUCT-DIFFERENT-ENTITY',
@@ -116,7 +116,7 @@ const BASE_RULES = [
   },
   // 'ai_correction' = same company, wrong classification → interpretation-
   // invalidating → re_derive. The engine only HINTS that the doc set may change
-  // (docSetMayChange) — it does NOT compute the doc itself; the DRS resolves it.
+  // (docSetMayChange) - it does NOT compute the doc itself; the DRS resolves it.
   {
     id: 'STRUCT-REDERIVE',
     when: { fieldClass: 'structural', intent: 'ai_correction' },
@@ -127,7 +127,7 @@ const BASE_RULES = [
 /**
  * ── PERSON RULES (CD-03, ratified 26 Jul 2026) ──────────────────────────────
  *
- * Same table format, same matcher, same result shape as BASE_RULES — these are
+ * Same table format, same matcher, same result shape as BASE_RULES - these are
  * ADDED rules, not a parallel engine. They apply only to person-scoped changes
  * (classifyChange's `personScope: true` path); company-level classification is
  * completely unaffected.
@@ -135,7 +135,7 @@ const BASE_RULES = [
  * THE LOAD-BEARING RULE: documents are keyed off PERSON TYPE, not the attribute
  * corrected. The same attribute correction produces a document for a UBO and no
  * document for a director-only person, because a director's identity is already
- * registry-verified (Companies House / ACRA) — collecting POI/POA from them
+ * registry-verified (Companies House / ACRA) - collecting POI/POA from them
  * would over-collect against the UK/SG standard.
  *
  * `then.silent: true` means the change is accepted and recorded with nothing
@@ -144,7 +144,7 @@ const BASE_RULES = [
  * Two sub-rules are deliberately UNDECIDED because they need real ownership
  * data that the person-type stub cannot honestly supply (see personType.js):
  * the ≥25%→<25% threshold crossing, and the pseudo-UBO case. UNDECIDED is
- * inert — recorded, no customer-facing consequence — never a guess.
+ * inert - recorded, no customer-facing consequence - never a guess.
  */
 const PERSON_RULES = [
   // Pseudo-UBO (most-senior-director-as-UBO where nobody meets the threshold)
@@ -158,13 +158,13 @@ const PERSON_RULES = [
 
   // ── Name: the three-way question (never a plain text edit) ──
   {
-    // "You spelled this person's name wrong" — AI error, same person.
+    // "You spelled this person's name wrong" - AI error, same person.
     id: 'PERSON-NAME-TYPO',
     when: { personScope: true, attribute: 'name', nameCase: 'typo' },
     then: { workflow: 'accept_silent', silent: true },
   },
   {
-    // "Their name legally changed" — same person, new name. POI shows the
+    // "Their name legally changed" - same person, new name. POI shows the
     // CURRENT name; we never ask for a name-change certificate, and we do not
     // care about the former name. The list document is emitted as its own
     // event (attribute 'name_list') so both are requested.
@@ -215,7 +215,7 @@ const PERSON_RULES = [
   },
 
   // ── Country of birth: never its own document (POI carries it). Separate
-  //    compliance signal from nationality — it does NOT fold into it. ──
+  //    compliance signal from nationality - it does NOT fold into it. ──
   {
     id: 'PERSON-COUNTRY-OF-BIRTH',
     when: { personScope: true, attribute: 'country_of_birth' },
@@ -260,14 +260,14 @@ const PERSON_RULES = [
   },
   {
     // Was a UBO, now is not. Archana, 2026-08-01: this must ASK for the
-    // ownership chart, not just flag an analyst — the request IS the analyst
+    // ownership chart, not just flag an analyst - the request IS the analyst
     // trigger, the same principle as removal and add-a-person.
     id: 'PERSON-OWNERSHIP-CROSSED-BELOW',
     when: { personScope: true, attribute: 'ownership_pct', thresholdCrossing: 'crossed_below' },
     then: { workflow: 'doc_required', docType: 'Ownership Chart' },
   },
   {
-    // Was not a UBO, now is — a NEW beneficial owner, which is at least as
+    // Was not a UBO, now is - a NEW beneficial owner, which is at least as
     // material as losing one. Same document for the same reason.
     id: 'PERSON-OWNERSHIP-CROSSED-ABOVE',
     when: { personScope: true, attribute: 'ownership_pct', thresholdCrossing: 'crossed_above' },
@@ -287,11 +287,11 @@ const PERSON_RULES = [
   },
 
   // ── ADD A PERSON (commit 7). The customer STATES the type when adding, so
-  //    person type is explicit here rather than inferred — the one place it is
+  //    person type is explicit here rather than inferred - the one place it is
   //    not a stub. Same director-vs-UBO document selection as everywhere else.
   //
   //    The list document proves the person belongs, and requesting it IS the
-  //    analyst trigger (same principle as removal) — no separate flag. ──
+  //    analyst trigger (same principle as removal) - no separate flag. ──
   {
     id: 'PERSON-ADDED-DIRECTOR',
     when: { personScope: true, attribute: 'added', personType: 'director' },
@@ -326,7 +326,7 @@ const PERSON_RULES = [
     then: { workflow: 'accept_silent', silent: true },
   },
 
-  // ── Removal. The list document IS the analyst trigger — requesting it means
+  // ── Removal. The list document IS the analyst trigger - requesting it means
   //    an analyst reviews the removal, so there is no separate analyst flag. ──
   {
     id: 'PERSON-REMOVAL-DIRECTOR',

@@ -20,7 +20,7 @@ test("a completion webhook re-resolves the band for the attempt", async () => {
   assert.equal(resolved, "att_9");
 });
 
-test("a re-resolve failure is swallowed — the webhook still reports success", async () => {
+test("a re-resolve failure is swallowed - the webhook still reports success", async () => {
   const deps = {
     verifyEvent: () => ({ type: "check.completed", payload: { id: "chk_1" } }),
     store: {

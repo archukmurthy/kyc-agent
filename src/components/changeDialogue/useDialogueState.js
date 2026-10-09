@@ -1,9 +1,9 @@
 /**
- * useDialogueState.js — local, per-instance dialogue state.
+ * useDialogueState.js - local, per-instance dialogue state.
  *
  * One hook instance per mounted <ChangeDialogue>. ALL transient working state
  * (which question is showing, the in-progress answers) lives here in component-
- * local useState — it never touches App.js, so answering the dialogue on one
+ * local useState - it never touches App.js, so answering the dialogue on one
  * unchecked field never re-renders the Confirm table or any other field's
  * dialogue. The only thing that ever crosses the component boundary is the
  * finished event (emitted by ChangeDialogue via onEvent), not this state.

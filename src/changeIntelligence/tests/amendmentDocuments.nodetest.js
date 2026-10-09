@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * amendmentDocuments.nodetest.js — the behaviour that protects the customer:
+ * amendmentDocuments.nodetest.js - the behaviour that protects the customer:
  * a document is shown only while the change that called for it is still the
  * field's CURRENT state. Revert the change and the document must drop off.
  *

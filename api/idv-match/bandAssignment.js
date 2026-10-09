@@ -45,7 +45,7 @@ function assignBand({ hygiene, screeningHit = false, escalationFlag = false } = 
   if (escalationFlag) reasons.push("escalation_flag");
   const hardExcluded = !!(screeningHit || escalationFlag);
 
-  // 2. A DOB month/year conflict overrides any name similarity — a name score can
+  // 2. A DOB month/year conflict overrides any name similarity - a name score can
   //    never beat a DOB conflict. A different DOB signals a different person ->
   //    Band C (existing LOA path + escalation).
   if (dob.conflict) {

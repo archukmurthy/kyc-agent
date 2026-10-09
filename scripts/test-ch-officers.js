@@ -13,12 +13,12 @@ async function test() {
   const officers = await getActiveOfficers({ companyName: "TESCO PLC" });
 
   if (!officers) {
-    console.error("FAILED — returned null (API key invalid or network error)");
+    console.error("FAILED - returned null (API key invalid or network error)");
     process.exitCode = 1;
     return;
   }
 
-  console.log("SUCCESS — " + officers.length + " active officers found:");
+  console.log("SUCCESS - " + officers.length + " active officers found:");
   officers.forEach((o) => {
     console.log(
       "  - " +

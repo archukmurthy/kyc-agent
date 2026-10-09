@@ -18,7 +18,7 @@ let cachedKeyProvider = null;
 // Dev/test key provider. Prefers a stable 32-byte key from IDV_MEDIA_WRAP_KEY
 // (base64) so ciphertext stays decryptable across restarts; otherwise an
 // ephemeral per-process key (fine within one test/invocation, but media
-// encrypted in one process can't be read in another — see MEDIA-1).
+// encrypted in one process can't be read in another - see MEDIA-1).
 function keyProvider(deps = {}) {
   if (deps.keyProvider) return deps.keyProvider;
   if (cachedKeyProvider) return cachedKeyProvider;

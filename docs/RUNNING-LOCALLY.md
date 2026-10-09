@@ -3,7 +3,7 @@
 Everything needed to get the product running on your own machine, in order.
 Written for somebody who has never run it before.
 
-If something here is wrong, fix it in the same change that made it wrong — a
+If something here is wrong, fix it in the same change that made it wrong - a
 setup guide that lies costs more than no guide at all.
 
 ## 1. What you need installed
@@ -19,17 +19,17 @@ npm install
 npm start
 ```
 
-That serves the app **and** the API together on `http://localhost:3000` — there
+That serves the app **and** the API together on `http://localhost:3000` - there
 is no separate backend to start. (`src/setupProxy.js` mounts every API route by
 hand for local use. A new route added to `api/` must be added there too, or it
 works when deployed and 404s on your machine. A test enforces this.)
 
 At this point every screen renders. What needs keys is below.
 
-## 3. Settings — `.env.local`
+## 3. Settings - `.env.local`
 
 Create `.env.local` in the repo root. It is gitignored and never committed.
-**Changes need a dev-server restart** — the values are read at startup.
+**Changes need a dev-server restart** - the values are read at startup.
 
 ### If you were sent an `.env.local`, use it as-is and skip this section.
 
@@ -44,7 +44,7 @@ DOSSIER_TOKEN_SECRET=any-long-random-string
 
 The first three are typed by people, so make them memorable rather than random.
 
-`DOSSIER_TOKEN_SECRET` is never typed — it signs the links customers receive,
+`DOSSIER_TOKEN_SECRET` is never typed - it signs the links customers receive,
 and (unless you set `SESSION_SECRET` separately) the staff sessions that logins
 hand out. **Without it every login answers 500**, deliberately: a login that
 cannot mint a verifiable session should fail loudly rather than quietly.
@@ -67,15 +67,15 @@ valid there too.
 
 ### Optional, and the product runs without them
 
-- **Clerk** (`REACT_APP_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`) — the login
+- **Clerk** (`REACT_APP_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`) - the login
   in front of the UBO screens. Leave both unset and the login is **off**: every
   screen works and nobody is refused. Setting the secret key is what switches
   the gate on, on the server and in the browser together.
-- **Storage** (`KV_REST_API_*`) — not needed locally. Without it, everything
+- **Storage** (`KV_REST_API_*`) - not needed locally. Without it, everything
   that would go to Redis is written to plain files on disk instead.
-- **Identity verification** (`DIDIT_*`, `COMPLYCUBE_*`, `IDV_*`) — a separate
+- **Identity verification** (`DIDIT_*`, `COMPLYCUBE_*`, `IDV_*`) - a separate
   module, not part of the onboarding flow.
-- **Spend ceilings** (`SPEND_CAP_DAILY`, `SPEND_CAP_PLATFORM_DAILY`) — they have
+- **Spend ceilings** (`SPEND_CAP_DAILY`, `SPEND_CAP_PLATFORM_DAILY`) - they have
   sensible defaults (100 per account per day, 500 across everything). Set them
   only to raise them.
 
@@ -105,7 +105,7 @@ Without `DATABASE_URL` the screens all work, but nothing persists between
 sessions and the submission pipeline has nowhere to write.
 
 1. Create a Neon Postgres database (free tier is enough). If you are sharing one
-   with somebody else, **take your own branch** rather than working in theirs —
+   with somebody else, **take your own branch** rather than working in theirs -
    Neon branching is instant and means neither of you can damage the other's
    data.
 2. Put the connection string in `.env.local` as `DATABASE_URL`.
@@ -139,7 +139,7 @@ is a known issue, tracked as TEST-2 in `docs/BACKLOG.md`.
 | File | What it is |
 | --- | --- |
 | `CLAUDE.md` | the map: what owns what, what there is exactly one of, the invariants |
-| `docs/HOW-WE-BUILD.md` | the working agreement — which paths get full review, what must be updated alongside the code |
+| `docs/HOW-WE-BUILD.md` | the working agreement - which paths get full review, what must be updated alongside the code |
 | `docs/BACKLOG.md` | every known gap and deferred decision, with why |
 | `docs/PRODUCTION-READINESS-PLAN.md` | the ordered programme for the platform |
 | `docs/ubo/P0-ROWS.md` | the UBO module's sixteen readiness rows and what is done |
@@ -151,14 +151,14 @@ is a known issue, tracked as TEST-2 in `docs/BACKLOG.md`.
 The whole analyst-to-customer path, end to end, verified on 2026-09-22:
 
 1. Sign in at `/admin?tenant=nium` with `ADMIN_PASSWORD`. The platform workspace
-   creates itself on that first sign-in — until then every other surface answers
+   creates itself on that first sign-in - until then every other surface answers
    `tenant_not_found`, which is the thing most likely to confuse you on day one.
 2. Sign in at `/preboarding?tenant=nium` with `PREBOARDING_PASSWORD`. What comes
-   back is a session that expires after a working day — not the password. Every
+   back is a session that expires after a working day - not the password. Every
    later request carries the session; the password is checked once and never
    travels again.
 3. Research a company and let the dossier save. It needs `DATABASE_URL`.
-4. Send the invite. **No email is sent** unless `RESEND_API_KEY` is configured —
+4. Send the invite. **No email is sent** unless `RESEND_API_KEY` is configured -
    the response carries the link instead, and you copy it by hand. That is
    expected locally, not a fault.
 5. Open that link. It signs you in as that one customer, with their data
@@ -169,7 +169,7 @@ The whole analyst-to-customer path, end to end, verified on 2026-09-22:
 
 ## 9. Things that will look broken and are
 
-Kept honest rather than tidy — an unexplained failure wastes an afternoon.
+Kept honest rather than tidy - an unexplained failure wastes an afternoon.
 
 - **Two pre-existing lint errors** in `api/idv-match/` and one in a test file.
   Everything else is clean. Tracked as PLAT-10.

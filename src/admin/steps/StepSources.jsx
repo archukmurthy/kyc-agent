@@ -4,10 +4,10 @@ import SourceRow from "../components/SourceRow";
 import { adminColors, adminStyles } from "../adminDesign";
 import { COUNTRIES, flagFor, countryName } from "../countries";
 
-// Step 6 — Source Classification.
+// Step 6 - Source Classification.
 //
 // Primary sources are grouped by jurisdiction; secondary is a flat list.
-// Upload supports CSV (with template download) — non-CSV files surface an
+// Upload supports CSV (with template download) - non-CSV files surface an
 // honest "AI extraction not wired up yet" notice and don't crash the UI.
 // The xlsx parsing the spec mentions is deliberately deferred to avoid
 // pulling a large dep into the bundle until it's actually needed.
@@ -627,7 +627,7 @@ function csvRow(cells) {
   }).join(",");
 }
 
-// Minimal CSV parser — supports quoted fields and escaped quotes; not
+// Minimal CSV parser - supports quoted fields and escaped quotes; not
 // production-grade for every CSV edge case but enough for the template format.
 function parseCsv(text) {
   const rows = [];

@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 
 // Post-verification confirm/edit panel (Section B, O2-4). Shows the applicant
-// their OWN verified fields (from resolve.verifiedFields) as confirmable rows —
-// each shown as a value with a tick, editable if wrong — then a single
+// their OWN verified fields (from resolve.verifiedFields) as confirmable rows -
+// each shown as a value with a tick, editable if wrong - then a single
 // "Confirm & continue". This is the applicant reviewing their own document data,
 // never a pick-one between two versions.
 const LABELS = {

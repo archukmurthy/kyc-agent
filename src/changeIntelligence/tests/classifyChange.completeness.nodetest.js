@@ -2,14 +2,14 @@
 
 /**
  * ──────────────────────────────────────────────────────────────────────────
- *  COMPLETENESS SWEEP — the most important file in this slice.
+ *  COMPLETENESS SWEEP - the most important file in this slice.
  *
  *  It enumerates the FULL cartesian product of the engine's input domain and
  *  buckets every result as decided or UNDECIDED. It is a living map of every
  *  compliance decision still owed. It is SUPPOSED to be uncomfortable to read.
  *
  *  Do NOT make this green by adding policy rules. Holes are surfaced and handed
- *  back to compliance — see the open questions in the PR.
+ *  back to compliance - see the open questions in the PR.
  *
  *  Prints the full UNDECIDED map, then asserts:
  *    1. total combo count == the cartesian size (sanity).
@@ -17,7 +17,7 @@
  *    3. EDD is never silently fired (open question O2).
  *    4. NO newly-discovered gaps: every coherent UNDECIDED combo is either a
  *       deliberately-unencoded design hole or an impossible input. Assertion 4
- *       is RED BY DESIGN on first run — the failure body IS the list of
+ *       is RED BY DESIGN on first run - the failure body IS the list of
  *       decisions owed. It does not gate the Vercel build (deploy runs
  *       `npm run build`, not these tests).
  * ──────────────────────────────────────────────────────────────────────────
@@ -33,7 +33,7 @@ const {
 
 const JURISDICTIONS = ['GB', 'SG'];
 
-// Coverage floor — recorded from the first run. Regressions that REDUCE the
+// Coverage floor - recorded from the first run. Regressions that REDUCE the
 // number of decided combinations (e.g. a deleted rule) fail assertion 2.
 const COVERAGE_FLOOR_COUNT = 1626;
 
@@ -155,7 +155,7 @@ test('EDD is never silently fired (open question O2)', () => {
   assert.equal(everFiredEdd, false);
 });
 
-// Assertion 4 — RED BY DESIGN on first run. The failure body lists every real
+// Assertion 4 - RED BY DESIGN on first run. The failure body lists every real
 // compliance decision still owed (coherent, UNDECIDED, not a known gap).
 test('no newly-discovered gaps beyond the expected-known list', () => {
   assert.deepEqual(buckets.owed.map(key), []);

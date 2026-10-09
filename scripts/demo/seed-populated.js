@@ -1,7 +1,7 @@
 "use strict";
 /*
  * DEMO SEED (POPULATED): seeds SEVERAL varied verification attempts so the Neon
- * console looks populated and shows the range of outcomes — Band A / B / C plus
+ * console looks populated and shows the range of outcomes - Band A / B / C plus
  * screening variety (clear / PEP / sanctions / adverse-media). Uses the real
  * durable paths (encrypted Vault, media, decision + outbox, events, lifecycle,
  * screening). Idempotent: cleans every prior DEMO* attempt first, then reseeds.
@@ -136,6 +136,6 @@ async function main() {
   const removed = await cleanDemo(sql);
   console.log(`Cleaned ${removed} prior DEMO* attempt(s). Seeding ${CASES.length} varied attempts:\n`);
   for (const cfg of CASES) await seedOne(sql, cfg);
-  console.log(`\n✅ Seeded ${CASES.length} attempts across every idv_* store — Band A/B/C + clear/PEP/sanctions/adverse.`);
+  console.log(`\n✅ Seeded ${CASES.length} attempts across every idv_* store - Band A/B/C + clear/PEP/sanctions/adverse.`);
 }
 main().catch((e) => { console.error("seed failed:", e.message); process.exit(1); });

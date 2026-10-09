@@ -2,7 +2,7 @@ const { test } = require("node:test");
 const assert = require("node:assert");
 const { createAttempt, getAttempt, getByDiditSession, updateAttempt } = require("../attemptStore");
 
-// These exercise the input guards, which run before any DB access — so they need
+// These exercise the input guards, which run before any DB access - so they need
 // no database. The DB round-trip is covered once migration 013 is applied.
 
 test("createAttempt rejects without an application id", async () => {

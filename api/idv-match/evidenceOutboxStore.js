@@ -12,7 +12,7 @@ function client() {
   return neon(conn);
 }
 
-// Append an envelope. Returns { id, inserted } — inserted:false when the
+// Append an envelope. Returns { id, inserted } - inserted:false when the
 // idempotency key already exists (duplicate publish, no-op).
 async function appendOutbox({ attemptId, idempotencyKey, envelope }) {
   if (!attemptId) throw new Error("appendOutbox: attemptId is required");

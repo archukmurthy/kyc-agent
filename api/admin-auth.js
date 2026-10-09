@@ -1,7 +1,7 @@
 // Per-tenant admin password gate.
 //
 // Lookup order:
-//   1. tenant-auth:{tenantId} in storage — hashed password set by super-admin
+//   1. tenant-auth:{tenantId} in storage - hashed password set by super-admin
 //   2. Platform-tenant-only fallback: ADMIN_PASSWORD env var. On a successful env
 //      fallback, the KV entry + tenant-registry are seeded so subsequent
 //      logins use the KV path.
@@ -18,7 +18,7 @@ const loginThrottle = require("../lib/loginThrottle");
 const session = require("../lib/session");
 const { clientIp } = require("../lib/rateLimit");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/config.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/config.js.
 let _deps = { storage };
 
 function authKey(tid) {
@@ -70,7 +70,7 @@ async function seedPlatformAuth(tenantId, envPassword) {
     // env password already verified, so the login itself still succeeds.
     //
     // Through the registry module, not a hand-rolled write: it owns the key
-    // and the entry shape. Same flags the other seed paths produce — a
+    // and the entry shape. Same flags the other seed paths produce - a
     // platform entry missing isProtected/preboardingEnabled is what took
     // pre-boarding dark for the tenant that uses it most.
     if (!(await registry.findTenant(tenantId))) {

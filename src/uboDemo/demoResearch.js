@@ -342,7 +342,7 @@ export function relationshipAssertionPresentation(fact) {
     : null;
   const description = specificControlRight
     || (fact?.relationship === "FORMAL_CONTROL_RIGHT"
-      ? "Formal control right reported — details not available in this result"
+      ? "Formal control right reported - details not available in this result"
       : String(fact?.relationship || fact?.type || "Source assertion").replaceAll("_", " "));
   const evidence = fact?.evidenceReferences?.[0];
   const sourceText = [evidence?.system, evidence?.referenceId, evidence?.locator?.source, evidence?.locator?.sourceUrl]

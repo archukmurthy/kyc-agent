@@ -1,7 +1,7 @@
 "use strict";
 
 // Data access for idv_document_media (Neon HTTP driver convention). Stores only
-// ciphertext pointers + crypto material + our integrity hash — never plaintext
+// ciphertext pointers + crypto material + our integrity hash - never plaintext
 // bytes. Throws on failure so callers decide.
 const { neon } = require("@neondatabase/serverless");
 const { randomUUID } = require("node:crypto");

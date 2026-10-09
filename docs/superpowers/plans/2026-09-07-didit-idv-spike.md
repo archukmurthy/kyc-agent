@@ -1,17 +1,17 @@
-# Didit IDV Spike — Implementation Plan
+# Didit IDV Spike - Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Wire a Didit identity-verification step into the KYC wizard that starts a sandbox session, lets the user verify on any device via QR, pulls the result, maps it to applicant fields, and stores the extras locally.
 
-**Architecture:** A thin, self-contained `lib/didit/` connector (create session + poll decision) — NOT the `idv/` module's internals. Two additive serverless routes (`api/idv-start`, `api/idv-result`), one new wizard step component, and minimal additive edits to `App.js` + `setupProxy.js`. Persistence is a local JSON file for the spike.
+**Architecture:** A thin, self-contained `lib/didit/` connector (create session + poll decision) - NOT the `idv/` module's internals. Two additive serverless routes (`api/idv-start`, `api/idv-result`), one new wizard step component, and minimal additive edits to `App.js` + `setupProxy.js`. Persistence is a local JSON file for the spike.
 
 **Tech Stack:** Node 24 (global `fetch`), CommonJS for `lib/`+`api/` (matches repo), React 18 (CRA) for the component, `qrcode` for the QR image, `node:test` + `node:assert` for tests (matches repo).
 
 ## Global Constraints
 
 - **Sandbox / synthetic only.** Env is `IDV_RUNTIME_MODE=test`, `IDV_SYNTHETIC_ONLY=1`, `DIDIT_ENVIRONMENT=sandbox`. **No real PII may flow through the spike.**
-- **`DIDIT_API_KEY` is server-side only** — never imported into `src/` or sent to the browser.
+- **`DIDIT_API_KEY` is server-side only** - never imported into `src/` or sent to the browser.
 - **No new runtime dependency beyond `qrcode`.** Do not import anything from `idv/` (respect its `index.js`-only boundary).
 - **Didit base URL:** `https://verification.didit.me`. Create: `POST /v3/session/`. Retrieve: `GET /v3/session/{session_id}/decision/`. Auth header: `x-api-key`.
 - **Correlation:** our `ref` (the wizard's `submissionId`) is sent as Didit `vendor_data`.
@@ -23,19 +23,19 @@
 
 ## File Structure
 
-- Create `lib/didit/mapDecision.js` — pure Didit-decision → `{ status, verified, mappedFields, extras }`.
-- Create `lib/didit/diditClient.js` — `createSession()` / `getDecision()` against Didit v3.
-- Create `lib/didit/store.js` — local JSON file store (`.didit-store.json`).
-- Create `api/idv-start.js` — POST route: create session + persist link.
-- Create `api/idv-result.js` — POST route: poll decision + map + persist.
-- Create `src/components/idv/IdentityVerificationStep.jsx` — the wizard step UI (QR + poll + display).
+- Create `lib/didit/mapDecision.js` - pure Didit-decision → `{ status, verified, mappedFields, extras }`.
+- Create `lib/didit/diditClient.js` - `createSession()` / `getDecision()` against Didit v3.
+- Create `lib/didit/store.js` - local JSON file store (`.didit-store.json`).
+- Create `api/idv-start.js` - POST route: create session + persist link.
+- Create `api/idv-result.js` - POST route: poll decision + map + persist.
+- Create `src/components/idv/IdentityVerificationStep.jsx` - the wizard step UI (QR + poll + display).
 - Create tests: `lib/didit/__tests__/mapDecision.nodetest.js`, `diditClient.nodetest.js`, `store.nodetest.js`, `api/__tests__/idv-start.nodetest.js`, `api/__tests__/idv-result.nodetest.js`.
-- Modify `src/setupProxy.js` — mount the two routes for local dev.
-- Modify `src/App.js` — add the step to `stepsFor`/`stepNames`, render the step, add a dev-only shortcut.
+- Modify `src/setupProxy.js` - mount the two routes for local dev.
+- Modify `src/App.js` - add the step to `stepsFor`/`stepNames`, render the step, add a dev-only shortcut.
 
 ---
 
-### Task 1: `mapDecision` — pure decision mapper
+### Task 1: `mapDecision` - pure decision mapper
 
 **Files:**
 - Create: `lib/didit/mapDecision.js`
@@ -96,7 +96,7 @@ test("handles a not-yet-complete decision without throwing", () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node --test lib/didit/__tests__/mapDecision.nodetest.js`
-Expected: FAIL — `Cannot find module '../mapDecision'`.
+Expected: FAIL - `Cannot find module '../mapDecision'`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -149,7 +149,7 @@ module.exports = { mapDecision };
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `node --test lib/didit/__tests__/mapDecision.nodetest.js`
-Expected: PASS — `tests 2 / pass 2 / fail 0`.
+Expected: PASS - `tests 2 / pass 2 / fail 0`.
 
 - [ ] **Step 5: Commit**
 
@@ -160,7 +160,7 @@ git commit -m "feat(idv): pure Didit decision mapper"
 
 ---
 
-### Task 2: `diditClient` — session create + decision fetch
+### Task 2: `diditClient` - session create + decision fetch
 
 **Files:**
 - Create: `lib/didit/diditClient.js`
@@ -224,7 +224,7 @@ test("getDecision GETs the decision endpoint by session id", async () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node --test lib/didit/__tests__/diditClient.nodetest.js`
-Expected: FAIL — `Cannot find module '../diditClient'`.
+Expected: FAIL - `Cannot find module '../diditClient'`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -281,7 +281,7 @@ module.exports = { createSession, getDecision };
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `node --test lib/didit/__tests__/diditClient.nodetest.js`
-Expected: PASS — `tests 2 / pass 2 / fail 0`.
+Expected: PASS - `tests 2 / pass 2 / fail 0`.
 
 - [ ] **Step 5: Commit**
 
@@ -292,7 +292,7 @@ git commit -m "feat(idv): Didit v3 session client"
 
 ---
 
-### Task 3: `store` — local JSON persistence
+### Task 3: `store` - local JSON persistence
 
 **Files:**
 - Create: `lib/didit/store.js`
@@ -344,7 +344,7 @@ test("merges a result onto an existing ref", () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node --test lib/didit/__tests__/store.nodetest.js`
-Expected: FAIL — `Cannot find module '../store'`.
+Expected: FAIL - `Cannot find module '../store'`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -382,7 +382,7 @@ module.exports = { saveSession, getSession, saveResult, getResult };
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `node --test lib/didit/__tests__/store.nodetest.js`
-Expected: PASS — `tests 2 / pass 2 / fail 0`.
+Expected: PASS - `tests 2 / pass 2 / fail 0`.
 
 - [ ] **Step 5: Commit**
 
@@ -454,7 +454,7 @@ test("creates session, stores link, returns hostedUrl", async () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node --test api/__tests__/idv-start.nodetest.js`
-Expected: FAIL — `Cannot find module '../idv-start'`.
+Expected: FAIL - `Cannot find module '../idv-start'`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -488,7 +488,7 @@ module.exports = async function handler(req, res) {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `node --test api/__tests__/idv-start.nodetest.js`
-Expected: PASS — `tests 2 / pass 2 / fail 0`.
+Expected: PASS - `tests 2 / pass 2 / fail 0`.
 
 - [ ] **Step 5: Commit**
 
@@ -565,7 +565,7 @@ test("pulls decision, maps, stores, returns mappedFields", async () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node --test api/__tests__/idv-result.nodetest.js`
-Expected: FAIL — `Cannot find module '../idv-result'`.
+Expected: FAIL - `Cannot find module '../idv-result'`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -599,7 +599,7 @@ module.exports = async function handler(req, res) {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `node --test api/__tests__/idv-result.nodetest.js`
-Expected: PASS — `tests 2 / pass 2 / fail 0`.
+Expected: PASS - `tests 2 / pass 2 / fail 0`.
 
 - [ ] **Step 5: Commit**
 
@@ -632,7 +632,7 @@ const idvResultHandler = require(path.join(__dirname, "..", "api", "idv-result.j
 After the `/api/save-dossier` block (ends around line 319), add:
 
 ```js
-  // Didit IDV spike — start a session / poll its result. POST; parse JSON body.
+  // Didit IDV spike - start a session / poll its result. POST; parse JSON body.
   app.post("/api/idv-start", (req, res) => {
     let raw = "";
     req.setEncoding("utf8");
@@ -723,7 +723,7 @@ test("renders a Start button and calls /api/idv-start on click", async () => {
 - [ ] **Step 3: Run test to verify it fails**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/components/idv`
-Expected: FAIL — cannot find `../IdentityVerificationStep`.
+Expected: FAIL - cannot find `../IdentityVerificationStep`.
 
 - [ ] **Step 4: Write the component**
 
@@ -780,7 +780,7 @@ export default function IdentityVerificationStep({ submissionId, onVerified, onC
   return (
     <div style={cardStyle}>
       <h2>Identity Verification</h2>
-      <p style={{ color: "#666" }}>Verify the applicant's identity with Didit (sandbox — synthetic data only).</p>
+      <p style={{ color: "#666" }}>Verify the applicant's identity with Didit (sandbox - synthetic data only).</p>
 
       {!hostedUrl && <Btn onClick={start} disabled={busy}>{busy ? "Starting…" : "Start verification"}</Btn>}
 
@@ -796,7 +796,7 @@ export default function IdentityVerificationStep({ submissionId, onVerified, onC
 
       {result && result.verified && (
         <div style={{ marginTop: 16 }}>
-          <h3>Verified — mapped fields</h3>
+          <h3>Verified - mapped fields</h3>
           <ul>
             {Object.entries(result.mappedFields).map(([k, v]) => (<li key={k}>{k}: {String(v)}</li>))}
           </ul>
@@ -848,7 +848,7 @@ import IdentityVerificationStep from "./components/idv/IdentityVerificationStep"
 
 - [ ] **Step 2: Add the step to the step maps**
 
-Replace the `stepsFor` / `stepNames` block (lines 595–602) with:
+Replace the `stepsFor` / `stepNames` block (lines 595-602) with:
 
 ```js
   const stepsFor = (j) => j === "ai_documents"
@@ -880,7 +880,7 @@ Immediately after the Applicant render block closes (the `)}` at line 4783), ins
 
 - [ ] **Step 4: Add the dev-only shortcut**
 
-Near the top of the component body (after `const STEPS = stepsFor(journeyType);` is in scope — place it with the other top-level `useEffect`s), add:
+Near the top of the component body (after `const STEPS = stepsFor(journeyType);` is in scope - place it with the other top-level `useEffect`s), add:
 
 ```jsx
   React.useEffect(() => {
@@ -920,9 +920,9 @@ git commit -m "feat(idv): wire identity verification step into wizard"
 
 ## Self-Review
 
-- **Spec coverage:** reach step (T8) ✅; start session + QR (T2, T7) ✅; cross-device poll retrieval (T2 `getDecision`, T5) ✅; map to fields (T1, prefill in T8) ✅; store extras locally (T3, T5) ✅; poll-on-return (T5/T7) ✅; dev shortcut (T8) ✅; sandbox/synthetic + server-side key (Global Constraints, T2) ✅; tests (T1–T5, T7) ✅; deferred items live in `BACKLOG.md` ✅.
+- **Spec coverage:** reach step (T8) ✅; start session + QR (T2, T7) ✅; cross-device poll retrieval (T2 `getDecision`, T5) ✅; map to fields (T1, prefill in T8) ✅; store extras locally (T3, T5) ✅; poll-on-return (T5/T7) ✅; dev shortcut (T8) ✅; sandbox/synthetic + server-side key (Global Constraints, T2) ✅; tests (T1-T5, T7) ✅; deferred items live in `BACKLOG.md` ✅.
 - **Placeholder scan:** no TBD/TODO; every code step shows full code.
-- **Type consistency:** `createSession → {providerSessionId, hostedUrl, status}`, `getDecision → decision`, `mapDecision → {status, verified, mappedFields, extras}`, `store.get/saveSession/Result`, route bodies `{ ref }` — consistent across T1–T8.
+- **Type consistency:** `createSession → {providerSessionId, hostedUrl, status}`, `getDecision → decision`, `mapDecision → {status, verified, mappedFields, extras}`, `store.get/saveSession/Result`, route bodies `{ ref }` - consistent across T1-T8.
 
 ## Out of scope (tracked in BACKLOG.md)
 

@@ -1,11 +1,11 @@
 /**
- * personType.js — the ASSUMED person-type interface for CD-03, plus its stub.
+ * personType.js - the ASSUMED person-type interface for CD-03, plus its stub.
  *
  * CD-03's document rule is keyed off PERSON TYPE, not the attribute corrected.
  * Commit 6 is the CONSUMER of that type: it reads `person.isDirector` /
  * `person.isUBO` and the CD-03 rules run live on them. The PRODUCER of those
- * flags — real director/UBO classification, ownership resolution, the
- * pseudo-UBO case — is the deferred UBO discovery / evidence stream
+ * flags - real director/UBO classification, ownership resolution, the
+ * pseudo-UBO case - is the deferred UBO discovery / evidence stream
  * (PR-032 / PR-042 / PR-046) and is explicitly out of scope here.
  *
  * ─────────────────────────────────────────────────────────────────────────────
@@ -15,17 +15,17 @@
  * ─────────────────────────────────────────────────────────────────────────────
  *
  * Resolution order, most trustworthy first:
- *   1. 'flags'          — the person object carries explicit isDirector/isUBO
+ *   1. 'flags'          - the person object carries explicit isDirector/isUBO
  *                         booleans. This is the real interface; when the
  *                         classifier lands it populates these and the stub
  *                         below stops being consulted.
- *   2. 'field-inferred' — STUB TIER. Inferred from the research field the
+ *   2. 'field-inferred' - STUB TIER. Inferred from the research field the
  *                         person was found under (the same signal the existing
  *                         UI already uses via isUboLikeField to decide EDD
  *                         forms). Good enough to tell a directors list from a
  *                         UBO list; CANNOT see a person who is BOTH, which is
  *                         exactly why the real classifier is still needed.
- *   3. 'stub-default'   — STUB TIER. Nothing to go on → UBO. Chosen so the
+ *   3. 'stub-default'   - STUB TIER. Nothing to go on → UBO. Chosen so the
  *                         failure direction is over-collection (asking for a
  *                         document that wasn't strictly required) rather than
  *                         under-collection (missing a required UBO document,
@@ -34,14 +34,14 @@
  * DUAL-ROLE AND PSEUDO-UBO ARE NOT DERIVABLE HERE. A person in both the
  * directors and the UBO list is two separate stakeholder objects with two
  * different sh_ ids and no identity link; and no seniority ranking exists to
- * find the "most senior director". Those cases are UNDECIDED by design — see
+ * find the "most senior director". Those cases are UNDECIDED by design - see
  * PERSON_TYPE.PSEUDO_UBO, which nothing in this module ever returns.
  */
 
 export const PERSON_TYPE = {
   DIRECTOR: "director",
   UBO: "ubo",
-  // Never produced by resolvePersonType — reserved so the engine has a rule to
+  // Never produced by resolvePersonType - reserved so the engine has a rule to
   // record UNDECIDED against once real ownership data can identify the case.
   PSEUDO_UBO: "pseudo_ubo",
 };
@@ -57,7 +57,7 @@ export const PERSON_ATTRIBUTE = {
   OWNERSHIP_PCT: "ownership_pct",
   ROLE: "role",
   REMOVAL: "removal",
-  // Commit 7 — the customer adding a person the research missed. Kept as their
+  // Commit 7 - the customer adding a person the research missed. Kept as their
   // own attributes rather than reusing the correction attributes so the audit
   // trail names the rule that actually fired: an analyst reading
   // PERSON-DOB-UBO on a person who was ADDED would be misled.
@@ -107,7 +107,7 @@ export function resolvePersonType(person = {}, fieldId = "") {
     };
   }
 
-  // 2. STUB TIER — infer from the list the person was found under.
+  // 2. STUB TIER - infer from the list the person was found under.
   if (uboLikeField(fieldId)) {
     return { isDirector: false, isUBO: true, personType: PERSON_TYPE.UBO, source: "field-inferred", isStub: true };
   }
@@ -115,16 +115,16 @@ export function resolvePersonType(person = {}, fieldId = "") {
     return { isDirector: true, isUBO: false, personType: PERSON_TYPE.DIRECTOR, source: "field-inferred", isStub: true };
   }
 
-  // 3. STUB TIER — nothing to go on. Over-collect rather than under-collect.
+  // 3. STUB TIER - nothing to go on. Over-collect rather than under-collect.
   return { isDirector: false, isUBO: true, personType: PERSON_TYPE.UBO, source: "stub-default", isStub: true };
 }
 
 /**
  * The composite change_events.field_id (Investigation C):
  *   `<personType>::<stakeholderId>::<attribute>`
- * field_id is an opaque TEXT key everywhere downstream — buildChangeEvent
+ * field_id is an opaque TEXT key everywhere downstream - buildChangeEvent
  * passes it through, writeEvent only checks presence, and
- * deriveAmendmentDocuments maps on it — so each person-attribute is
+ * deriveAmendmentDocuments maps on it - so each person-attribute is
  * independently addressable and supersedes independently.
  */
 export function personFieldId(personType, stakeholderId, attribute) {

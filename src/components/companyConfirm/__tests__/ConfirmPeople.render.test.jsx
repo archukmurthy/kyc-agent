@@ -1,10 +1,10 @@
 /**
- * ConfirmPeople.render.test.jsx — CHARACTERISATION of the Confirm page parts
+ * ConfirmPeople.render.test.jsx - CHARACTERISATION of the Confirm page parts
  * that still render from App.js.
  *
- * ConfirmStep.render.test.jsx covers the shell. Everything below it — the
+ * ConfirmStep.render.test.jsx covers the shell. Everything below it - the
  * pre-filled row table, the source badges, the People cards and their
- * per-attribute rows — is injected into ConfirmStep as render-function PROPS
+ * per-attribute rows - is injected into ConfirmStep as render-function PROPS
  * (renderUnifiedFoundTable / renderStakeholderConfirmSection), which close over
  * App's state and refs. They cannot be rendered in isolation, so this file
  * drives the REAL app through the wizard to the Confirm step.
@@ -27,7 +27,7 @@ jest.setTimeout(60000);
 beforeEach(() => {
   // /api/config, track-event and ipify fire on mount. Rejecting them makes the
   // app fall back to buildLocalDefaultConfig(), which ships the Corporate:GB
-  // schema — deterministic, no network.
+  // schema - deterministic, no network.
   global.fetch = jest.fn(() => Promise.reject(new Error("offline test")));
   jest.useFakeTimers();
 });
@@ -81,7 +81,7 @@ async function driveToConfirm() {
   fireEvent.click(screen.getByRole("button", { name: /Dummy Research/i }));
   await settle(5000);
 
-  // Applicant page — fill via the test-data control, satisfy the signatory
+  // Applicant page - fill via the test-data control, satisfy the signatory
   // upload, continue.
   fireEvent.click(screen.getByRole("button", { name: /Fill with test data/i }));
   const fileInput = document.querySelector('input[type="file"]');
@@ -161,7 +161,7 @@ describe("the People section", () => {
     // House people are tier1 and carry none.
     const badges = screen.queryAllByText(/\d+ needs? you/);
     expect(badges.length).toBeGreaterThan(0);
-    // No "Complete" badge exists any more — having nothing to say says nothing.
+    // No "Complete" badge exists any more - having nothing to say says nothing.
     expect(screen.queryByText(/✓ Complete/)).not.toBeInTheDocument();
   });
 
@@ -228,7 +228,7 @@ describe("Confirm All (real data)", () => {
     // ChangeDialogue and asks exactly the registry question (address's only
     // planned step). Answering "Not yet" -> registryStatus not_reflected hits
     // policyTable's ADDRESS-NOT-REFLECTED rule: doc_required, "Notice of Change
-    // of Address". This is the doc_required workflow the bug report names — a
+    // of Address". This is the doc_required workflow the bug report names - a
     // genuinely disputed row with an already-answered dialogue, the case
     // confirmAll's own bulk re-tick used to skip cleaning up.
     fireEvent.click(screen.getByRole("button", { name: "Edit Registered Address Line 1" }));

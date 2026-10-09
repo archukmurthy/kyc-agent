@@ -1946,7 +1946,7 @@
     {
       "id": "UI04",
       "label": "Range ownership",
-      "description": "An open/closed 25–50% ownership range is preserved.",
+      "description": "An open/closed 25-50% ownership range is preserved.",
       "states": [
         {
           "id": "current",

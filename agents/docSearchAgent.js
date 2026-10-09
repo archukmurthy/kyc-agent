@@ -205,7 +205,7 @@ function downloadFile(url, destPath, timeoutMs = 15000) {
       resolve({ success: false, statusCode: null, reason: err.message });
     });
     // A server that accepts the connection but never responds would otherwise
-    // hang the download — and the whole doc-search request — indefinitely.
+    // hang the download - and the whole doc-search request - indefinitely.
     request.on("timeout", () => {
       request.destroy();
       cleanup();
@@ -318,7 +318,7 @@ Return the most recent version as a direct PDF link if possible.`;
         localPath = dl.path;
       } else {
         // Download attempted but failed (404, 403, redirect, network).
-        // The URL itself WAS found and verified via search — so this is
+        // The URL itself WAS found and verified via search - so this is
         // url_found, not an error. The failure reason goes in notes.
         downloadStatus = "url_found";
       }
@@ -373,23 +373,23 @@ function formatStatus(status) {
     case "error":
       return "⚠ Error";
     default:
-      return status || "—";
+      return status || "-";
   }
 }
 
 // NOTE: this table is customer-facing (rendered in Step 2 of the KYC flow).
-// Token and cost data deliberately stay OUT of it — they live only on the
+// Token and cost data deliberately stay OUT of it - they live only on the
 // per-document cost object (r.cost) and the overall cost summary, which are
 // for database storage and internal use.
 function buildSummaryTable(companyName, results) {
   const rows = results.map((r) => ({
     "Company Name": companyName,
     "Document Type": r.label,
-    "Year": r.year || "—",
-    "Source": r.sourceLabel || "—",
+    "Year": r.year || "-",
+    "Source": r.sourceLabel || "-",
     "Source URL": r.sourceUrl || r.url || r.documentUrl || "Not found",
     "Status": formatStatus(r.status),
-    "File": r.filename || "—",
+    "File": r.filename || "-",
     "Notes": r.notes || "",
   }));
 

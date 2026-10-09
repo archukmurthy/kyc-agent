@@ -82,7 +82,7 @@ test("correction is append-only and preserves the original value", async () => {
     action: "CORRECTED",
   });
   assert.strictEqual(result.action, "CORRECTED");
-  // Original extraction still readable — correction did not overwrite it.
+  // Original extraction still readable - correction did not overwrite it.
   const values = await vault.retrieveForAuthorizedPurpose({ reference, fields: ["full_name"] });
   assert.strictEqual(values.full_name, "Ada Lovelace");
 });

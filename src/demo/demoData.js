@@ -22,7 +22,7 @@ export function buildDemoDocSearchResults(
     .replace(/[^a-zA-Z0-9_.]/g, "");
 
   // Domain-friendly slug for realistic, company-specific demo source URLs
-  // (no underscores, lowercased, alphanumeric only — e.g. "hsbcholdings").
+  // (no underscores, lowercased, alphanumeric only - e.g. "hsbcholdings").
   const domainSlug = companyName
     .toLowerCase()
     .replace(/\s+/g, "")
@@ -86,7 +86,7 @@ export function buildDemoDocSearchResults(
   return {
     documents,
     // Mirrors the customer-facing column shape of the agent's
-    // buildSummaryTable — no token/cost columns (internal-only data).
+    // buildSummaryTable - no token/cost columns (internal-only data).
     summaryTable: documents.map(d => ({
       "Company Name": companyName,
       "Document Type": d.label,
@@ -121,13 +121,13 @@ export function buildDemoDocSearchResults(
 // Dummy registry (self-source) results for demo/test mode. Mirrors the exact
 // shape of the /api/self-source response so the Documents-step registry section,
 // the Confirm prefill, and the Required-Documents "already satisfied" logic all
-// behave the same as a live run — without spending API credits.
+// behave the same as a live run - without spending API credits.
 //
 // PR-059 A: every value here is deliberately FAKE placeholder data. Earlier this
 // stub hardcoded a real third party's Companies House identity (reg number,
 // address, incorporation date), which then got persisted into test dossiers and
 // surfaced as cross-company contamination. NEVER put a real company's details
-// here — only obviously-synthetic sentinels (00000000 / 1 Test Street / etc.).
+// here - only obviously-synthetic sentinels (00000000 / 1 Test Street / etc.).
 export function buildDemoSelfSourceResults(companyName) {
   const now = new Date().toISOString();
   const CH = "https://find-and-update.company-information.service.gov.uk";
@@ -228,7 +228,7 @@ export const DUMMY_RESEARCH_VALUES = {
   industryDescription: "Software development and SaaS distribution to enterprise customers.",
   isMultiLayered: "No",
   // JSON-encoded (same shape as `directors` below) so the UBO people carry the
-  // identity attributes CD-03's person rules act on — nationality, DOB,
+  // identity attributes CD-03's person rules act on - nationality, DOB,
   // residence. As a bare string they parsed into name+shareholding only, which
   // made the UBO half of the person-type matrix (UBO DOB/nationality → POI)
   // impossible to exercise live.
@@ -238,7 +238,7 @@ export const DUMMY_RESEARCH_VALUES = {
     { full_name: "Trustees", share_percentage: 25 },
   ]),
   // directors / UBO research fields are parsed into structured stakeholder
-  // records on Confirm — value is a JSON-encoded array of {full_name, role,
+  // records on Confirm - value is a JSON-encoded array of {full_name, role,
   // share_percentage} so the customer sees per-person cards instead of a
   // single text blob.
   directors: JSON.stringify([
@@ -262,7 +262,7 @@ export const DUMMY_RESEARCH_VALUES = {
   registered_address_postcode: "EC1A 1AA",
   registered_address_country: "United Kingdom",
   incorporation_date: "2015-03-12",
-  annual_turnover: "$500,001–$1,500,000",
+  annual_turnover: "$500,001-$1,500,000",
   employee_count: "51-250",
   operating_countries: "UK, US, SG",
   payout_transaction_countries: "GB, US, EU",

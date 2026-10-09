@@ -1,5 +1,5 @@
 /**
- * HoverTooltip.jsx — a lightweight, purely presentational hover tooltip used on
+ * HoverTooltip.jsx - a lightweight, purely presentational hover tooltip used on
  * the Confirm page to keep supporting copy out of the default view.
  *
  * Why its own component rather than state on ConfirmStep: the hover state stays
@@ -7,9 +7,9 @@
  * with it the whole found-fields table and its inline editors).
  *
  * Layout contract: the popover is absolutely positioned and therefore OUT OF
- * FLOW — showing or hiding it must never reflow the page. The wrapper is an
+ * FLOW - showing or hiding it must never reflow the page. The wrapper is an
  * inline-block `span` (valid phrasing content, so it can live inside an <h2>),
- * and everything inside the popover is a `span` too — never a <div> — so the
+ * and everything inside the popover is a `span` too - never a <div> - so the
  * markup stays legal wherever the trigger is placed.
  *
  * Desktop hover is the required interaction; focus/blur is wired up as a free
@@ -33,7 +33,7 @@ const POPOVER = (width, align) => ({
   borderRadius: 10,
   boxShadow: "0 8px 24px rgba(26,58,74,0.16)",
   padding: "11px 13px",
-  // Reset every inherited text style — triggers include a bold <h2> and an
+  // Reset every inherited text style - triggers include a bold <h2> and an
   // uppercase, letter-spaced, centred tile label.
   fontSize: 12.5,
   fontWeight: 400,

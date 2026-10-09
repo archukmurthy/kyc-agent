@@ -3,7 +3,7 @@
 Run with `--baseline 60`. These edits make the assumption visible wherever the
 scorecard travels.
 
-## 1. Console — add a banner line at the very top of the Headlines block
+## 1. Console - add a banner line at the very top of the Headlines block
 
 FIND (line ~310):
 ```js
@@ -12,11 +12,11 @@ console.log(`\nHeadlines:`);
 
 REPLACE WITH:
 ```js
-console.log(`\n  [baseline] assumes ${BASELINE} min analyst RESEARCH per entity (SME estimate, provisional — research/data-gathering only, excludes screening/EDD/QC)`);
+console.log(`\n  [baseline] assumes ${BASELINE} min analyst RESEARCH per entity (SME estimate, provisional - research/data-gathering only, excludes screening/EDD/QC)`);
 console.log(`\nHeadlines:`);
 ```
 
-## 2. HTML — turn the subtitle into a provisional banner
+## 2. HTML - turn the subtitle into a provisional banner
 
 FIND (line ~367):
 ```js
@@ -32,7 +32,7 @@ excludes screening adjudication, EDD and QC. Single flat figure across segments;
 treat as an average.</p>
 ```
 
-## 3. HTML — add the banner style (inside the existing <style> block, ~line 354)
+## 3. HTML - add the banner style (inside the existing <style> block, ~line 354)
 
 Add this rule anywhere in the `<style>`:
 ```css

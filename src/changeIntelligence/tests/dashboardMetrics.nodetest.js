@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * dashboardMetrics.nodetest.js — the dashboard's correctness guarantees:
+ * dashboardMetrics.nodetest.js - the dashboard's correctness guarantees:
  * field-level metrics count CURRENT state only (reverted changes excluded), every
  * metric carries a sample size, and the empty case is all-zeros (no crash).
  *
@@ -55,7 +55,7 @@ test('full scenario: current-state metrics, revert excluded, sample sizes presen
   assert.equal(m.meta.earlyData, true); // 2 < 20
   assert.equal(m.meta.currentChanges, 6); // e1..e4 + e6 + fallback; e5 superseded
 
-  // headline — the reverted ai_correction (e5) is NOT counted
+  // headline - the reverted ai_correction (e5) is NOT counted
   assert.equal(m.headline.correctionsCaptured.value, 6);
   assert.equal(m.headline.aiErrorCorrections.value, 2); // e1, e4 only (e5 superseded)
   assert.equal(m.headline.rfiPreempted.value, 3); // e2, e6 (revert), fallback - all ops_review

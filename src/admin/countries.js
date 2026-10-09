@@ -1,5 +1,5 @@
 // Country list used by the admin UI for jurisdiction and country-coverage
-// selectors. Mirrors the COUNTRIES list in src/App.js — keep in sync if you
+// selectors. Mirrors the COUNTRIES list in src/App.js - keep in sync if you
 // add markets there.
 export const COUNTRIES = [
   { code: "GB", name: "United Kingdom" },

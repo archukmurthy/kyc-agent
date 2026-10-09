@@ -9,7 +9,7 @@ function monthYearOnly(value) {
 }
 
 // Freeze the selected officer's Companies House record at the moment of selection.
-// This snapshot is stored on the attempt and is what we later compare against —
+// This snapshot is stored on the attempt and is what we later compare against -
 // it must never be re-fetched. Birth is month/year only.
 function buildOfficerSnapshot(candidate, opts = {}) {
   if (!candidate) return null;

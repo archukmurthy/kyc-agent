@@ -1,6 +1,6 @@
 /**
  * api/document-requirements.js
- * Vercel serverless route — DRS endpoint
+ * Vercel serverless route - DRS endpoint
  *
  * POST /api/document-requirements
  * Body: { incorporationCountry, entityType, ownershipType, sector? }
@@ -88,7 +88,7 @@ module.exports = async function handler(req, res) {
 
 /**
  * Derives boolean flags used by the Step 2 renderer to show/hide sections.
- * Add flags here as the form evolves — keeps the frontend declarative.
+ * Add flags here as the form evolves - keeps the frontend declarative.
  */
 function deriveStepFlags(checklist, entityType, sector) {
   const requirements = checklist.map(i => i.requirement);

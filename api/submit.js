@@ -36,7 +36,7 @@ module.exports = async function handler(req, res) {
   }
 
   // A submission may name the analyst dossier it came from, but only the
-  // customer holding that dossier's signed link may claim it — otherwise anyone
+  // customer holding that dossier's signed link may claim it - otherwise anyone
   // could attach a submission to (and lock the analyst out of) any dossier.
   let verifiedDossierId = null;
   if (rawBody.dossierId) {
@@ -56,7 +56,7 @@ module.exports = async function handler(req, res) {
   const body = { ...rawBody, dossierId: verifiedDossierId };
 
   // Phase 1: durable capture. If this throws, the request fails loudly (non-200) so
-  // the browser keeps retrying from its saved draft — the bundle is NOT yet safe.
+  // the browser keeps retrying from its saved draft - the bundle is NOT yet safe.
   try {
     await _deps.enqueue({ submissionId, tenantId, payload: body });
   } catch (err) {
@@ -80,10 +80,10 @@ module.exports = async function handler(req, res) {
   try {
     const r = await _deps.finalizeSubmission(body);
     await _deps.markDone(submissionId, r.sessionId);
-    console.log(`[api/submit] saved inline — session ${r.sessionId}`);
+    console.log(`[api/submit] saved inline - session ${r.sessionId}`);
     return res.status(200).json({ status: "saved", ...r });
   } catch (err) {
-    // Count this attempt here only if markProcessing didn't already count it above —
+    // Count this attempt here only if markProcessing didn't already count it above -
     // never double-counts, never zero-counts.
     await _deps.markFailed(submissionId, err.message, { incrementAttempt: !claimed }).catch(() => {});
     console.warn(`[api/submit] finalize deferred to worker (${submissionId}):`, err.message);

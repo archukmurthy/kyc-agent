@@ -53,7 +53,7 @@ async function getByDiditSession(diditSessionId) {
 
 // Update the mutable lifecycle fields of an attempt. Only the fields provided
 // (non-null) are changed; the rest are preserved via COALESCE. This is pure data
-// access — ordering/terminal-status rules live in the webhook handler.
+// access - ordering/terminal-status rules live in the webhook handler.
 async function updateAttempt(id, { status = null, diditSessionId = null, verificationResult = null, secureIdentityReference = null, lastEventAt = null } = {}) {
   if (!id) throw new Error("updateAttempt: id is required");
   const sql = client();

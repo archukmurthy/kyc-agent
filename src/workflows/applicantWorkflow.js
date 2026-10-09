@@ -5,7 +5,7 @@ import {
   formatShareholding,
 } from "../pipeline";
 
-  // RFC4122 v4 UUID — uses crypto.randomUUID where available, falls back
+  // RFC4122 v4 UUID - uses crypto.randomUUID where available, falls back
   // to a Math.random()-based generator for older browsers.
 export const genUUID = () => {
     if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
@@ -93,7 +93,7 @@ export const getApplicantCandidates = (research, dossierStakeholders) => {
     if (candidates.length > 0) return candidates;
 
     // Fallback: customer arrived via an invite link (no research in this
-    // session) — derive candidates from the dossier's saved stakeholders.
+    // session) - derive candidates from the dossier's saved stakeholders.
     // dossierStakeholders may be an array, a { all: [...] } wrapper, or the
     // research stakeholder-field map { directors: [...], ubo_names: [...] }.
     const flat = Array.isArray(dossierStakeholders)

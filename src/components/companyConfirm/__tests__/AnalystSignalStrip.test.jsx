@@ -3,7 +3,7 @@
  * commit 5's analyst UI renders NOTHING. This is the check that lets us ship
  * the build-time view knowing one flag removes it for real customers.
  *
- * react-dom + act (this repo does not install @testing-library) — same pattern
+ * react-dom + act (this repo does not install @testing-library) - same pattern
  * as src/__tests__/appMounts.test.jsx.
  */
 import React from 'react';

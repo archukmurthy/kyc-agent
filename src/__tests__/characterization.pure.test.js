@@ -1,5 +1,5 @@
 /**
- * characterization.pure.test.js — golden-value tests for the pure modules
+ * characterization.pure.test.js - golden-value tests for the pure modules
  * extracted from App.js during the modular-architecture refactor. Values were
  * captured from the pre-refactor App.js source; these tests pin the extracted
  * modules to that behaviour.

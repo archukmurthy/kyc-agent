@@ -12,8 +12,8 @@
  * Usage:
  *   const { takeScreenshot } = require("./screenshotHelper");
  *   const result = await takeScreenshot(url, destPath, { requirement });
- *   // result.fullPagePath    — compliance evidence (full page)
- *   // result.focusedPath     — human-readable (content section only)
+ *   // result.fullPagePath    - compliance evidence (full page)
+ *   // result.focusedPath     - human-readable (content section only)
  */
 
 let playwright = null;
@@ -24,7 +24,7 @@ try {
 }
 
 // ─── Cookie banner selectors to dismiss ───────────────────────────────────────
-// Ordered by priority — first match wins. Add more as you encounter them.
+// Ordered by priority - first match wins. Add more as you encounter them.
 const COOKIE_DISMISS_SELECTORS = [
   // Companies House / GOV.UK
   'button:has-text("Reject analytics cookies")',
@@ -47,7 +47,7 @@ const COOKIE_DISMISS_SELECTORS = [
 const CONTENT_SELECTORS = {
   "Legal existence": [
     ".company-header",                      // Companies House company header
-    "h1",                                   // fallback — company name heading
+    "h1",                                   // fallback - company name heading
     ".registered-office-address",
     "#content",
   ],
@@ -92,13 +92,13 @@ function getContentSelector(requirement) {
 
 // ─── Wait strategy per site ───────────────────────────────────────────────────
 function getWaitStrategy(url) {
-  // FCA register and other JS SPAs — wait for network to fully settle
+  // FCA register and other JS SPAs - wait for network to fully settle
   if (url.includes("register.fca.org.uk") ||
       url.includes("eservices.mas.gov.sg") ||
       url.includes("bizfile.gov.sg")) {
     return "networkidle";
   }
-  // Most registries — domcontentloaded is fine but add a short extra wait
+  // Most registries - domcontentloaded is fine but add a short extra wait
   return "domcontentloaded";
 }
 
@@ -108,14 +108,14 @@ function getWaitStrategy(url) {
  *
  * @param {string} url
  * @param {string} destPath        - base path e.g. "/path/to/Revolut_Legal_existence_pass1"
- *                                   (no extension — we add _full.png and _focused.png)
+ *                                   (no extension - we add _full.png and _focused.png)
  * @param {Object} options
  * @param {string} options.requirement  - DRS requirement name, used to pick content selector
  * @returns {{ success, fullPagePath, focusedPath, reason }}
  */
 async function takeScreenshot(url, destPath, options = {}) {
   if (!playwright) return { success: false, reason: "Playwright not installed" };
-  // Skip in Vercel serverless — no browser runtime available (see PR-028)
+  // Skip in Vercel serverless - no browser runtime available (see PR-028)
   if (process.env.VERCEL) return { success: false, reason: "Playwright skipped in Vercel serverless (PR-028)" };
 
   const requirement   = options.requirement || "";
@@ -156,7 +156,7 @@ async function takeScreenshot(url, destPath, options = {}) {
           await page.waitForTimeout(500); // allow banner animation to clear
           break;
         }
-      } catch { /* selector not found — try next */ }
+      } catch { /* selector not found - try next */ }
     }
 
     // ── Step 2: Full page screenshot (compliance evidence record) ─────────────
@@ -189,7 +189,7 @@ async function takeScreenshot(url, destPath, options = {}) {
       } catch { /* try next selector */ }
     }
 
-    // Fallback — viewport screenshot if no content element found
+    // Fallback - viewport screenshot if no content element found
     if (!focusedSuccess) {
       await page.screenshot({ path: focusedPath, fullPage: false });
       console.log(`[Screenshot]   Focused fallback (viewport): ${focusedPath}`);
@@ -199,7 +199,7 @@ async function takeScreenshot(url, destPath, options = {}) {
       success:       true,
       fullPagePath,
       focusedPath,
-      cookieDismissed: true, // approximate — we attempted dismissal
+      cookieDismissed: true, // approximate - we attempted dismissal
     };
 
   } catch (err) {

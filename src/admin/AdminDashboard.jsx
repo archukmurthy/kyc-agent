@@ -97,7 +97,7 @@ export default function AdminDashboard({
 
   // Resume target for "Run Full Setup Wizard".
   //
-  // Company / documents / sources are treated as optional — they have
+  // Company / documents / sources are treated as optional - they have
   // defaults and don't gate publishing. Only licences, active entity types,
   // and schemas for active matrix cells are "required". When everything
   // required is done, return 1 so the user reviews from the beginning rather
@@ -113,7 +113,7 @@ export default function AdminDashboard({
   // Deep-merge nested maps (schemas, documents) so a partial patch from a
   // step / mini-wizard adds to the existing set instead of overwriting it.
   // Without this, two siblings that each patch `schemas` would clobber each
-  // other's writes — and a single schema save that didn't pre-spread the
+  // other's writes - and a single schema save that didn't pre-spread the
   // full schemas map would silently drop every other configured schema.
   function onConfigChange(patch) {
     if (!patch) return;
@@ -150,7 +150,7 @@ export default function AdminDashboard({
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
       setPublishMsg({ ok: true, text: `Published - v${data.version} is live` });
       setHasUnpublishedChanges(false);
-      // Clear staged preview now that the same config is live — prevents an
+      // Clear staged preview now that the same config is live - prevents an
       // open preview tab from continuing to show pre-publish state on refresh.
       clearPreviewSession();
       const cfgRes = await fetch(`/api/config?tenant=${encodeURIComponent(tenantId)}`, { cache: "no-store" });
@@ -196,7 +196,7 @@ export default function AdminDashboard({
     // Re-mount the standalone Documents view each time so it picks up the
     // latest entity types (e.g. one just added via the mini-wizard).
     if (v === "documents") setDocumentsViewKey((k) => k + 1);
-    // Same for the schemas view — bumping the key forces StepSchemas to
+    // Same for the schemas view - bumping the key forces StepSchemas to
     // re-mount so its derived state (selected cell, tabs) starts from the
     // freshest config.
     if (v === "schemas") setSchemasViewKey((k) => k + 1);
@@ -232,7 +232,7 @@ export default function AdminDashboard({
         tenantId={tenantId}
         onPublishSuccess={async () => {
           setHasUnpublishedChanges(false);
-          // Re-fetch the live config so localConfig matches what's in KV —
+          // Re-fetch the live config so localConfig matches what's in KV -
           // including any new schemas and server-side metadata (_version,
           // _publishedAt). Without this the wizard's in-step publish can
           // leave the dashboard's matrix / status pills stale.

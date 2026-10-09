@@ -20,8 +20,8 @@
 ### Owner decisions (binding, 2026-09-17)
 
 1. **RERES-1 is done:** every correction, entity type included, re-runs research (commit cbf5691).
-2. **Item 5 — no manual form link:** when research can't run (failure or cap) and the tenant has no `manualFormUrl`, the customer continues on the Applicant page **without prefill** (the wrong company's findings are cleared, their typed applicant details kept). With a `manualFormUrl`, today's picker-with-manual-card fallback stays.
-3. **Item 9 — document agents:** for customer research (`isCustomerResearch`), `/api/doc-search` and `/api/self-source` run **only when the customer clicks** a "Find documents automatically" button on the documents step. Analysts (pre-boarding) and plain fresh onboarding keep today's auto-run.
+2. **Item 5 - no manual form link:** when research can't run (failure or cap) and the tenant has no `manualFormUrl`, the customer continues on the Applicant page **without prefill** (the wrong company's findings are cleared, their typed applicant details kept). With a `manualFormUrl`, today's picker-with-manual-card fallback stays.
+3. **Item 9 - document agents:** for customer research (`isCustomerResearch`), `/api/doc-search` and `/api/self-source` run **only when the customer clicks** a "Find documents automatically" button on the documents step. Analysts (pre-boarding) and plain fresh onboarding keep today's auto-run.
 
 ### Scope limit (binding)
 
@@ -42,8 +42,8 @@ The server grant is enforced for **link customers** (a verified `dossier:` token
   - `consume(payload)` → `Promise<boolean>`: true the first time a `jti` is burned (storage key `research-grant-used:<jti>`, TTL 900s), false after. `// ponytail:` note that get-then-set is not atomic (bounded: a racing duplicate within one request window).
   - `__setDeps({ storage, now })`.
 - `POST /api/search-attempt` allowed → body gains `grant` (subject `dossier:<dossierId>`, tenant = actor tenant). Refused → no grant.
-- `POST /api/research-attempt` allowed → body gains `grant` (subject `application:<applicationId>`, `tenantId: ""`). Refused → no grant. (Issued for symmetry; not enforced — see scope limit.)
-- A grant mint failure (no secret) on an otherwise allowed attempt → `200 { allowed: false, attemptsUsed, remaining, warning: "grant_unavailable" }` — and the count must NOT be incremented: check the secret is configured BEFORE the increment.
+- `POST /api/research-attempt` allowed → body gains `grant` (subject `application:<applicationId>`, `tenantId: ""`). Refused → no grant. (Issued for symmetry; not enforced - see scope limit.)
+- A grant mint failure (no secret) on an otherwise allowed attempt → `200 { allowed: false, attemptsUsed, remaining, warning: "grant_unavailable" }` - and the count must NOT be incremented: check the secret is configured BEFORE the increment.
 - `POST /api/research`: when `resolveDossierActor(req)` is a **customer**, require header `X-Research-Grant`:
   - verify with `subject: "dossier:" + actor.dossierId`, `tenantId: actor.tenantId`; invalid/missing → `403 { error: "research_grant_required" }` before config read or any spend;
   - `mode: "research"` additionally calls `consume`; already consumed → `403 { error: "research_grant_used" }`;
@@ -114,6 +114,6 @@ Commit: `fix(reresearch): log corrections after they save; no-manual-form fallba
 
 ### Task 5: Verification and backlog
 
-- [ ] `npm run test:node`, full `CI=true npx react-scripts test --watchAll=false` (re-run known-flaky suites in isolation), `CI=true npm run build` — all pass.
+- [ ] `npm run test:node`, full `CI=true npx react-scripts test --watchAll=false` (re-run known-flaky suites in isolation), `CI=true npm run build` - all pass.
 - [ ] `docs/BACKLOG.md`: mark RERES-2 and RERES-3 DONE with a one-line resolution each; add under RERES-2 that fresh-customer counts stay advisory until PLAT-7; note `RESEARCH_GRANT_SECRET` (optional) next to DEP-3.
 - [ ] Commit: `docs: RERES-2 and RERES-3 done`.

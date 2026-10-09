@@ -1,14 +1,14 @@
 // Fetch a saved entity dossier by id so the Preview button and the customer
 // invite link (a signed dossier token) can reconstruct full onboarding state
-// from the DB — the dossier is the source of truth. Two credentials, resolved
+// from the DB - the dossier is the source of truth. Two credentials, resolved
 // via lib/dossierAccess.js: an analyst (`Bearer <PREBOARDING_PASSWORD>` +
 // `?tenant=`, naming any dossier id in that tenant) or a customer (the signed
-// link token, which names exactly one dossier — no bare `?dossierId=` lookup
+// link token, which names exactly one dossier - no bare `?dossierId=` lookup
 // exists any more). Returns raw_research (the complete research.found with
 // .stakeholders + verificationStatus intact) plus the tiered arrays and
 // broken-out coverage counts. Read-only; best-effort on DB failure: returns
 // 200 with success:false so the flow never hard-blocks, but auth failures are
-// proper 4xx/410. There is no single `coverage` column — it's reconstructed
+// proper 4xx/410. There is no single `coverage` column - it's reconstructed
 // client-side from total_fields/verified_fields/fill_rate/etc.
 //
 // CommonJS (module.exports) so src/setupProxy.js can require() it for local dev,
@@ -16,7 +16,7 @@
 const { neon } = require("@neondatabase/serverless");
 const dossierAccess = require("../lib/dossierAccess");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { neon, access: dossierAccess };
 
 module.exports = async function handler(req, res) {

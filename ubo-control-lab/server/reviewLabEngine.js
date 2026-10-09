@@ -82,7 +82,7 @@ const exact = (value) => ({ type: "EXACT", value });
 
 const DEMO_ALICE_28_FIXTURE = simpleFixture(
   "DEMO-ALICE-28",
-  "Alice — direct + indirect ownership",
+  "Alice - direct + indirect ownership",
   "The accepted engine multiplies the indirect chain and aggregates it with Alice's independent direct interest.",
   "COMPANY",
   [
@@ -112,7 +112,7 @@ const FIXTURES = Object.freeze([
   simpleFixture("V2-LAB-04", "Layer closure comparator", "An exact 25% endpoint demonstrates the frozen strict >25 statutory comparator.", "COMPANY", [TARGET, PERSON], [
     { id: "v2-layer-endpoint-25", from: PERSON.entityId, to: TARGET.entityId, type: "ECONOMIC_OWNERSHIP", value: exact(25), concept: "SHARE_OWNERSHIP" },
   ]),
-  simpleFixture("V2-LAB-05", "Registry band and declaration", "Declared 80% is compared with an independent 75–100% registry band: corroborated, not exact-value verified.", "COMPANY", [TARGET, PERSON], [
+  simpleFixture("V2-LAB-05", "Registry band and declaration", "Declared 80% is compared with an independent 75-100% registry band: corroborated, not exact-value verified.", "COMPANY", [TARGET, PERSON], [
     { id: "v2-band-owner-80", from: PERSON.entityId, to: TARGET.entityId, type: "ECONOMIC_OWNERSHIP", value: exact(80), concept: "SHARE_OWNERSHIP" },
   ], {
     percentageEvidenceInputs: [{
@@ -124,8 +124,8 @@ const FIXTURES = Object.freeze([
   simpleFixture("V2-LAB-06", "TDR direct LLP versus intermediary", "Voting bands can satisfy a direct LLP condition but do not manufacture an ASDA intermediary-majority chain.", "LLP", [TDR, ...TDR_PEOPLE], TDR_PEOPLE.map((person) => ({
     id: `${person.entityId}-tdr-voting`, from: person.entityId, to: TDR.entityId, type: "VOTING_RIGHTS", value: range(25, 50), sourceNature: "voting-rights-25-to-50-percent-limited-liability-partnership",
   }))),
-  { id: "V2-LAB-07", label: "ASDA — SYSTEM COVERAGE AVAILABLE", description: "Actual Wave 9 ASDA A plan with sanitized system coverage.", entityProfile: "COMPANY", targetEntityId: ASDA.targetEntityId, entities: ASDA.entities, relationships: ASDA.relationships, defaultProfileId: "asda-wave-9-further-coverage" },
-  { id: "V2-LAB-08", label: "ASDA — DISCOVERY EXHAUSTED / GOVERNANCE EVIDENCE REQUIRED", description: "Actual Wave 9 ASDA B plan with predictable registry opacity and a coherent TDR evidence package.", entityProfile: "COMPANY", targetEntityId: ASDA.targetEntityId, entities: ASDA.entities, relationships: ASDA.relationships, defaultProfileId: "asda-wave-9-predictable-opacity", asdaB: true },
+  { id: "V2-LAB-07", label: "ASDA - SYSTEM COVERAGE AVAILABLE", description: "Actual Wave 9 ASDA A plan with sanitized system coverage.", entityProfile: "COMPANY", targetEntityId: ASDA.targetEntityId, entities: ASDA.entities, relationships: ASDA.relationships, defaultProfileId: "asda-wave-9-further-coverage" },
+  { id: "V2-LAB-08", label: "ASDA - DISCOVERY EXHAUSTED / GOVERNANCE EVIDENCE REQUIRED", description: "Actual Wave 9 ASDA B plan with predictable registry opacity and a coherent TDR evidence package.", entityProfile: "COMPANY", targetEntityId: ASDA.targetEntityId, entities: ASDA.entities, relationships: ASDA.relationships, defaultProfileId: "asda-wave-9-predictable-opacity", asdaB: true },
   simpleFixture("V2-LAB-09", "Operational failure", "A provider outage remains an operational blocker and does not create customer burden solely from failure.", "COMPANY", [TARGET], [], { outcome: { state: "UNAVAILABLE" }, issues: [{ code: "SOURCE_TEMPORARILY_UNAVAILABLE", retryable: true }], operationBlocked: true }),
   simpleFixture("V2-LAB-10", "Specialist structure", "A trust structure routes to specialist review rather than an ordinary recursive customer plan.", "COMPANY", [TARGET, { entityId: "v2-trust", category: "TRUST_OR_LEGAL_ARRANGEMENT", name: "REVIEW FAMILY TRUST", profile: "TRUST" }], [
     { id: "v2-trust-target", from: "v2-trust", to: TARGET.entityId, type: "TRUST_OWNERSHIP" },
@@ -144,7 +144,7 @@ function catalogue() {
       readiness: "REVIEW_ONLY",
       productionAuthorized: false,
       blockingSignoffCount: 18,
-      watermark: "REVIEW POLICY — NOT APPROVED FOR PRODUCTION",
+      watermark: "REVIEW POLICY - NOT APPROVED FOR PRODUCTION",
     },
     profiles: [{ profileId: "NOT_PROVIDED", label: "No RegistryCapabilityProfile", warning: "NOT_PROVIDED", state: "NOT_PROVIDED" }, ...REVIEW_PROFILES.profiles.map(({ label, warning, profile }) => ({ profileId: profile.profileId, label, warning, profileVersion: profile.profileVersion, profileHash: profile.profileHash, effectivePeriod: clone(profile.effectivePeriod), lastReviewedDate: profile.lastReviewedDate, reviewByDate: profile.reviewByDate, entitlementContext: clone(profile.entitlementContext), capabilityEntries: clone(profile.capabilityEntries), requiredSignoffs: clone(profile.requiredSignoffs), productionAuthorized: false }))],
     fixtures: FIXTURES.map(({ id, label, description, entityProfile, defaultProfileId }) => ({ id, label, description, entityProfile, defaultProfileId: defaultProfileId || "NOT_PROVIDED" })),

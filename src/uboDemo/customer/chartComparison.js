@@ -314,7 +314,7 @@ function buildChartResearchComparison(researchEntries = [], chartEntries = [], {
           identityResolutions: review[0].resolution.identityResolutions,
         };
       }
-      return needsConfirmation(`chart:${chartEntry.fact.factId}`, null, chartEntry, "Chart only — not independently corroborated by current research.");
+      return needsConfirmation(`chart:${chartEntry.fact.factId}`, null, chartEntry, "Chart only - not independently corroborated by current research.");
     }
     const foundIndex = uniqueAutomatic.index;
     used.add(foundIndex);
@@ -325,7 +325,7 @@ function buildChartResearchComparison(researchEntries = [], chartEntries = [], {
     });
   });
   research.forEach((researchEntry, index) => {
-    if (!used.has(index)) rows.push(needsConfirmation(`research:${researchEntry.fact.factId}`, researchEntry, null, "Research only — need confirmation from customer."));
+    if (!used.has(index)) rows.push(needsConfirmation(`research:${researchEntry.fact.factId}`, researchEntry, null, "Research only - need confirmation from customer."));
   });
   return rows;
 }

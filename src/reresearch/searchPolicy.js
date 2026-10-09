@@ -1,5 +1,5 @@
 /**
- * searchPolicy.js — pure, UI-agnostic policy for the self-serve re-research
+ * searchPolicy.js - pure, UI-agnostic policy for the self-serve re-research
  * two-retry cap and the dispute-kind mapping.
  *
  * No I/O, no React. CommonJS-in-src (the engine / pipeline.js precedent) so it's
@@ -19,7 +19,7 @@
 
 const SEARCH_CAP = 2;
 
-// Shown on the SECOND attempt — the usual cause of a second miss is the name.
+// Shown on the SECOND attempt - the usual cause of a second miss is the name.
 const LEGAL_NAME_ALERT =
   "Use the legal entity name exactly as registered with the local authority - " +
   "not a trade name or common name.";

@@ -1,10 +1,10 @@
 /**
- * transitions.js — the transition table as DATA.
+ * transitions.js - the transition table as DATA.
  *
  * An ordered array of legal edges: { from, event, to, guard }. `guard` is the
  * name of a predicate in guards.js, or null for an unguarded edge.
  *
- * EVERY edge not in this table is illegal — no implicit self-loops, no
+ * EVERY edge not in this table is illegal - no implicit self-loops, no
  * state-skipping (draft → ready is absent, therefore illegal), and nothing out
  * of `locked` (it has no rows here and is also enforced as terminal).
  *

@@ -17,7 +17,7 @@ describe("parsePercentage - a point value, or nothing", () => {
   });
 
   it("refuses a band or a qualifier rather than picking a number out of it", () => {
-    ["25-50%", "25 – 50%", "25 to 50%", "Over 25%", "More than 25%", "at least 25%", "~25%"]
+    ["25-50%", "25 - 50%", "25 to 50%", "Over 25%", "More than 25%", "at least 25%", "~25%"]
       .forEach((v) => expect(parsePercentage(v)).toBeNull());
   });
 

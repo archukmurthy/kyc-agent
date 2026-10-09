@@ -1,4 +1,4 @@
-# Design — Tenant-scoped pre-boarding, dossier security, AI-endpoint hardening, customer self-serve re-research
+# Design - Tenant-scoped pre-boarding, dossier security, AI-endpoint hardening, customer self-serve re-research
 
 **Date:** 2026-09-16
 **Status:** approved section-by-section by the product owner (2026-09-15 / 2026-09-16)
@@ -9,7 +9,7 @@
 
 ## 1. Goal
 
-Make the pre-boarding → invite → customer-onboarding path correct per tenant, authenticated, cost-safe, and able to re-research when the customer corrects the analyst's data — without losing the audit trail.
+Make the pre-boarding → invite → customer-onboarding path correct per tenant, authenticated, cost-safe, and able to re-research when the customer corrects the analyst's data - without losing the audit trail.
 
 Five parts, built in this order. Each is independently shippable and independently testable.
 
@@ -36,17 +36,17 @@ Five parts, built in this order. Each is independently shippable and independent
 - **Constant-time comparison** (`crypto.timingSafeEqual`) for every secret/signature comparison.
 - **Tenant resolution stays 3-strict**: no `"nium"` fallback anywhere, client or server.
 - **Inline styles only** in React; match the surrounding file's conventions.
-- **Refs, not state, for gap/stakeholder form values** (`gapRef`, `stakeholdersRef`) — do not lift to `useState`.
+- **Refs, not state, for gap/stakeholder form values** (`gapRef`, `stakeholdersRef`) - do not lift to `useState`.
 
 ---
 
-## 3. Part 5 — Tenancy, links and default settings
+## 3. Part 5 - Tenancy, links and default settings
 
 ### 3.1 Problem (measured, not assumed)
 
 - `?preboarding=1` is global: read in `src/index.js:12` (title only) and `src/App.js:4699` + `:771` (routing). Nothing ties it to a tenant.
 - `PREBOARDING_PASSWORD = "ARCH"` (`src/App.js:287`) is a client constant; `PreboardingGate.jsx:37` compares in-browser.
-- `GET /api/config?tenant=<anything>` **auto-seeds a blank config** for any sanitised string (`api/config.js:58-71`) — a typo creates a tenant. `api/save-dossier.js:65-69` then creates the Postgres `tenants` row.
+- `GET /api/config?tenant=<anything>` **auto-seeds a blank config** for any sanitised string (`api/config.js:58-71`) - a typo creates a tenant. `api/save-dossier.js:65-69` then creates the Postgres `tenants` row.
 - `isActive` (tenant registry) is read only by the super-admin UI; no endpoint enforces it.
 - The draft key is global: `kyc_draft_v1` (`src/utils/submissionDraft.js:5`); the draft stores neither `tenantId` nor `agentType`, so a tenant-A draft is offered under tenant B and restores its `dossierId` (`src/App.js:887`).
 - **Verified false lead:** no code path injects `tenant=nium` into another tenant's invite link. `preview_tenant_id` and `sessionStorage.tenant_id` are written and never read; `AdminDashboard.jsx:57` default prop never applies; config `_tenantId` is not used for links.
@@ -59,7 +59,7 @@ Five parts, built in this order. Each is independently shippable and independent
 ### 3.2 Decisions
 
 1. **Entry:** `/preboarding?tenant=<id>` (own path, mirrors `/admin`). `/?tenant=<id>&preboarding=1` **redirects** to it (client-side, preserving other params).
-2. **Per-tenant switch:** `preboardingEnabled` on the **tenant registry entry** (not the tenant config — a config rollback must never silently re-open or close pre-boarding); **super admin only** toggles it (tenant card, `PUT /api/tenants?action=toggle-preboarding`). Tenant admins see a read-only indicator.
+2. **Per-tenant switch:** `preboardingEnabled` on the **tenant registry entry** (not the tenant config - a config rollback must never silently re-open or close pre-boarding); **super admin only** toggles it (tenant card, `PUT /api/tenants?action=toggle-preboarding`). Tenant admins see a read-only indicator.
 3. **Password:** one shared, **server-checked** analyst password (`PREBOARDING_PASSWORD` env). Per-tenant passwords → PREB-3.
 4. **Tenant binding:** the pre-boarding auth response carries the verified tenant; the client uses it for dossier saves and invite links.
 5. **No silent tenant creation:** config GET seeds only for tenants that exist (registry entry, or a pre-existing non-blank config for legacy tenants).
@@ -79,7 +79,7 @@ Five parts, built in this order. Each is independently shippable and independent
 - 404 `tenant_not_found` when the tenant has no registry entry **and** no existing non-blank config.
 - 403 `tenant_inactive` when `isActive === false`; 403 `preboarding_disabled` when `config.preboarding?.enabled !== true`.
 - 500 when `PREBOARDING_PASSWORD` is unset; 401 on mismatch (`timingSafeEqual` via `lib/auth.js#verifyEnvBearer`).
-- 200 `{ success: true, token: <password>, tenantId, companyName }` — same shape as `api/admin-auth.js`, so the client stores it in `sessionStorage` (`preboarding_token`, `preboarding_tenant`) exactly like `AdminRoot`.
+- 200 `{ success: true, token: <password>, tenantId, companyName }` - same shape as `api/admin-auth.js`, so the client stores it in `sessionStorage` (`preboarding_token`, `preboarding_tenant`) exactly like `AdminRoot`.
 - `GET` (no password) returns only `{ available: boolean, reason }` so the gate can render the right screen without probing the password.
 
 **Tenant existence helper.** New `lib/tenantRegistry.js` (CommonJS): `readRegistry()`, `findTenant(id)`, `tenantExists(id)`, `isTenantActive(id)`. `api/tenants.js` keeps ownership of writes and is refactored to use the helper (no second registry reader; `api/benchmark.js`'s copy-pasted `readConfig`/`seedTenant` is replaced by the shared one).
@@ -104,7 +104,7 @@ Five parts, built in this order. Each is independently shippable and independent
 **Default-settings template.**
 - `lib/configTemplates.js` (new, CommonJS): `listTemplates()` → `[{ id: "nium-default", label: "Nium default settings", description }]`; `buildTemplateConfig(id, tenantId)` → delegates to `lib/seedConfig.js#buildDefaultConfig` and clears brand fields. Templates live in code, so they cannot be deleted at runtime.
 - `GET /api/config-templates` lists them; `GET /api/config-templates?id=nium-default&tenant=<id>` returns the built config (admin credential required).
-- Admin panel: **"Apply default settings"** in `StepPublish` — confirm dialog → archive current version → load the template into the working draft (not published). Publish remains the only path to live.
+- Admin panel: **"Apply default settings"** in `StepPublish` - confirm dialog → archive current version → load the template into the working draft (not published). Publish remains the only path to live.
 - Super admin create: unchanged options, but the copy is brand-cleared and `startFrom` values become `blank` | `nium-default`.
 - `src/admin/defaultConfig.js` and the seed half of `src/config/localDefaultConfig.js` are deleted; the admin offline fallback fetches the template (and, if offline, renders blank).
 
@@ -122,14 +122,14 @@ Jest: `/preboarding` renders the gate; legacy `?preboarding=1` redirects; disabl
 
 ---
 
-## 4. Part 1 — Credentials and endpoint locks
+## 4. Part 1 - Credentials and endpoint locks
 
 ### 4.1 Decisions
 
 - **Customer key:** signed, expiring (30 days), revocable `dossierToken`.
 - **Analyst key:** shared password, server-checked, Bearer.
 - **Dual-credential** on the shared endpoints (the customer re-research path needs them).
-- **Old `?dossierId=` links break** — no grace period.
+- **Old `?dossierId=` links break** - no grace period.
 - **Ownership lock:** once the customer has changed anything (or submitted), the analyst is read-only for that dossier, enforced server-side.
 - `change-events` (write) and `amendment-documents` (read) get the same locks.
 
@@ -143,7 +143,7 @@ Jest: `/preboarding` renders the gate; legacy `?preboarding=1` redirects; disabl
 
 **`lib/auth.js`** gains `requireEnvBearer(req, res, envName)` (constant-time) and `readBearer(req)`. Existing hash helpers stay (weak-hash replacement remains PLAT-2).
 
-**`lib/dossierAccess.js`** (new, CommonJS) — one place that answers "who is calling, and may they touch this dossier?":
+**`lib/dossierAccess.js`** (new, CommonJS) - one place that answers "who is calling, and may they touch this dossier?":
 ```
 resolveDossierActor(req)          → { kind: "analyst"|"customer"|"none", tenantId, dossierId|null, reason }
 assertCanReadDossier(actor, row)  → { ok, status, error }
@@ -155,18 +155,18 @@ Ownership: `entity_dossiers.owned_by` (`'analyst' | 'customer'`, migration 026, 
 
 | Endpoint | analyst Bearer | customer token | Notes |
 |---|---|---|---|
-| `POST /api/preboarding-auth` | — | — | issues the analyst credential |
-| `POST /api/invite` | required | — | mints the dossier token, emails the token link |
-| `POST /api/revoke-dossier-token` (new) | required | — | body `{ dossierId }` or `{ jti }`; revokes |
+| `POST /api/preboarding-auth` | - | - | issues the analyst credential |
+| `POST /api/invite` | required | - | mints the dossier token, emails the token link |
+| `POST /api/revoke-dossier-token` (new) | required | - | body `{ dossierId }` or `{ jti }`; revokes |
 | `GET /api/get-dossier` | read any dossier in its tenant | read only its own dossier | token tenant must match the row |
 | `POST /api/save-dossier` (update) | refused when `owned_by = 'customer'` | own dossier only | tenant from credential |
 | `POST /api/save-dossier` (create) | required | refused | customers never create dossiers |
 | `GET/POST /api/search-attempt` | own tenant | own dossier | **adds the missing `tenant_id` filter** |
 | `POST /api/change-events` (dossier-keyed) | read-only for customer-owned | own dossier | non-dossier ids unchanged (PLAT-7) |
 | `GET /api/amendment-documents` (dossier-keyed) | own tenant | own dossier | same |
-| `POST /api/dossier-reseed` | — | — | pure decision, stores/returns nothing |
+| `POST /api/dossier-reseed` | - | - | pure decision, stores/returns nothing |
 
-Failures: `401 unauthorized`, `403 dossier_locked`, `410 link_expired` / `link_revoked` (customer-facing copy: "This link has expired — ask your onboarding contact for a new one").
+Failures: `401 unauthorized`, `403 dossier_locked`, `410 link_expired` / `link_revoked` (customer-facing copy: "This link has expired - ask your onboarding contact for a new one").
 
 **Link format.** `/?tenant=<id>&dossierToken=<token>&journey=customer`. `InviteScreen` no longer builds the link: it POSTs to `/api/invite` and renders the link the server returns (single source of truth). `api/invite.js` keeps the same-origin validation for any client-supplied link and drops `dossierId` from the URL. `src/App.js` link-landing reads `dossierToken`, sends it as `Authorization: Bearer dossier:<token>` (or `?dossierToken=`, see below) to `get-dossier`, and keeps it in memory + draft for later calls.
 
@@ -174,7 +174,7 @@ Failures: `401 unauthorized`, `403 dossier_locked`, `410 link_expired` / `link_r
 
 **Preview (analyst) is read-only** for customer-owned dossiers: the client shows a "Review only" banner and disables save/re-search/submit/correction actions; the server refuses regardless.
 
-**`save-dossier` hardening:** the `INSERT INTO tenants` upsert is removed — the tenant must already exist (Part 5 guarantees it).
+**`save-dossier` hardening:** the `INSERT INTO tenants` upsert is removed - the tenant must already exist (Part 5 guarantees it).
 
 ### 4.3 Tests (Part 1)
 
@@ -183,7 +183,7 @@ Jest: gate calls the server and stores the credential; expired-link screen; invi
 
 ---
 
-## 5. Part 2 — AI-endpoint hardening
+## 5. Part 2 - AI-endpoint hardening
 
 ### 5.1 Decisions
 
@@ -213,7 +213,7 @@ POST /api/research
 
 **`lib/rateLimit.js`** (new, CommonJS): `check({ bucket, key, limit, windowSeconds })` → `{ allowed, remaining, retryAfterSeconds }`, backed by `lib/storage.js` with keys `ratelimit:<bucket>:<key>:<windowStart>` and a TTL of one window. Non-atomic read-modify-write is accepted at the limit edge (`// ponytail: fixed-window counter, swap for an atomic INCR if the edge case matters`). Key selection: analyst credential → `analyst:<hash>`; dossier token → `dossier:<dossierId>`; otherwise `ip:<first x-forwarded-for entry>`.
 
-Defaults (env-tunable, `RATE_LIMIT_*`): research 40/h, doc-search 40/h, self-source 40/h, ubo-discovery 20/h, generate-policy 10/h, analyst bucket 200/h. Exceeded → `429 { error: "rate_limited", retryAfterSeconds }` + `Retry-After`; the client shows "Too many requests — please try again in N minutes".
+Defaults (env-tunable, `RATE_LIMIT_*`): research 40/h, doc-search 40/h, self-source 40/h, ubo-discovery 20/h, generate-policy 10/h, analyst bucket 200/h. Exceeded → `429 { error: "rate_limited", retryAfterSeconds }` + `Retry-After`; the client shows "Too many requests - please try again in N minutes".
 
 **Other endpoints.**
 - `api/benchmark.js`: requires the admin credential (`requireEnvBearer` / tenant-auth), plus the shared config reader; keeps its 25-company cap.
@@ -227,7 +227,7 @@ Jest: the three call sites send the new body shape; the 429 message renders.
 
 ---
 
-## 6. Part 3 — Customer correction → re-research
+## 6. Part 3 - Customer correction → re-research
 
 ### 6.1 Decisions
 
@@ -254,7 +254,7 @@ Jest: the three call sites send the new body shape; the 429 message renders.
 1. Set the corrected values into state.
 2. Ask the server for permission + count: `POST /api/search-attempt` (dossier) or `POST /api/research-attempt` (fresh, storage-keyed by application id) → `{ allowed, attemptsUsed, remaining }`. Not allowed → Step 5 fallback.
 3. `POST /api/save-dossier` with `snapshot: true` → the server writes the current row into `entity_dossier_versions` **before** applying the update, and flips `owned_by` to `'customer'`.
-4. Run research with the corrected values passed as **explicit arguments** (`doResearch({ overrides })` — today it reads stale closure state) and `forceRefresh` semantics covered by the new cache key.
+4. Run research with the corrected values passed as **explicit arguments** (`doResearch({ overrides })` - today it reads stale closure state) and `forceRefresh` semantics covered by the new cache key.
 5. Keep: applicant details (`gapRef` applicant keys), gap answers, IDV state, uploaded files, `dossierId`, `landedViaLink`, `onboardingSubmissionId` (no rotation on the dossier path).
    Replace: `research`, `checks`, `affirmedFields`, `inlineEditOpen`, stakeholder state, `coverage`, `fieldMetadata`, **and `selfSourceResults`** (stale-company leak fixed).
    Reset: `factChecks` and both forks, so the gate re-renders confirmed against the new values.
@@ -283,13 +283,13 @@ Browser QA checklist (owner): link → correct name → re-search → continue �
 
 ---
 
-## 7. Part 4 — Pre-boarding polish
+## 7. Part 4 - Pre-boarding polish
 
-1. **Analyst resume** — persist `showDossierView` in the draft (or re-derive it: `agentType==='preboarding' && dossierId && step===confirm`) so resume returns the analyst to `DossierView`.
-2. **`selfSourceResults` in the draft** — add it (plain JSON: labels + URLs) so sourced documents survive resume; `manuallyUploadedDocs` derives from it.
-3. **First-save duplicate race** — client in-flight guard in `saveDossier` + a client-minted `creationKey` sent on the INSERT branch, unique-indexed server-side so a repeat create is ignored.
-4. **Dead code** — remove the `?ref` hydration effect (`src/App.js:1002-1031`; nothing has written `nium_invite_*` since Phase 1) and the duplicate `?preboarding` parse (folded into Part 5). The parked "Back to agent selection" button stays parked.
-5. **Wire orphan tests** — extend the `test:node` glob to cover `src/reresearch/tests/*.nodetest.js` and `dossierLifecycle/__tests__/*`.
+1. **Analyst resume** - persist `showDossierView` in the draft (or re-derive it: `agentType==='preboarding' && dossierId && step===confirm`) so resume returns the analyst to `DossierView`.
+2. **`selfSourceResults` in the draft** - add it (plain JSON: labels + URLs) so sourced documents survive resume; `manuallyUploadedDocs` derives from it.
+3. **First-save duplicate race** - client in-flight guard in `saveDossier` + a client-minted `creationKey` sent on the INSERT branch, unique-indexed server-side so a repeat create is ignored.
+4. **Dead code** - remove the `?ref` hydration effect (`src/App.js:1002-1031`; nothing has written `nium_invite_*` since Phase 1) and the duplicate `?preboarding` parse (folded into Part 5). The parked "Back to agent selection" button stays parked.
+5. **Wire orphan tests** - extend the `test:node` glob to cover `src/reresearch/tests/*.nodetest.js` and `dossierLifecycle/__tests__/*`.
 
 Tests: resume returns to the dossier; sourced docs survive resume; double save creates one row; a link without `?ref` still works; the newly wired suites pass.
 
@@ -307,4 +307,4 @@ Tests: resume returns to the dossier; sourced docs survive resume; double save c
 - `src/App.js` is ~5,400 lines; Parts 3 and 5 touch it heavily. Mitigation: extract the correction logic into `src/reresearch/correctionPlan.js` and keep handlers thin; run build + full jest after each task.
 - Moving prompt construction server-side changes research output if the stored tenant config differs from the browser's. Mitigation: a golden-prompt test comparing the server-built prompt against the current browser-built prompt for the Nium default config.
 - Locking endpoints can break flows we have not mapped. Mitigation: the endpoint matrix is exhaustive and each cell is tested; `dossier-reseed` deliberately stays open.
-- Jest suites `PolicySimulator.test.jsx`, `appMounts.test.jsx`, `noTenantLanding.integration.test.jsx` are known-flaky under parallel load — re-run failures in isolation before treating them as regressions.
+- Jest suites `PolicySimulator.test.jsx`, `appMounts.test.jsx`, `noTenantLanding.integration.test.jsx` are known-flaky under parallel load - re-run failures in isolation before treating them as regressions.

@@ -1,18 +1,18 @@
 /**
- * AmendmentDocCard.jsx — the ONE upload card for an amendment document.
+ * AmendmentDocCard.jsx - the ONE upload card for an amendment document.
  *
  * Rendered in two places from a single implementation: inline on the Confirm
  * row where the correction happened, and in the Fill Gaps "Amendment
  * Documentation" panel. Both are fed the same `{ fieldId, docType }` entry and
  * both read/write the same App-level `amendmentUploads` store (keyed
  * `fieldId::docType`), so an upload started in either place is immediately
- * satisfied in the other — one document, one upload, one source of truth.
+ * satisfied in the other - one document, one upload, one source of truth.
  *
  * CONTROLLED: it owns no upload state. The parent passes the current upload
  * record and receives the file; storing it (and lifting it into the dossier
  * payload, PR-071) stays the parent's job.
  *
- * The customer sees the document NAME only — the internal rule code carried on
+ * The customer sees the document NAME only - the internal rule code carried on
  * `reason` (e.g. "Required by rule ADDR-NOTREFLECTED") is never shown.
  */
 
@@ -45,7 +45,7 @@ export function AmendmentDocCard({
 }) {
   const inputRef = useRef(null);
   const inline = variant === "inline";
-  // "summary-action" renders the control only — the summary panel already shows
+  // "summary-action" renders the control only - the summary panel already shows
   // the document name and status, so repeating them would just be noise.
   const actionOnly = variant === "summary-action";
 

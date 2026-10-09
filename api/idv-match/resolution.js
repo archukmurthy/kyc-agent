@@ -2,7 +2,7 @@
 
 // Band B resolution flow (Phase 7 / Step 5). Server-side decision logic in the
 // exact order 5a -> 5b -> 5c. One round only: at most one question + one upload;
-// anything unresolved goes to review. Returns decisions (never persists — the
+// anything unresolved goes to review. Returns decisions (never persists - the
 // decision row is written by the record-only layer). Applicant-facing text comes
 // from copy.js verbatim; nothing here invents wording.
 const { scoreEquivalence } = require("./nameEquivalence");
@@ -50,7 +50,7 @@ function resolveBandB({
 
   // Not plausibly the same person (fails phonetic + transliteration + fuzzy, well
   // below the ask-threshold): don't ask "what explains the difference?" of a
-  // clearly different person — route straight to review. (Precise Band-C demotion
+  // clearly different person - route straight to review. (Precise Band-C demotion
   // for clearly-different names is BACKLOG BANDS-3.)
   if (!eq.ruleExplained && eq.score < getPolicy().thresholds.skipToReview) {
     return toReview(["not_plausibly_same_person"]);
@@ -93,7 +93,7 @@ async function handleExplanation({ category, officerName, docName, mrzName, evid
   switch (category) {
     case "same_spelling": {
       // Re-run the engine treating the explanation as corroborating input. The
-      // explanation ALONE never resolves — it only clears a near-threshold score.
+      // explanation ALONE never resolves - it only clears a near-threshold score.
       const eq = scoreEquivalence(officerName, primary || { surname: "", forenames: [] });
       const th = getPolicy().thresholds;
       if (eq.score >= th.combinedExplanation) {
@@ -121,7 +121,7 @@ async function handleExplanation({ category, officerName, docName, mrzName, evid
     case "registry_incorrect":
       // Identity-document name proceeds as canonical; light-touch async review;
       // applicant is NOT blocked. A reportability-assessment task is created for a
-      // human — the system never auto-reports.
+      // human - the system never auto-reports.
       return {
         resolved: true, outcomeType: "registry_error_asserted", resolvedBy: "applicant-dialogue",
         basis: "uncorroborated customer assertion", canonicalName: primary,

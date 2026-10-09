@@ -32,7 +32,7 @@ test("reconcileScreening pulls a pending check and stores the attention outcome"
   assert.strictEqual(updates[0].patch.outcome, "attention");
 });
 
-test("reconcileScreening skips rows that are already complete — getCheck not called", async () => {
+test("reconcileScreening skips rows that are already complete - getCheck not called", async () => {
   const rows = [{ id: "row-1", status: "complete", outcome: "clear", complycube_check_id: "cc-check-1" }];
   let getCheckCalls = 0;
   const deps = {

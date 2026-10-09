@@ -214,7 +214,7 @@ function createUboReviewApplication({ policyPack } = {}) {
           productionAuthorized: false,
           pipelineMaturity: result.snapshot.decisionContent.pipelineMaturity,
           blockingSignoffCount: result.snapshot.decisionContent.policy.readiness.unresolvedSignoffs.length,
-          watermark: "REVIEW POLICY — NOT APPROVED FOR PRODUCTION",
+          watermark: "REVIEW POLICY - NOT APPROVED FOR PRODUCTION",
         },
       }));
     });

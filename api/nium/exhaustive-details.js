@@ -6,17 +6,17 @@
  *
  * Method: POST
  * Body:
- *   - publicDetailsId (required) — from Route 1 result
+ *   - publicDetailsId (required) - from Route 1 result
  *
  * Returns:
  *   - searchId            Must be passed by KYC agent into Create Customer v5
  *   - businessName, businessRegistrationNumber, registeredCountry, registeredDate, website
- *   - stakeholders        { individual[], corporate[] } — each with positions[]
+ *   - stakeholders        { individual[], corporate[] } - each with positions[]
  *   - addresses           { registeredAddress }
  *   - raw                 Full Nium response for anything else the agent needs
  *   - cached: true/false  Whether result came from cache
  *
- * CHARGEABLE API — the cache prevents duplicate charges.
+ * CHARGEABLE API - the cache prevents duplicate charges.
  *   Cache key: exhaustive:{publicDetailsId}
  *   TTL: 90 days
  *
@@ -57,7 +57,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ ...cached, cached: true });
     }
   } catch (cacheErr) {
-    // Cache read failure is non-fatal — fall through to live API
+    // Cache read failure is non-fatal - fall through to live API
     console.warn("[exhaustive-details] cache read failed, proceeding to API:", cacheErr.message);
   }
 
@@ -73,7 +73,7 @@ module.exports = async function handler(req, res) {
       registeredDate: data.registeredDate,
       website: data.website,
       // Nium returns stakeholders split into individual + corporate, each with
-      // positions[] (and corporate with sharePercentage) — the exact shape the
+      // positions[] (and corporate with sharePercentage) - the exact shape the
       // Confirm / Fill-Gaps corporate-stakeholder form already consumes.
       stakeholders: data.stakeholders || { individual: [], corporate: [] },
       addresses: data.addresses || null,
@@ -87,7 +87,7 @@ module.exports = async function handler(req, res) {
       await storage.set(cacheKey, payload, { ttlSeconds: CACHE_TTL_SECONDS });
       console.log("[exhaustive-details] Cached:", cacheKey);
     } catch (cacheErr) {
-      // Cache write failure is non-fatal — still return the data
+      // Cache write failure is non-fatal - still return the data
       console.warn("[exhaustive-details] cache write failed:", cacheErr.message);
     }
 

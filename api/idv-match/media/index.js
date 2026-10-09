@@ -3,10 +3,10 @@
 // Document-image media store (Phase 2.5 sub-step 4).
 //
 // Stores ONLY identity document images (front / back / portrait page). Selfie,
-// liveness, and biometric media are refused — only an external reference records
+// liveness, and biometric media are refused - only an external reference records
 // that they existed at the provider. Bytes are envelope-encrypted before upload;
 // the DB row holds ciphertext pointers only. Retrieval is server-side authorized
-// + audited and decrypts on read — never URL-possession (contrast PLAT-1).
+// + audited and decrypts on read - never URL-possession (contrast PLAT-1).
 
 const { randomUUID } = require("node:crypto");
 const { encryptBytes, decryptBytes } = require("./mediaCrypto");

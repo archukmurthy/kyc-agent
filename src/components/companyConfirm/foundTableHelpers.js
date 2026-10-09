@@ -1,9 +1,9 @@
 /**
- * foundTableHelpers.js — the pure helpers the pre-filled-fields table needs.
+ * foundTableHelpers.js - the pure helpers the pre-filled-fields table needs.
  *
  * Moved VERBATIM out of App.js as part of the FoundFieldsTable extraction.
  * Nothing here reads component state: `groupFoundBySection` used to close over
- * `activeSchema`, so the schema is now its second argument — that is the only
+ * `activeSchema`, so the schema is now its second argument - that is the only
  * change to any of these bodies.
  *
  * `humaniseSection` and `safeRenderValue` are also used by App.js outside the
@@ -14,7 +14,7 @@
 import { findFieldDef, isStakeholderField } from "../../pipeline";
 
 /** Badges sit in a fixed cell on each confirm row; text WRAPS inside the badge
- *  rather than pushing the cell wider — a nowrap badge with a long source
+ *  rather than pushing the cell wider - a nowrap badge with a long source
  *  string was collapsing the value column. */
 export const badgeBaseStyle = {
   fontSize: 11,

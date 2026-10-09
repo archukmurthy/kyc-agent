@@ -424,6 +424,6 @@ test("Lab browser exposes one applicant submit while retaining internal operatio
   assert.match(source, /submittedBundleIds/);
   assert.match(source, /Restored your local Lab demo session/);
   assert.match(source, /Save this Lab session locally for demo\/testing/);
-  assert.match(source, /Saved only in this browser — Lab testing, not production case storage/);
+  assert.match(source, /Saved only in this browser - Lab testing, not production case storage/);
   assert.doesNotMatch(source, /input[^\n]+type:\s*"file"/);
 });

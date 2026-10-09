@@ -31,7 +31,7 @@ test("Analyst Review presents human-readable relationship and aggregate conclusi
   render(<AnalystResolutionView mode="REVIEW" {...props} />);
   expect(screen.getByRole("heading", { name: "Assessment Details" })).toBeInTheDocument();
   expect(screen.getAllByText("Continue through ownership chain").length).toBeGreaterThan(0);
-  expect(screen.getByText("Not applicable — legal entity")).toBeInTheDocument();
+  expect(screen.getByText("Not applicable - legal entity")).toBeInTheDocument();
   expect(screen.getByText("26%")).toBeInTheDocument();
   expect(screen.getByText("UBO identified")).toBeInTheDocument();
 });

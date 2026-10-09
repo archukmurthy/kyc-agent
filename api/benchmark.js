@@ -4,7 +4,7 @@
 // returns a structured, scoreable result (coverage, source tiers, public-
 // company classification, document requirements, and per-request token totals).
 //
-// It is read-only with respect to our own data — it never writes config or
+// It is read-only with respect to our own data - it never writes config or
 // state. It DOES make outbound Anthropic calls (web research), so it costs
 // tokens; those are captured per call and totalled in the response.
 //
@@ -38,7 +38,7 @@ let _deps = { readConfigForTenant, authorizeAdmin: authorizeAdminForTenant };
 
 const MODEL = "claude-sonnet-4-5";
 const MAX_TOKENS = 16000;
-const MAX_COMPANIES = 25; // batch cap — keeps a single request bounded
+const MAX_COMPANIES = 25; // batch cap - keeps a single request bounded
 
 // Maps this app's ownership-type IDs to the DRS engine's normaliseEntityType()
 // vocabulary. Kept in sync with OWNERSHIP_ID_TO_DRS in src/App.js.
@@ -157,7 +157,7 @@ async function benchmarkCompany(input, tenantConfig) {
     fetchResearch: callAnthropic,
   });
 
-  // Deterministic document requirements (best-effort — never fails the row).
+  // Deterministic document requirements (best-effort - never fails the row).
   let documentRequirements = null;
   let documentError = null;
   try {
@@ -251,7 +251,7 @@ module.exports = async function handler(req, res) {
     // (e.g. plain GET / no harness) → persistence is skipped entirely.
     const runId = (companies[0] && companies[0].runId) || null;
 
-    // Sequential — research calls are slow and rate-limited; one failure
+    // Sequential - research calls are slow and rate-limited; one failure
     // per company is isolated and reported, the batch continues.
     const results = [];
     for (const company of companies) {
@@ -264,7 +264,7 @@ module.exports = async function handler(req, res) {
       results.push(result);
 
       // Persist to Neon (best-effort). A DB error must NEVER break the
-      // benchmark response — log and carry on.
+      // benchmark response - log and carry on.
       if (runId && result.ok) {
         try {
           await persistBenchmarkEntity(result, {

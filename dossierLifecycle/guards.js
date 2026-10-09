@@ -1,9 +1,9 @@
 /**
- * guards.js — pure guard predicates for the dossier lifecycle.
+ * guards.js - pure guard predicates for the dossier lifecycle.
  *
  * Each guard takes the transition `context` and returns { ok, reason }.
- * Guards read context only — they never mutate it, and never inspect the actor
- * (analyst vs customer) — authorization is the caller's concern, not this
+ * Guards read context only - they never mutate it, and never inspect the actor
+ * (analyst vs customer) - authorization is the caller's concern, not this
  * machine's. Guards validate the TRANSITION, never the actor.
  */
 

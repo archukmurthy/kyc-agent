@@ -24,7 +24,7 @@ function slugId(label) {
     .slice(0, 32) || "entity_" + Date.now();
 }
 
-// Step 3 — entity types. Lets the admin manage the list of entity types and
+// Step 3 - entity types. Lets the admin manage the list of entity types and
 // toggle which licences apply to each, which produces the schema matrix used
 // in Step 4. Removing a licence association also removes its schema cell.
 export default function StepEntityTypes({

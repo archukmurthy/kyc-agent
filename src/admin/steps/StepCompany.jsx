@@ -13,7 +13,7 @@ const BLANK = {
   primaryContactEmail: "",
 };
 
-// Step 1 — company setup. Standalone mode shows a save button and a saved
+// Step 1 - company setup. Standalone mode shows a save button and a saved
 // confirmation; wizard mode pushes every keystroke to the parent so the
 // wizard's bottom-nav handles persistence.
 export default function StepCompany({ config, onChange, isStandalone = false }) {

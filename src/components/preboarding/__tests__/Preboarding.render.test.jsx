@@ -1,5 +1,5 @@
 /**
- * Preboarding.render.test.jsx — CHARACTERISATION of the pre-boarding surface
+ * Preboarding.render.test.jsx - CHARACTERISATION of the pre-boarding surface
  * while it is still inline in App.js.
  *
  * WHY NOW: extraction B lifts the analyst pre-boarding surface into
@@ -8,7 +8,7 @@
  * reached through EARLY RETURNS above the main return, gated on a ?preboarding=1
  * URL param plus a password.
  *
- * WHY IT IS NETTABLE AT ALL. The param is read DURING RENDER — not in an effect,
+ * WHY IT IS NETTABLE AT ALL. The param is read DURING RENDER - not in an effect,
  * not cached at module load:
  *
  *     const preboardingParam = new URLSearchParams(window.location.search).get("preboarding")
@@ -25,13 +25,13 @@
  *
  * ONE STUB, DELIBERATELY. /api/save-dossier is stubbed to resolve with a
  * dossierId for the populated-invite tests. Without it dossierId stays null and
- * Send invite is disabled — a saved dossier is required to produce a working,
+ * Send invite is disabled - a saved dossier is required to produce a working,
  * cross-device link (the legacy `?ref=` localStorage-snapshot link is no longer
  * generated or emailed). Same shape as the AI-Documents net's /api/self-source
  * stub.
  *
  * CHARACTERISATION, not specification: these assert what the surface does TODAY.
- * After B's move this file must stay green UNCHANGED — with ONE deliberate
+ * After B's move this file must stay green UNCHANGED - with ONE deliberate
  * exception flagged inline below (the back-button dead end).
  */
 
@@ -94,7 +94,7 @@ const buttonsWithText = (re) =>
 
 const codeInput = () => screen.getByPlaceholderText(/Enter access code/i);
 
-/** Step 1 — pushState is already done in beforeEach; this just mounts. */
+/** Step 1 - pushState is already done in beforeEach; this just mounts. */
 async function mountAtGate() {
   await act(async () => {
     render(<KYCAgent preboarding />);
@@ -102,14 +102,14 @@ async function mountAtGate() {
   await settle(0);
 }
 
-/** Step 2 — the password is checked by /api/preboarding-auth, not the bundle. */
+/** Step 2 - the password is checked by /api/preboarding-auth, not the bundle. */
 async function unlock(code = "ARCH") {
   fireEvent.change(codeInput(), { target: { value: code } });
   fireEvent.click(buttonsWithText(/Access Pre-boarding Agent/i)[0]);
   await settle(0);
 }
 
-/** Step 3+4 — lookup → dummy research → confirm → auto-save → dossier view. */
+/** Step 3+4 - lookup → dummy research → confirm → auto-save → dossier view. */
 async function driveToDossier() {
   await mountAtGate();
   await unlock();
@@ -134,7 +134,7 @@ async function driveToDossier() {
   await settle(5000);
 }
 
-/** Step 5 — the dossier's invite control. */
+/** Step 5 - the dossier's invite control. */
 async function driveToInvite() {
   await driveToDossier();
   fireEvent.click(buttonsWithText(/Invite Customer to Onboard/i)[0]);
@@ -161,13 +161,13 @@ describe("pre-boarding gate", () => {
     // Before that fix the branch rendered `<KYCAgent previewMode />` with no
     // preboarding prop, so `isPreboardingSurface` was false, the redirect
     // effect's early-return guard never tripped, and the component fell
-    // through to the ordinary customer flow instead of the gate — discarding
+    // through to the ordinary customer flow instead of the gate - discarding
     // preview mode. See task-11-report.md for this test's failing run against
     // the pre-fix call shape.
     //
     // LIMIT OF THIS TEST: it renders `<KYCAgent previewMode preboarding />`
     // directly, proving the COMPONENT's contract for that prop combination.
-    // It does not — and under jsdom cannot — execute src/index.js itself, so
+    // It does not - and under jsdom cannot - execute src/index.js itself, so
     // it cannot catch a regression in index.js's /preview branch (e.g. a
     // revert back to `<KYCAgent previewMode />` with the preboarding prop
     // dropped). That branch has no test of its own; a future reader should
@@ -189,7 +189,7 @@ describe("pre-boarding gate", () => {
     expect(buttonsWithText(/Access Pre-boarding Agent/i).length).toBe(1);
   });
 
-  it("a wrong code does NOT unlock — the server rejects it", async () => {
+  it("a wrong code does NOT unlock - the server rejects it", async () => {
     await mountAtGate();
     fetchRoutes["/api/preboarding-auth"] = (url, opts) =>
       Promise.resolve(
@@ -248,7 +248,7 @@ describe("pre-boarding gate", () => {
   it("the availability probe rejecting (offline/server error) degrades to the unavailable screen, not a crash or a password box", async () => {
     // PreboardingGate's probe effect has a `catch` fallback for a rejected
     // fetch (network down, server 500 before it can even answer) that no
-    // other test exercises — it always resolves. Force that branch: the GET
+    // other test exercises - it always resolves. Force that branch: the GET
     // probe rejects outright rather than resolving with an `available` body.
     fetchRoutes["/api/preboarding-auth"] = () => Promise.reject(new Error("network down"));
     await mountAtGate();
@@ -276,7 +276,7 @@ describe("back to agent selection", () => {
    *
    * PREVIOUSLY this assertion pinned the button's dead end: clicking it called
    * setAgentType(null), the routing block re-derived agentType from the still-set
-   * ?preboarding=1 param, and the gate re-trapped the user — so the control did
+   * ?preboarding=1 param, and the gate re-trapped the user - so the control did
    * nothing observable.
    *
    * It was parked rather than fixed because its destination is parked. The button
@@ -286,7 +286,7 @@ describe("back to agent selection", () => {
    * state, not papering over a bug.
    *
    * RE-ENABLE the button together with renderLandingPage, and at that point this
-   * assertion should be rewritten again — to expect an actual return to agent
+   * assertion should be rewritten again - to expect an actual return to agent
    * selection.
    */
   it("the back-to-agent-selection control is PARKED - no dead-end affordance renders", async () => {
@@ -297,7 +297,7 @@ describe("back to agent selection", () => {
     expect(buttonsWithText(/Back to agent selection/i).length).toBe(0);
     expect(bodyText()).not.toMatch(/Back to agent selection/i);
 
-    // The gate itself is unaffected — the access control is still the way through.
+    // The gate itself is unaffected - the access control is still the way through.
     expect(buttonsWithText(/Access Pre-boarding Agent/i).length).toBe(1);
   });
 });
@@ -337,12 +337,12 @@ describe("dossier view", () => {
   /**
    * COVERAGE GAP, recorded rather than papered over. renderDossierDocuments()
    * returns null when there are no documents, and the pre-boarding drive never
-   * populates docSearchResults / selfSourceResults — those are filled by the
+   * populates docSearchResults / selfSourceResults - those are filled by the
    * ai_documents journey's Documents step, which pre-boarding skips entirely
    * (its doc-search effect is gated on isAiDocs && step === STEPS.documents).
    * There is no fetch to stub that would reach it on this path.
    *
-   * So this pins the REAL current behaviour — the section is absent — which
+   * So this pins the REAL current behaviour - the section is absent - which
    * still catches a move that made it render unconditionally. The populated
    * documents list needs a fixture variant and is NOT covered here.
    */
@@ -398,8 +398,8 @@ describe("dossier view", () => {
   });
 
   /**
-   * A 403 dossier_locked means the save DID land — under the customer, not
-   * lost — so this must NOT look like the offline-save-failure case above:
+   * A 403 dossier_locked means the save DID land - under the customer, not
+   * lost - so this must NOT look like the offline-save-failure case above:
    * no "hasn't been saved" banner, no Retry save button (retrying can never
    * succeed once the customer owns it). Instead the analyst goes read-only.
    */
@@ -480,12 +480,12 @@ describe("invite screen", () => {
     await driveToInvite();
     expect(inviteForm().name).toBeInTheDocument();
     expect(inviteForm().email).toBeInTheDocument();
-    // The dossier is no longer showing — invite takes priority.
+    // The dossier is no longer showing - invite takes priority.
     expect(bodyText()).not.toMatch(/📄 Documents Sourced/);
   });
 
   // ── UNSAVED branch: no stub, save fails, dossierId stays null. This fix
-  // moves the gate earlier — the DossierView Invite button is now disabled,
+  // moves the gate earlier - the DossierView Invite button is now disabled,
   // so the invite screen is never reached at all (InviteScreen's own
   // dossierId-gated Send button, asserted separately, is defense-in-depth
   // for the unlikely case dossierId is cleared after this screen opens). ──
@@ -498,7 +498,7 @@ describe("invite screen", () => {
     fireEvent.click(inviteButton);
     await settle(0);
 
-    // Still on the dossier — clicking a disabled button does not navigate.
+    // Still on the dossier - clicking a disabled button does not navigate.
     expect(bodyText()).toMatch(/Intelligence Dossier/i);
     expect(screen.queryByPlaceholderText(/Sarah Chen/i)).not.toBeInTheDocument();
   });

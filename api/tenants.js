@@ -4,11 +4,11 @@
 // {SUPER_ADMIN_PASSWORD}). Uses the existing lib/storage abstraction so dev
 // (filesystem) and prod (KV) both work.
 //
-// GET    /api/tenants                                 — list tenants (seeds registry on first call)
-// POST   /api/tenants                                 — create new tenant (config + password + registry entry)
-// PUT    /api/tenants?action=reset-password&tenantId  — reset a tenant's password
-// PUT    /api/tenants?action=toggle-status&tenantId   — toggle isActive
-// PUT    /api/tenants?action=toggle-preboarding&tenantId — toggle preboardingEnabled
+// GET    /api/tenants                                 - list tenants (seeds registry on first call)
+// POST   /api/tenants                                 - create new tenant (config + password + registry entry)
+// PUT    /api/tenants?action=reset-password&tenantId  - reset a tenant's password
+// PUT    /api/tenants?action=toggle-status&tenantId   - toggle isActive
+// PUT    /api/tenants?action=toggle-preboarding&tenantId - toggle preboardingEnabled
 
 const storage = require("../lib/storage");
 const { buildBlankConfig } = require("../lib/seedConfig");
@@ -25,7 +25,7 @@ const session = require("../lib/session");
 const DEFAULTS_REQUESTED = new Set(["default", "defaults", "nium-default", "nium-defaults"]);
 
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/config.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/config.js.
 let _deps = { storage, registry: tenantRegistry };
 
 const REGISTRY_KEY = tenantRegistry.REGISTRY_KEY;
@@ -95,11 +95,11 @@ async function ensureRegistry() {
     return reg;
   }
   // Back-fill flags for registries written before those flags existed.
-  //   isProtected — isInternal was the old spelling of the same idea.
-  //   preboardingEnabled — on by default for every tenant (owner decision
+  //   isProtected - isInternal was the old spelling of the same idea.
+  //   preboardingEnabled - on by default for every tenant (owner decision
   //     2026-09-17), so an entry that never had the flag gets true.
-  // Additive and idempotent: an entry that already carries a flag — including
-  // an explicit `false` a super-admin set — is never re-patched.
+  // Additive and idempotent: an entry that already carries a flag - including
+  // an explicit `false` a super-admin set - is never re-patched.
   let changed = false;
   reg = reg.map((t) => {
     if (!t) return t;

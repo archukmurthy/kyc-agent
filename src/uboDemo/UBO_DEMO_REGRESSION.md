@@ -24,20 +24,20 @@
 
 ## Regression tiers
 
-FAST — after every tweak:
+FAST - after every tweak:
 
 ```text
 npm run test:ubo-demo:critical
 ```
 
-FOCUSED — before each commit:
+FOCUSED - before each commit:
 
 ```text
 npm run test:ubo-demo:critical
 <focused test command for the changed component>
 ```
 
-RC — before push or deployment:
+RC - before push or deployment:
 
 ```text
 npm run test:ubo-demo:critical

@@ -1,4 +1,4 @@
-// Excel import/export for field schemas. Pure data transforms — no UI here.
+// Excel import/export for field schemas. Pure data transforms - no UI here.
 //
 // External (Excel column / spec) keys vs internal (codebase) field keys.
 // The rest of the codebase persists fields as:
@@ -6,7 +6,7 @@
 //     section, aiSearch, searchHint, showIf, showWhen }
 // The Excel template uses the spec's column headers (Field ID, Field Type,
 // Show Only If, etc.) for clarity to non-technical admins. This module is the
-// only place the two vocabularies meet — every public function reads/writes
+// only place the two vocabularies meet - every public function reads/writes
 // the codebase shape, and uses the Excel headers strictly inside this file.
 
 import * as XLSX from "xlsx";
@@ -200,7 +200,7 @@ export function parseSchemaExcel(file) {
         // there is nothing to render to the customer (and the parser would
         // auto-generate the Field ID from the label anyway). Excel often
         // leaves trailing rows with stray content in some column from
-        // formatting / copy-paste leftovers — those are not fields.
+        // formatting / copy-paste leftovers - those are not fields.
         // Preserve the original sheet row number through filtering so error
         // messages stay accurate.
         const labelIdx = columnMap.label;

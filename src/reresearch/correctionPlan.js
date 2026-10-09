@@ -1,9 +1,9 @@
 /**
- * correctionPlan.js — pure decision for a customer's correction of the five
+ * correctionPlan.js - pure decision for a customer's correction of the five
  * foundational facts on the Applicant page.
  *
- * Rule: any change to a foundational fact — company name, country, registration
- * number, entity type, ownership type, or a mix — re-runs the research with the
+ * Rule: any change to a foundational fact - company name, country, registration
+ * number, entity type, ownership type, or a mix - re-runs the research with the
  * corrected values and spends one of the customer's two server-counted
  * re-searches. (Owner decision 2026-09-17, RERES-1: an entity-type-only
  * correction used to re-derive the schema without searching; it now searches

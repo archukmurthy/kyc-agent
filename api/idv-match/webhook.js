@@ -53,7 +53,7 @@ async function processWebhook({ rawBody, headers, now = Date.now() }, deps = {})
   // Map -> Vault (PII) -> store (non-PII). See persistDecision.
   await persist({ attempt, decision, receivedAt: new Date(now), lastEventAt: eventTime, statusFallback: status }, deps);
 
-  // Domain history — best-effort. occurredAt = provider event time; receivedAt =
+  // Domain history - best-effort. occurredAt = provider event time; receivedAt =
   // when we received the delivery. Distinct times, never conflated.
   const nowIso = new Date(now).toISOString();
   await safeAppendLifecycleEvent({ attemptId: attempt.id, type: LIFECYCLE_EVENTS.WEBHOOK_RECEIVED || "WEBHOOK_RECEIVED", occurredAt: eventTime, receivedAt: nowIso }, deps);

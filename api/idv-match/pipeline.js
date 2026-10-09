@@ -37,7 +37,7 @@ async function runBandPipeline(input = {}, deps = {}) {
       livenessPassed, screeningHit, escalationFlag,
     });
 
-    // Dialogue is not a terminal outcome — no decision row until the applicant answers.
+    // Dialogue is not a terminal outcome - no decision row until the applicant answers.
     if (res.dialogue) return { enabled: true, band: "B", dialogue: res };
 
     const recorded = await recordBandOutcome({
@@ -46,7 +46,7 @@ async function runBandPipeline(input = {}, deps = {}) {
         band: "B", outcomeType: res.outcomeType, resolvedBy: res.resolvedBy,
         score: res.score, basis: res.basis, ruleIds: res.ruleIds,
         policyVersion: res.policyVersion, reasons: res.reasons, applicantView: res.applicantView,
-        // Carry the hard-exclusion review flag through — resolveBandB's toReview()
+        // Carry the hard-exclusion review flag through - resolveBandB's toReview()
         // sets requiresReview:true; without this it's dropped and behaviors records
         // requiresReview:false on a genuine review outcome (compliance contract).
         requiresReview: res.requiresReview,

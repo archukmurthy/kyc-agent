@@ -1,4 +1,4 @@
-# ADR 0022 — Public-contract adaptive customer UI
+# ADR 0022 - Public-contract adaptive customer UI
 
 ## Status
 

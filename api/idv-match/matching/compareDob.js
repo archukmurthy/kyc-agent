@@ -2,7 +2,7 @@
 
 // DOB comparison, month/year ONLY (Phase 4). Companies House gives an officer's
 // month + year; a passport gives a full date. We compare month + year and NEVER
-// read or compare the day — "May 1985" vs "24 May 1985" is consistent.
+// read or compare the day - "May 1985" vs "24 May 1985" is consistent.
 
 // Parse a year/month from either "YYYY-MM-DD", "YYYY-MM", or "YYYY". The day is
 // never extracted. Returns { year, month|null } or null.

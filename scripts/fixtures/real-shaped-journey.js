@@ -178,7 +178,7 @@ function buildRealShapedJourneyFixture(runId = randomUUID()) {
       businessRegistrationNumber: "12345678",
       // CORRECTED scalar: the customer replaced the registry value. The
       // original survives only in fieldMetadata.agentValue below (and in
-      // change_events.before_value) — the whole point of the provenance trail.
+      // change_events.before_value) - the whole point of the provenance trail.
       registeredAddress: "20 Example Street, London, EC1A 1AB",
       applicantFirstName: "Maya",
       applicantLastName: "Thompson",

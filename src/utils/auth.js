@@ -1,5 +1,5 @@
 // Client-side auth utilities. Mirrored by lib/auth.js (CommonJS) for API
-// routes — keep the two in sync. Deliberately simple; if you outgrow this
+// routes - keep the two in sync. Deliberately simple; if you outgrow this
 // (real bcrypt, scrypt, argon2 etc.) replace BOTH files together.
 
 // Password hashing lives server-side only (lib/auth.js). It used to be

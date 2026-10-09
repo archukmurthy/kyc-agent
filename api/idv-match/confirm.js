@@ -1,7 +1,7 @@
 "use strict";
 
 // Applicant confirm/correct of their verified details (Phase E3). Sensitive
-// extras never touch the submission in plaintext — they live in the Vault. This
+// extras never touch the submission in plaintext - they live in the Vault. This
 // endpoint compares the applicant's confirmed values against the vaulted
 // extraction and records each as an immutable event (confirmed / corrected /
 // gap-supplied), correcting the Vault (append-only version) when changed. It

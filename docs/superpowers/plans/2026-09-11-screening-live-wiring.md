@@ -2,18 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Actually run PEP/sanctions/adverse-media screening in the live band flow — screen the Didit-verified document identity once IDV is terminal, feed a real hit into the band decision, and behind a provider abstraction that lets a second screening provider slot in without a rewrite.
+**Goal:** Actually run PEP/sanctions/adverse-media screening in the live band flow - screen the Didit-verified document identity once IDV is terminal, feed a real hit into the band decision, and behind a provider abstraction that lets a second screening provider slot in without a rewrite.
 
-**Architecture:** A `ScreeningProvider` contract (parallel to the IDV `ProviderAdapter`, NOT folded into it) with a ComplyCube adapter and a provider-neutral canonical result shape; `startScreening`/`hasScreeningHit` refactored onto that seam. Wiring point is `resolveAttempt` (resolve.js) — the exact moment IDV is terminal and the verified identity is known. Sync-now scope: a synchronous result feeds the band immediately; a pending result puts the attempt in a poll-hold (the client already polls `/resolve`) and the ComplyCube webhook re-resolves to cover the abandoned-tab case. Ongoing monitoring and category-specific policy are deferred (SCR-3/SCR-4). The persisted `categories` column keeps its existing neutral vocabulary, so there is **no DB migration**.
+**Architecture:** A `ScreeningProvider` contract (parallel to the IDV `ProviderAdapter`, NOT folded into it) with a ComplyCube adapter and a provider-neutral canonical result shape; `startScreening`/`hasScreeningHit` refactored onto that seam. Wiring point is `resolveAttempt` (resolve.js) - the exact moment IDV is terminal and the verified identity is known. Sync-now scope: a synchronous result feeds the band immediately; a pending result puts the attempt in a poll-hold (the client already polls `/resolve`) and the ComplyCube webhook re-resolves to cover the abandoned-tab case. Ongoing monitoring and category-specific policy are deferred (SCR-3/SCR-4). The persisted `categories` column keeps its existing neutral vocabulary, so there is **no DB migration**.
 
 **Tech Stack:** Node CommonJS serverless handlers, `@complycube/api` SDK (stubbed in all tests), Neon HTTP driver, `node:test` for backend suites. React client unchanged except it already polls `/resolve`.
 
 ## Global Constraints
 
-- Everything stays behind `IDV_DISCREPANCY_BANDS_ENABLED` (`bandsEnabled()` in `api/idv-match/config.js`). Flag OFF ⇒ `resolveAttempt` returns `{ enabled:false }` before any screening runs — the live journey is unchanged. Copy verbatim.
+- Everything stays behind `IDV_DISCREPANCY_BANDS_ENABLED` (`bandsEnabled()` in `api/idv-match/config.js`). Flag OFF ⇒ `resolveAttempt` returns `{ enabled:false }` before any screening runs - the live journey is unchanged. Copy verbatim.
 - **No real/paid ComplyCube calls in any automated test.** Every test injects a stubbed SDK/client via `deps`. Live sandbox proof is a manual, explicitly-approved step (see final task), never in `npm test`.
 - **No DB migration.** Persist screening categories in the existing `idv_screening_checks.categories` JSONB using the current neutral keys `{ watchlist, pep, adverseMedia, other }`.
-- **Data minimization holds:** never persist match PII / names / scores of watchlist entries — only outcome + boolean categories, exactly as today.
+- **Data minimization holds:** never persist match PII / names / scores of watchlist entries - only outcome + boolean categories, exactly as today.
 - Decisions locked (2026-09-11): (1) separate `ScreeningProvider` abstraction, kit extraction deferred to SCR-5; (2) sync-now, monitoring-later (SCR-3 deferred); (3) screen the verified document identity post-IDV; (4) uniform hard-exclusion (SCR-4 deferred).
 - Follow existing patterns: pure interpret, injectable `deps = {}`, `"use strict"`, throw-on-failure in stores.
 
@@ -33,7 +33,7 @@
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `api/idv-match/__tests__/flagsResolve.nodetest.js` (mirror the existing `deps()` helper in that file — it already stubs `attemptStore`, `matchDecisionStore`, `getDecision`, `mapDiditDecision`, `runBandPipeline`; extend it to capture the pipeline input):
+Add to `api/idv-match/__tests__/flagsResolve.nodetest.js` (mirror the existing `deps()` helper in that file - it already stubs `attemptStore`, `matchDecisionStore`, `getDecision`, `mapDiditDecision`, `runBandPipeline`; extend it to capture the pipeline input):
 
 ```js
 test("resolveAttempt passes a boolean screeningHit (not the accessor object) into the pipeline", async () => {
@@ -52,7 +52,7 @@ test("resolveAttempt passes a boolean screeningHit (not the accessor object) int
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node --test api/idv-match/__tests__/flagsResolve.nodetest.js`
-Expected: FAIL — `capturedScreeningHit` is an object, `typeof` is `"object"`.
+Expected: FAIL - `capturedScreeningHit` is an object, `typeof` is `"object"`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -92,7 +92,7 @@ git commit -m "fix(idv-match): pass boolean screeningHit into band pipeline (obj
 
 ### Task 2: Canonical screening result model
 
-Provider-neutral shape so the store/band logic never see provider field names. The neutral category vocabulary is the one already persisted (`watchlist/pep/adverseMedia/other`), so this normalizes TO that — no new enum, no migration.
+Provider-neutral shape so the store/band logic never see provider field names. The neutral category vocabulary is the one already persisted (`watchlist/pep/adverseMedia/other`), so this normalizes TO that - no new enum, no migration.
 
 **Files:**
 - Create: `api/idv-match/screening/canonical.js`
@@ -134,7 +134,7 @@ test("normalizeScreening defaults every observation key to false and coerces to 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node --test api/idv-match/screening/__tests__/canonical.nodetest.js`
-Expected: FAIL — `Cannot find module '../canonical'`.
+Expected: FAIL - `Cannot find module '../canonical'`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -192,10 +192,10 @@ A small contract parallel to `idv/contracts/providerAdapter.js`. NOT folded into
   - `class ScreeningProvider` with those four methods throwing `"Not implemented"`.
   - `assertScreeningProvider(adapter) -> adapter` (throws `TypeError` naming the first missing method).
 - Method contracts (documented, implemented by adapters in Task 4):
-  - `async screenPerson(subject, deps) -> { providerClientId, providerCheckId, result }` — `subject = { firstName, lastName, dob?, nationality? }`; `result` is a canonical result (Task 2) if the check completed synchronously, else `null` (pending, arrives via webhook).
-  - `async handleWebhook({ rawBody, signature, secret }, deps) -> { statusCode, body, checkId?, result? }` — `result` canonical when the delivery is a terminal completion.
+  - `async screenPerson(subject, deps) -> { providerClientId, providerCheckId, result }` - `subject = { firstName, lastName, dob?, nationality? }`; `result` is a canonical result (Task 2) if the check completed synchronously, else `null` (pending, arrives via webhook).
+  - `async handleWebhook({ rawBody, signature, secret }, deps) -> { statusCode, body, checkId?, result? }` - `result` canonical when the delivery is a terminal completion.
   - `getCapabilities() -> { provider, sandbox, ongoingMonitoring }`.
-  - `async getMonitoringStatus(subjectRef, deps) -> { enabled }` — SCR-3 stub; returns `{ enabled:false }` today.
+  - `async getMonitoringStatus(subjectRef, deps) -> { enabled }` - SCR-3 stub; returns `{ enabled:false }` today.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -226,14 +226,14 @@ test("assertScreeningProvider accepts a complete adapter", () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node --test api/idv-match/screening/__tests__/screeningProvider.contract.nodetest.js`
-Expected: FAIL — `Cannot find module '../contracts/screeningProvider'`.
+Expected: FAIL - `Cannot find module '../contracts/screeningProvider'`.
 
 - [ ] **Step 3: Write minimal implementation**
 
 ```js
 "use strict";
 
-// Screening/AML provider contract — a sibling of the IDV ProviderAdapter, NOT an
+// Screening/AML provider contract - a sibling of the IDV ProviderAdapter, NOT an
 // extension of it. Screening is "screen a person against sanctions/PEP/adverse
 // media", not a hosted document+liveness session, so it gets its own small shape.
 const REQUIRED_METHODS = Object.freeze(["screenPerson", "handleWebhook", "getCapabilities", "getMonitoringStatus"]);
@@ -337,14 +337,14 @@ test("getCapabilities reports ongoingMonitoring false and getMonitoringStatus di
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node --test api/idv-match/screening/__tests__/complyCubeScreeningAdapter.nodetest.js`
-Expected: FAIL — module not found.
+Expected: FAIL - module not found.
 
 - [ ] **Step 3: Write minimal implementation**
 
 ```js
 "use strict";
 
-// ComplyCube screening adapter — the one place ComplyCube specifics live. Wraps
+// ComplyCube screening adapter - the one place ComplyCube specifics live. Wraps
 // the existing thin SDK client + pure interpreter and returns the canonical shape.
 const { ScreeningProvider } = require("../contracts/screeningProvider");
 const defaultClient = require("../complyCubeClient");
@@ -367,7 +367,7 @@ class ComplyCubeScreeningAdapter extends ScreeningProvider {
 
   async handleWebhook(args, deps = {}) {
     const res = await processScreeningWebhook(args, deps);
-    return res; // { statusCode, body: { ..., hit } } — re-resolve is driven by the route (Task 8)
+    return res; // { statusCode, body: { ..., hit } } - re-resolve is driven by the route (Task 8)
   }
 
   getCapabilities() {
@@ -400,7 +400,7 @@ git commit -m "feat(idv-match): ComplyCube screening adapter implementing the Sc
 
 ### Task 5: Screening provider registry
 
-Thin selector — returns the configured adapter. No override-router yet (YAGNI until routing rules exist).
+Thin selector - returns the configured adapter. No override-router yet (YAGNI until routing rules exist).
 
 **Files:**
 - Create: `api/idv-match/screening/registry.js`
@@ -430,7 +430,7 @@ test("getScreeningProvider throws on an unknown provider", () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node --test api/idv-match/screening/__tests__/registry.nodetest.js`
-Expected: FAIL — module not found.
+Expected: FAIL - module not found.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -438,7 +438,7 @@ Expected: FAIL — module not found.
 "use strict";
 
 // Screening provider registry. One entry today; a second provider (Refinitiv,
-// Onfido, sanctions.io) is added here + a new adapter — nothing else changes.
+// Onfido, sanctions.io) is added here + a new adapter - nothing else changes.
 const { ComplyCubeScreeningAdapter } = require("./providers/complyCubeScreeningAdapter");
 const { screeningConfig } = require("./config");
 
@@ -515,7 +515,7 @@ test("startScreening records a synchronously-complete canonical result", async (
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node --test api/idv-match/screening/__tests__/screeningFlow.nodetest.js`
-Expected: FAIL — `startScreening` still calls `complyCubeClient` directly / ignores `deps.screeningProvider`.
+Expected: FAIL - `startScreening` still calls `complyCubeClient` directly / ignores `deps.screeningProvider`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -627,7 +627,7 @@ test("resolveAttempt does not re-screen when a screening row already exists", as
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node --test api/idv-match/__tests__/flagsResolve.nodetest.js`
-Expected: FAIL — no `startScreening` call / no pending-hold branch.
+Expected: FAIL - no `startScreening` call / no pending-hold branch.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -652,7 +652,7 @@ const listScreening = deps.listScreeningByAttempt || screeningStore.listByAttemp
 ```js
 // Screen the verified document identity once IDV is terminal and the officer is
 // known (decision (3): screen the proven identity). Idempotent: only start if no
-// screening row exists for this attempt. ComplyCube is async — a pending result
+// screening row exists for this attempt. ComplyCube is async - a pending result
 // holds the band decision (client keeps polling; the webhook re-resolves).
 const existingScreening = await listScreening(attemptId);
 if (!existingScreening.length) {
@@ -730,14 +730,14 @@ test("a completion webhook re-resolves the band for the attempt", async () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `node --test api/idv-match/screening/__tests__/screeningWebhook.nodetest.js`
-Expected: FAIL — `resolveAttempt` never called.
+Expected: FAIL - `resolveAttempt` never called.
 
 - [ ] **Step 3: Write minimal implementation**
 
 In `api/idv-match/screening/webhook.js`, after the `updateScreeningResult(...)` call inside `processScreeningWebhook`, add a best-effort re-resolve:
 
 ```js
-  // Re-resolve the band now the screening result is stored — covers the case where
+  // Re-resolve the band now the screening result is stored - covers the case where
   // the applicant left our tab and is no longer polling /resolve. resolveAttempt is
   // idempotent (a decision already recorded is returned as-is), so a concurrent poll
   // can't double-record. Best-effort: a re-resolve failure never fails the webhook.
@@ -768,7 +768,7 @@ git commit -m "feat(idv-match): screening webhook re-resolves band on completion
 
 **Files:**
 - Modify: `docs/idv-discrepancy-bands/BUILD-TRACKER.md` (tick SCR-2)
-- Modify: `docs/BACKLOG.md` (mark SCR-2 wiring done; SCR-1/SCR-3/SCR-4/SCR-5 remain OPEN — the live-webhook-secret + monitoring + category-policy + kit-extraction are still deferred)
+- Modify: `docs/BACKLOG.md` (mark SCR-2 wiring done; SCR-1/SCR-3/SCR-4/SCR-5 remain OPEN - the live-webhook-secret + monitoring + category-policy + kit-extraction are still deferred)
 
 **Interfaces:** none (documentation + verification).
 
@@ -778,18 +778,18 @@ Run:
 ```bash
 node --test api/idv-match/screening/__tests__/ api/idv-match/__tests__/flagsResolve.nodetest.js
 ```
-Expected: all PASS (no real network calls — every provider/store is stubbed).
+Expected: all PASS (no real network calls - every provider/store is stubbed).
 
 - [ ] **Step 2: Run the CRA client suite for the IDV match component**
 
 Run: `npx react-scripts test --watchAll=false src/idv-match`
-Expected: PASS — the client already polls `/resolve`; a `pending: true` hold response keeps it polling (verify the poll loop treats `pending`/`needsRetry` as "keep waiting", same as `verification_in_progress`).
+Expected: PASS - the client already polls `/resolve`; a `pending: true` hold response keeps it polling (verify the poll loop treats `pending`/`needsRetry` as "keep waiting", same as `verification_in_progress`).
 
 - [ ] **Step 3: Update BUILD-TRACKER**
 
 In `docs/idv-discrepancy-bands/BUILD-TRACKER.md`, under the screening/Phase-5 section, add:
 ```
-- [x] SCR-2 live wiring — startScreening called in resolveAttempt (verified identity, post-IDV); pending-hold + webhook re-resolve; object-truthiness bug fixed; ScreeningProvider abstraction + ComplyCube adapter + registry + canonical model. Kit extraction deferred (SCR-5), monitoring deferred (SCR-3), category policy deferred (SCR-4), live webhook secret deferred (SCR-1). Flag still OFF.
+- [x] SCR-2 live wiring - startScreening called in resolveAttempt (verified identity, post-IDV); pending-hold + webhook re-resolve; object-truthiness bug fixed; ScreeningProvider abstraction + ComplyCube adapter + registry + canonical model. Kit extraction deferred (SCR-5), monitoring deferred (SCR-3), category policy deferred (SCR-4), live webhook secret deferred (SCR-1). Flag still OFF.
 ```
 
 - [ ] **Step 4: Update BACKLOG**
@@ -805,7 +805,7 @@ git commit -m "docs(idv-match): SCR-2 screening live-wiring done; SCR-1/3/4/5 re
 
 ---
 
-### Task 10: Manual live-sandbox proof (GATED — requires explicit approval)
+### Task 10: Manual live-sandbox proof (GATED - requires explicit approval)
 
 **Not part of `npm test`.** A single real ComplyCube **sandbox** (test-key, free) round-trip to confirm the provider seam works end-to-end against the live API shape. **Do not run without the user's explicit go-ahead** (per the no-paid-API-without-asking standard; sandbox is free but any real external call is gated).
 
@@ -826,16 +826,16 @@ Note the sandbox proof (hit detected via the provider seam) in BUILD-TRACKER; do
 ## Self-Review
 
 **Spec coverage:**
-- Decision (1) separate abstraction ⇒ Tasks 3–5 (contract, adapter, registry), kit deferred ⇒ SCR-5 backlog. ✓
-- Decision (2) sync-now, monitoring-later ⇒ Task 7 (sync + pending-hold), Task 8 (webhook re-resolve); monitoring stub in Tasks 3–4 (`getMonitoringStatus → {enabled:false}`, `ongoingMonitoring:false`), SCR-3 backlog. ✓
+- Decision (1) separate abstraction ⇒ Tasks 3-5 (contract, adapter, registry), kit deferred ⇒ SCR-5 backlog. ✓
+- Decision (2) sync-now, monitoring-later ⇒ Task 7 (sync + pending-hold), Task 8 (webhook re-resolve); monitoring stub in Tasks 3-4 (`getMonitoringStatus → {enabled:false}`, `ongoingMonitoring:false`), SCR-3 backlog. ✓
 - Decision (3) screen verified identity post-IDV ⇒ Task 7 (subject from `identity`, after terminal + officer match, verify_only excluded). ✓
 - Decision (4) uniform hard-exclusion ⇒ unchanged `bandAssignment`/`resolveBandB` boolean semantics; SCR-4 backlog. ✓
 - Must-fix bug ⇒ Task 1. ✓
 - No-migration / data-min / flag-gated / no-paid-API ⇒ Global Constraints + Task 10 gating. ✓
 
-**Placeholder scan:** every code step shows full code; no TODO/TBD; `hasScreeningHit` body explicitly "keep verbatim" (not a placeholder — it is unchanged existing code).
+**Placeholder scan:** every code step shows full code; no TODO/TBD; `hasScreeningHit` body explicitly "keep verbatim" (not a placeholder - it is unchanged existing code).
 
-**Type consistency:** `startScreening` returns `{ screeningId, providerCheckId }` (Task 6) — used only internally by resolve (Task 7 ignores the return). `screenPerson -> { providerClientId, providerCheckId, result }` consistent across Tasks 3/4/6. `normalizeScreening` output shape consistent across Tasks 2/4/6. `screening.hit`/`screening.pending` from the unchanged `hasScreeningHit` shape used in Tasks 1/7. ✓
+**Type consistency:** `startScreening` returns `{ screeningId, providerCheckId }` (Task 6) - used only internally by resolve (Task 7 ignores the return). `screenPerson -> { providerClientId, providerCheckId, result }` consistent across Tasks 3/4/6. `normalizeScreening` output shape consistent across Tasks 2/4/6. `screening.hit`/`screening.pending` from the unchanged `hasScreeningHit` shape used in Tasks 1/7. ✓
 
 ## Open risk noted for the executor
 - **Poll/webhook re-resolve race:** a client poll and the webhook can both enter `resolveAttempt` near-simultaneously; the idempotency guard (`decisions.listByAttempt` early-return) closes most of the window but not all. Acceptable for sync-now; if duplicate decision rows ever appear, add a unique partial index on `(attempt_id)` for terminal decisions. `ponytail:` documented ceiling, upgrade path is the unique index.
@@ -845,7 +845,7 @@ Note the sandbox proof (hit detected via the provider seam) in BUILD-TRACKER; do
 
 ## Post-final-review amendments (2026-09-11)
 Superseding notes after the whole-branch review (all applied, verified merge-ready):
-- **ScreeningProvider contract is 3 methods, not 4** — `handleWebhook` was trimmed (it was dead: the `screening/webhook.js` route owns webhook handling + re-resolve directly). Provider-neutral webhook handling is deferred to SCR-5 with the shared kit. Ignore the 4-method `handleWebhook` references in Tasks 3/4 above.
-- **Fail-CLOSED on screening-start failure** — beyond the read-path holds, a start failure that leaves no row (`screeningStartAttempted && count===0`) also holds with `screening_unavailable`; a screening outage never silently onboards an unscreened applicant.
-- **verify_only path is screened too** — the screening gate was extracted to `screeningGate()` and applied to both the auto_match and verify_only paths; a verify_only screening hit → review (never auto-success); an unverified verify_only is not screened.
-- **Band C no-officer-match** identities remain unscreened (already escalate to manual review) — tracked as SCR-6, a compliance-signed flag-on prerequisite.
+- **ScreeningProvider contract is 3 methods, not 4** - `handleWebhook` was trimmed (it was dead: the `screening/webhook.js` route owns webhook handling + re-resolve directly). Provider-neutral webhook handling is deferred to SCR-5 with the shared kit. Ignore the 4-method `handleWebhook` references in Tasks 3/4 above.
+- **Fail-CLOSED on screening-start failure** - beyond the read-path holds, a start failure that leaves no row (`screeningStartAttempted && count===0`) also holds with `screening_unavailable`; a screening outage never silently onboards an unscreened applicant.
+- **verify_only path is screened too** - the screening gate was extracted to `screeningGate()` and applied to both the auto_match and verify_only paths; a verify_only screening hit → review (never auto-success); an unverified verify_only is not screened.
+- **Band C no-officer-match** identities remain unscreened (already escalate to manual review) - tracked as SCR-6, a compliance-signed flag-on prerequisite.

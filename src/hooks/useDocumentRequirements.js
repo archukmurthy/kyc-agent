@@ -1,7 +1,7 @@
 /**
  * hooks/useDocumentRequirements.js
  *
- * React hook — calls the DRS API and returns the checklist + feature flags.
+ * React hook - calls the DRS API and returns the checklist + feature flags.
  * Drop-in for the KYC Onboarding Agent.
  *
  * Usage (Step 1 → Step 2 transition):
@@ -27,7 +27,7 @@ const DRS_ENDPOINT = '/api/document-requirements';
  * @property {string}   entityType
  * @property {string}   ownershipType
  * @property {string}   [sector]
- * @property {string[]} [submittedRequirements]  — for recompute pass
+ * @property {string[]} [submittedRequirements]  - for recompute pass
  */
 
 /**
@@ -50,14 +50,14 @@ const DRS_ENDPOINT = '/api/document-requirements';
  * @typedef {object} DRSResult
  * @property {string}          onboardingCountry
  * @property {ChecklistItem[]} checklist
- * @property {ChecklistItem[]} rfiItems           — items the customer must provide
- * @property {ChecklistItem[]} selfSourceItems     — items Nium will pull
- * @property {ChecklistItem[]} mandatoryGaps       — mandatory items not yet submitted
+ * @property {ChecklistItem[]} rfiItems           - items the customer must provide
+ * @property {ChecklistItem[]} selfSourceItems     - items Nium will pull
+ * @property {ChecklistItem[]} mandatoryGaps       - mandatory items not yet submitted
  * @property {number}          mandatoryCount
- * @property {object}          flags               — feature flags for Step 2 renderer
+ * @property {object}          flags               - feature flags for Step 2 renderer
  * @property {boolean}         loading
  * @property {string|null}     error
- * @property {function}        recompute           — call with updated params to refresh
+ * @property {function}        recompute           - call with updated params to refresh
  */
 
 export function useDocumentRequirements(initialParams) {
@@ -123,11 +123,11 @@ export function useDocumentRequirements(initialParams) {
     initialParams?.incorporationCountry,
     initialParams?.entityType,
     initialParams?.ownershipType,
-    // sector intentionally omitted — Step 1 call is sector-agnostic
+    // sector intentionally omitted - Step 1 call is sector-agnostic
   ]);
 
   /**
-   * Recompute — call at pre-declaration with updated params merged over initial.
+   * Recompute - call at pre-declaration with updated params merged over initial.
    * Typically: { sector, submittedRequirements: [...] }
    */
   const recompute = useCallback((updates = {}) => {

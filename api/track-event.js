@@ -1,13 +1,13 @@
 // Lightweight event tracking → Neon `session_timeline`.
 //
-// Fire-and-forget from the client (see App.js#trackEvent). ALWAYS returns 200 —
+// Fire-and-forget from the client (see App.js#trackEvent). ALWAYS returns 200 -
 // event tracking must never block or fail the user's interaction.
 //
 // CommonJS (module.exports), not `export default`, so src/setupProxy.js can
 // require() it for local `npm start` (mirrors api/submit.js, api/doc-search.js,
 // etc.). Vercel supports both forms in production.
 //
-// Schema note: writes session_id (NULLABLE — landing-page events have no session
+// Schema note: writes session_id (NULLABLE - landing-page events have no session
 // yet), event_type, event_data (JSONB), tenant_id, occurred_at. The event_data
 // + tenant_id columns and the nullable session_id come from migration
 // db/migrations/004_session_timeline_update.sql.
@@ -32,10 +32,10 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: "eventType is required" });
   }
 
-  // Always return 200 — event tracking must never block the user.
+  // Always return 200 - event tracking must never block the user.
   try {
     if (!process.env.DATABASE_URL) {
-      console.log("[track-event] No DB — logging only:", eventType, eventData);
+      console.log("[track-event] No DB - logging only:", eventType, eventData);
       return res.status(200).json({ success: true });
     }
 

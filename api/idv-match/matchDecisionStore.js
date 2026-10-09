@@ -1,6 +1,6 @@
 "use strict";
 
-// Data access for idv_match_decisions (append-only in spirit — a changed outcome
+// Data access for idv_match_decisions (append-only in spirit - a changed outcome
 // is a new row that `supersedes` the old one, never an overwrite). Neon HTTP
 // driver convention.
 const { neon } = require("@neondatabase/serverless");

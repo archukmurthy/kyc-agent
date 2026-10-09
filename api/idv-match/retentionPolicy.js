@@ -1,10 +1,10 @@
 "use strict";
 
 // Retention/deletion structure (Phase E5). The contract requires SEPARATE
-// retention clocks per data class — provider media, Vault PII, IDV operations,
+// retention clocks per data class - provider media, Vault PII, IDV operations,
 // and Evidence provenance cannot share one deletion clock. This module defines
 // the structure and computes per-class deletion-due dates. Periods are UNSET
-// (null = keep until a period is specified) until compliance sets them — the
+// (null = keep until a period is specified) until compliance sets them - the
 // structure is in place so turning on a real period is a config change, not a
 // rebuild.
 

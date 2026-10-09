@@ -1,5 +1,5 @@
 /**
- * AmendmentDocuments.jsx — the "Amendment Documentation" section at the top of
+ * AmendmentDocuments.jsx - the "Amendment Documentation" section at the top of
  * the Fill Gaps page. It lists the documents the customer now owes BECAUSE OF
  * the changes they made on Confirm, each with an upload control.
  *
@@ -13,7 +13,7 @@
  * Empty list → renders nothing (no empty section).
  *
  * Upload control: matches the existing manual-upload pattern in App.js
- * (handleManualDocumentUpload) — a hidden <input type="file"> triggered by a
+ * (handleManualDocumentUpload) - a hidden <input type="file"> triggered by a
  * button. On selection the file is uploaded to Vercel Blob via
  * /api/upload-document (PR-034) and the PERMANENT blobUrl is stored, then lifted
  * to the parent via onUploadsChange so it lands in the dossier save payload and
@@ -37,7 +37,7 @@ const SECTION = {
 const HEADING = { fontSize: 17, fontWeight: 700, margin: '0 0 4px', color: '#7a4f00' };
 const SUB = { fontSize: 12, color: '#7a4f0099', margin: '0 0 12px' };
 // The row / title / button / upload-state styles moved to AmendmentDocCard,
-// which now renders every amendment document — here and on the Confirm row.
+// which now renders every amendment document - here and on the Confirm row.
 
 // Scope-aware (commit 6a): person documents key by (stakeholderId, docType) so
 // one person's upload can never satisfy another person's requirement; company
@@ -50,7 +50,7 @@ export function AmendmentDocuments({ submissionId, initialUploads, onUploadsChan
   const [busyKey, setBusyKey] = useState(null);
   // keyOf(doc) -> { name, blobUrl, uploadFailed, at }. Seeded from the parent so
   // amendment uploads survive navigating away from Fill Gaps and back (PR-071).
-  // The parent's copy is authoritative — Confirm renders the SAME documents with
+  // The parent's copy is authoritative - Confirm renders the SAME documents with
   // the same upload store, so a file uploaded there is already satisfied here.
   const [uploads, setUploads] = useState(() => initialUploads || {});
   useEffect(() => { setUploads(initialUploads || {}); }, [initialUploads]);
@@ -73,9 +73,9 @@ export function AmendmentDocuments({ submissionId, initialUploads, onUploadsChan
         // document (e.g. three address lines → one "Notice of Change of
         // Address"). Collapsing is SCOPE-AWARE (commit 6a): company documents
         // dedupe per type as before, but person documents dedupe per
-        // (person, type) — "Proof of Identity" is inherently per-person, and
+        // (person, type) - "Proof of Identity" is inherently per-person, and
         // collapsing John's and Jane's into one card under-collects identity
-        // evidence. Any entry without a docType passes through untouched —
+        // evidence. Any entry without a docType passes through untouched -
         // never under-collect evidence (safety rule).
         setDocuments(canonicalDocs(arr));
       })
@@ -93,7 +93,7 @@ export function AmendmentDocuments({ submissionId, initialUploads, onUploadsChan
   if (!merged.length) return null; // no changes need documents → render nothing
 
   async function handleUpload(file, doc) {
-    // PR-071 — upload to Vercel Blob immediately (PR-034 endpoint) and store the
+    // PR-071 - upload to Vercel Blob immediately (PR-034 endpoint) and store the
     // PERMANENT blobUrl rather than an ephemeral browser blob: URL (which is
     // lost on refresh). Shared with the Confirm row card via uploadAmendmentDoc.
     const k = keyOf(doc);

@@ -1,9 +1,9 @@
 /**
- * readEvents.js — read-only query helpers over change_events.
+ * readEvents.js - read-only query helpers over change_events.
  *
  * NOTHING here mutates. There is no INSERT/UPDATE/DELETE in this module by
  * design (writeEvent.js is the only write path). If a read file ever imports a
- * mutation, that is a bug — the append-only invariant test asserts this surface.
+ * mutation, that is a bug - the append-only invariant test asserts this surface.
  *
  * The "current" value of a field is a DERIVATION, not a stored column: it is the
  * latest row for that (submission, field) that NO other row supersedes. A
@@ -24,7 +24,7 @@ async function getEventsBySubmission(db, submissionId) {
   );
 }
 
-// One field's full lineage (oldest first) — every event, nothing collapsed.
+// One field's full lineage (oldest first) - every event, nothing collapsed.
 async function getEventsByField(db, submissionId, fieldId) {
   return db.query(
     `-- @qid:by_field\nSELECT * FROM change_events WHERE ${COLUMNS.submissionId} = $1 AND ${COLUMNS.fieldId} = $2 ORDER BY ${COLUMNS.id} ASC`,
@@ -56,7 +56,7 @@ async function getUndecidedEvents(db, submissionId) {
   );
 }
 
-// Thin filtered read for the analyst queue. Data only — no selector, no UI.
+// Thin filtered read for the analyst queue. Data only - no selector, no UI.
 async function getEscalations(db, submissionId) {
   return db.query(
     `-- @qid:escalations\nSELECT * FROM change_events WHERE ${COLUMNS.submissionId} = $1 AND ${COLUMNS.escalation} = true ORDER BY ${COLUMNS.id} ASC`,
@@ -65,7 +65,7 @@ async function getEscalations(db, submissionId) {
 }
 
 // Thin filtered read for the future Fill-Gaps amendment-doc selector: events
-// that call for a document (doc_type set). Data only — no selector logic here.
+// that call for a document (doc_type set). Data only - no selector logic here.
 async function getAmendmentDocs(db, submissionId) {
   return db.query(
     `-- @qid:amendment_docs\nSELECT * FROM change_events WHERE ${COLUMNS.submissionId} = $1 AND ${COLUMNS.docType} IS NOT NULL ORDER BY ${COLUMNS.id} ASC`,
@@ -76,7 +76,7 @@ async function getAmendmentDocs(db, submissionId) {
 // Whole-table read for the (read-only) Change Intelligence dashboard. Returns
 // EVERY event, oldest first, so the pure aggregator can derive current-state per
 // (submission, field) itself. Bounded by `limit` (default 50k) so a runaway
-// table can't blow the serverless response. Data only — no aggregation here.
+// table can't blow the serverless response. Data only - no aggregation here.
 async function getAllEvents(db, limit = 50000) {
   return db.query(
     `-- @qid:all_events\nSELECT * FROM change_events ORDER BY ${COLUMNS.id} ASC LIMIT $1`,

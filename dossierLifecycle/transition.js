@@ -1,5 +1,5 @@
 /**
- * transition.js — the dossier lifecycle state machine (main export).
+ * transition.js - the dossier lifecycle state machine (main export).
  *
  * transition(currentState, event, context) → { nextState, valid, reason }
  *

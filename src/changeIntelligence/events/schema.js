@@ -1,14 +1,14 @@
 /**
- * schema.js — single source of truth for the change_events table shape, as seen
+ * schema.js - single source of truth for the change_events table shape, as seen
  * by the DAL. Column names live here as constants so neither writeEvent nor
  * readEvents hard-codes a string twice; the canonical DDL is the mirror copy in
  * db/migrations/007_change_events.sql (keep the two in sync).
  *
  * The closed-vocabulary enums (FIELD_CLASS, WORKFLOW, VERIFIABILITY, INTENT,
- * REGISTRY_STATUS) are NOT redefined here — they are imported from the engine's
+ * REGISTRY_STATUS) are NOT redefined here - they are imported from the engine's
  * enums.js, read-only, so this slice cannot drift from the engine contract. The
  * only vocab owned locally is CHANGE_TYPE_VALUES, which is deriveChangeType's
- * output (add|remove|changed) — distinct from the engine's post-split
+ * output (add|remove|changed) - distinct from the engine's post-split
  * CHANGE_TYPE (add|remove|correct|update), which the engine consumes but this
  * table does not store.
  *
@@ -82,7 +82,7 @@ const WRITABLE_COLUMNS = [
   COLUMNS.jurisdiction,
 ];
 
-// JSONB columns — serialised with JSON.stringify on write so a JS value (object,
+// JSONB columns - serialised with JSON.stringify on write so a JS value (object,
 // array, scalar) round-trips faithfully through the driver.
 const JSONB_COLUMNS = [COLUMNS.beforeValue, COLUMNS.afterValue];
 

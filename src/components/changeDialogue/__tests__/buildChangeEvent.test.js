@@ -111,7 +111,7 @@ describe('buildChangeEvent', () => {
 });
 
 /**
- * REGRESSION — change_events.source_tier is a SMALLINT in Postgres, but a
+ * REGRESSION - change_events.source_tier is a SMALLINT in Postgres, but a
  * stakeholder object carries the string form ("tier1"). Passing the raw string
  * makes real Postgres reject the ENTIRE insert, and nothing local catches it:
  * the route always answers 200 and the fake DB does not type-check. Every

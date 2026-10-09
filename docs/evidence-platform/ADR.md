@@ -1,4 +1,4 @@
-# Evidence Platform — Architecture Decision Log
+# Evidence Platform - Architecture Decision Log
 
 ## Purpose
 
@@ -18,15 +18,15 @@ This log explains **why significant choices were made and when they changed**.
 
 Every decision uses one of:
 
-- **PROPOSED** — under consideration; must not yet drive architecture-changing implementation.
-- **APPROVED** — authoritative.
-- **REJECTED** — considered and deliberately not adopted.
-- **SUPERSEDED** — previously approved but replaced by another named decision.
-- **DEFERRED** — valid question but intentionally postponed.
+- **PROPOSED** - under consideration; must not yet drive architecture-changing implementation.
+- **APPROVED** - authoritative.
+- **REJECTED** - considered and deliberately not adopted.
+- **SUPERSEDED** - previously approved but replaced by another named decision.
+- **DEFERRED** - valid question but intentionally postponed.
 
 ---
 
-# ADR-001 — Architecture Authority and Codex Decision Boundary
+# ADR-001 - Architecture Authority and Codex Decision Boundary
 
 **Status:** APPROVED
 
@@ -52,7 +52,7 @@ Architectural evolution becomes explicit and reviewable.
 
 ---
 
-# ADR-002 — Evidence Is a First-Class Domain Concept
+# ADR-002 - Evidence Is a First-Class Domain Concept
 
 **Status:** APPROVED
 
@@ -72,7 +72,7 @@ Requirements, investigations, dossiers, assertions, and decisions may reference 
 
 ---
 
-# ADR-003 — Source Evidence and Derived Knowledge Remain Distinct
+# ADR-003 - Source Evidence and Derived Knowledge Remain Distinct
 
 **Status:** APPROVED
 
@@ -99,7 +99,7 @@ The platform can explain not only what it believes but why.
 
 ---
 
-# ADR-004 — Historical Reconstruction Is a Core Requirement
+# ADR-004 - Historical Reconstruction Is a Core Requirement
 
 **Status:** APPROVED
 
@@ -119,7 +119,7 @@ Destructive current-state replacement should be avoided where it would destroy m
 
 ---
 
-# ADR-005 — Evidence Collection and Interpretation Are Separate Concerns
+# ADR-005 - Evidence Collection and Interpretation Are Separate Concerns
 
 **Status:** APPROVED
 
@@ -141,7 +141,7 @@ Collected evidence remains usable even if extraction/interpretation logic change
 
 ---
 
-# ADR-006 — Existing KYC Behavior Is Protected During Evidence Platform Introduction
+# ADR-006 - Existing KYC Behavior Is Protected During Evidence Platform Introduction
 
 **Status:** APPROVED
 
@@ -163,7 +163,7 @@ Codex must identify rather than silently resolve conflicts between target Eviden
 
 ---
 
-# ADR-007 — Canonical Evidence May Be Reused Across Contexts
+# ADR-007 - Canonical Evidence May Be Reused Across Contexts
 
 **Status:** APPROVED
 
@@ -185,7 +185,7 @@ Evidence reuse becomes possible without destroying contextual meaning.
 
 ---
 
-# ADR-008 — Architecture Changes Require Named Decisions
+# ADR-008 - Architecture Changes Require Named Decisions
 
 **Status:** APPROVED
 
@@ -205,7 +205,7 @@ The codebase cannot become the accidental source of architectural truth.
 
 # New ADR Template
 
-## ADR-XXX — [Decision Name]
+## ADR-XXX - [Decision Name]
 
 **Status:** PROPOSED
 
@@ -295,7 +295,7 @@ No implementation of the proposed architectural change should occur until the de
 
 ---
 
-## ADR-009 — Build Evidence Platform Independently Before Legacy Integration
+## ADR-009 - Build Evidence Platform Independently Before Legacy Integration
 
 **Status:** APPROVED
 
@@ -364,7 +364,7 @@ Some temporary duplication between legacy evidence mechanisms and the new Eviden
 
 ---
 
-## ADR-010 — Core Evidence Domain, Capture, Reuse, and Extraction Lineage
+## ADR-010 - Core Evidence Domain, Capture, Reuse, and Extraction Lineage
 
 **Status:** APPROVED
 
@@ -411,7 +411,7 @@ Reuse eligibility also depends on provenance/access class:
 
 #### Evidence records subject identity without becoming a master entity system
 
-Evidence must be able to record the real-world subject to which it relates using available stable identifiers or references from the surrounding platform and, where appropriate, authoritative source identifiers—for example, a UK company number. The same real-world company must not automatically become a different subject merely because it appears in multiple cases or customer contexts.
+Evidence must be able to record the real-world subject to which it relates using available stable identifiers or references from the surrounding platform and, where appropriate, authoritative source identifiers-for example, a UK company number. The same real-world company must not automatically become a different subject merely because it appears in multiple cases or customer contexts.
 
 A1 must not create a global master-entity/company identity system. Evidence owns the relationship between evidence and its subject; it does not own global entity resolution. If repository inspection finds no safe existing subject reference capable of meeting A1 needs without a new canonical identity decision, implementation must stop and report that issue.
 
@@ -431,7 +431,7 @@ The existing configurable KYC/KYB schema remains authoritative. Extraction Run l
 
 Where multiple representations exist, the architecture must allow a later independent verification path, such as primary extraction from a machine-readable Artifact and independent re-extraction from a screenshot. Stage A1 does not implement verification workflows, triggers, model selection, comparison logic, discrepancy decisioning, or analyst routing, but must not make them impossible.
 
-An extraction discrepancy—two extraction methods disagreeing about what the same evidence says—is distinct from an evidence discrepancy—two independently understood pieces of evidence reporting different values.
+An extraction discrepancy-two extraction methods disagreeing about what the same evidence says-is distinct from an evidence discrepancy-two independently understood pieces of evidence reporting different values.
 
 #### Evidence Platform does not own KYC decisioning or schema semantics
 
@@ -467,7 +467,7 @@ Exact table names, internal API/service names, lifecycle enum names, migration m
 
 ---
 
-## ADR-011 — Companies House Collection Producer, Partial Success, and Collection Identity
+## ADR-011 - Companies House Collection Producer, Partial Success, and Collection Identity
 
 **Status:** APPROVED
 
@@ -534,7 +534,7 @@ Successful source areas survive and remain valid when another source area fails.
 
 ---
 
-## ADR-012 — Evidence Interpretation, Discovered Facts, and Verification Lineage
+## ADR-012 - Evidence Interpretation, Discovered Facts, and Verification Lineage
 
 **Status:** APPROVED
 
@@ -688,7 +688,7 @@ Stage A3 explicitly excludes final KYC integration, KYC UI integration, legacy s
 
 ---
 
-## ADR-013 — Evidence-to-Need Evaluation and the A4a/A4b Boundary
+## ADR-013 - Evidence-to-Need Evaluation and the A4a/A4b Boundary
 
 **Status:** APPROVED
 
@@ -698,7 +698,7 @@ Stage A3 explicitly excludes final KYC integration, KYC UI integration, legacy s
 
 ### Context
 
-Stages A1–A3 establish Evidence Requirements, schema-aligned Information Needs, immutable Evidence Assets and Artifacts, Extraction Runs, requested and discovered Facts, direct and derived grounding, extraction-support states, independent-verification lineage, and precise Fact-to-Artifact support.
+Stages A1-A3 establish Evidence Requirements, schema-aligned Information Needs, immutable Evidence Assets and Artifacts, Extraction Runs, requested and discovered Facts, direct and derived grounding, extraction-support states, independent-verification lineage, and precise Fact-to-Artifact support.
 
 They do not establish a durable evaluation of how a Fact relates to an Information Need. Existing relationships must not be misread as that evaluation: an Asset associated with a Requirement is not proof of satisfaction; a requested Fact carrying schema or Information Need lineage is not an acceptance result; A3 extraction support describes whether evidence supports a Fact, not whether KYC accepts that Fact for a requirement.
 
@@ -710,8 +710,8 @@ The previously contemplated Stage A4 combined candidate matching, evidence cover
 
 Stage A4 is divided into:
 
-* **A4a — Fact-to-Information-Need Evaluation**, which evaluates how an immutable Evidence Fact relates to an explicitly supplied Information Need; and
-* **A4b — Coverage, Conflict, and Provisional Requirement Assessment**, which may later reason across candidate evaluations once the required collection, cardinality, temporal, source-policy, and aggregation semantics are separately governed.
+* **A4a - Fact-to-Information-Need Evaluation**, which evaluates how an immutable Evidence Fact relates to an explicitly supplied Information Need; and
+* **A4b - Coverage, Conflict, and Provisional Requirement Assessment**, which may later reason across candidate evaluations once the required collection, cardinality, temporal, source-policy, and aggregation semantics are separately governed.
 
 A4a may be implemented only through a separately authorized build task. A4b is not authorized for implementation by this decision.
 
@@ -818,7 +818,7 @@ The implementation must not overload:
 * `evidence_requirements.status`; or
 * mutable JSON on existing Facts.
 
-Existing A1–A3 records remain immutable. No migration is authorized by this governance-only task.
+Existing A1-A3 records remain immutable. No migration is authorized by this governance-only task.
 
 #### A4b requires separate governance
 
@@ -866,7 +866,7 @@ A4a explicitly excludes source-winner or operative-value selection, final KYC sa
 
 ---
 
-## ADR-014 — Generic Private Artifact Ingestion and Authorized Reopen
+## ADR-014 - Generic Private Artifact Ingestion and Authorized Reopen
 
 **Status:** APPROVED
 
@@ -896,7 +896,7 @@ Repository diagnosis established that the current model already contains the nec
 
 #### R1 is generic Evidence infrastructure
 
-Insert **Evidence Consumer Readiness R1 — Private Artifact Ingestion** after A4a and before A4b.
+Insert **Evidence Consumer Readiness R1 - Private Artifact Ingestion** after A4a and before A4b.
 
 R1 accepts an upload only after a trusted host has authorized Evidence Platform custody. It creates generic Evidence provenance and does not create or import consumer-domain concepts.
 
@@ -1058,7 +1058,7 @@ R1 requires careful server-side authorization, media validation, integrity read-
 
 ---
 
-## ADR-015 — Targeted Interpretation Boundary for Authorized Evidence Consumers
+## ADR-015 - Targeted Interpretation Boundary for Authorized Evidence Consumers
 
 **Status:** APPROVED AND IMPLEMENTED
 
@@ -1078,7 +1078,7 @@ The existing A3 service is not yet a stable downstream integration boundary. Its
 
 #### Insert R2 before R3, R4, and A4b
 
-Add **Evidence Consumer Readiness R2 — Targeted Interpretation Boundary** after R1 and before R3, R4, and deferred A4b.
+Add **Evidence Consumer Readiness R2 - Targeted Interpretation Boundary** after R1 and before R3, R4, and deferred A4b.
 
 R2 is a stable, provider-neutral service/API boundary around the existing A3 interpretation engine. It is not a new extraction engine and must preserve A3's immutable Extraction Run, Fact, support, and Artifact-lineage model.
 
@@ -1144,10 +1144,10 @@ The existing Extraction Run JSONB metadata can carry bounded correlation without
 
 R2 must preserve a per-requested-concept outcome that distinguishes at least:
 
-* `found` — one or more supported Facts answer the concept;
-* `not_found` — the input was interpretable and complete enough to conclude the requested fact was not represented;
-* `not_evaluated` — incomplete/unreadable input or another limitation prevented evaluation; and
-* `unsupported` — the current interpretation capability does not understand or support the requested concept.
+* `found` - one or more supported Facts answer the concept;
+* `not_found` - the input was interpretable and complete enough to conclude the requested fact was not represented;
+* `not_evaluated` - incomplete/unreadable input or another limitation prevented evaluation; and
+* `unsupported` - the current interpretation capability does not understand or support the requested concept.
 
 Exact internal enum names remain implementation details, but `unsupported`, `not_found`, `not_evaluated`, provider unavailability/failure, and overall inconclusive interpretation must not be conflated.
 
@@ -1209,9 +1209,9 @@ R2 remains generic Evidence infrastructure. It imports no UBO/KYC/EDD/source-of-
 
 ---
 
-## ADR-016 — Multimodal Interpretation and Durable Evidence Locators
+## ADR-016 - Multimodal Interpretation and Durable Evidence Locators
 
-**Status:** APPROVED — IMPLEMENTED
+**Status:** APPROVED - IMPLEMENTED
 
 **Implemented at:** `ec96fe358ef09bdec15dd14f23a7ade1b36aba06`
 
@@ -1231,7 +1231,7 @@ Migration 013 records only the immutable pair `(fact_id, artifact_id)`. It truth
 
 #### Insert R3 after R2 and before R4 and A4b
 
-Add **Evidence Consumer Readiness R3 — PDF/Image Interpretation + Durable Evidence Locators** after R2. R3 extends the existing A3/R2 interpretation engine; it must not create a second extraction engine.
+Add **Evidence Consumer Readiness R3 - PDF/Image Interpretation + Durable Evidence Locators** after R2. R3 extends the existing A3/R2 interpretation engine; it must not create a second extraction engine.
 
 ```text
 authorized persisted PDF / PNG / JPEG
@@ -1256,9 +1256,9 @@ R3 continues to receive neutral requested concepts through R2 and continues A3 o
 The provider-facing Evidence abstraction must distinguish content items conceptually equivalent to:
 
 ```text
-text       — verified JSON/HTML text plus Artifact identity and order
-image      — verified PNG/JPEG bytes plus canonical MIME and Artifact identity
-document   — verified PDF bytes plus canonical MIME and Artifact identity
+text       - verified JSON/HTML text plus Artifact identity and order
+image      - verified PNG/JPEG bytes plus canonical MIME and Artifact identity
+document   - verified PDF bytes plus canonical MIME and Artifact identity
 ```
 
 Each item retains its Evidence Artifact ID, media/representation type, authoritative order, and safe source metadata. Raw bytes remain server-side and are supplied only after authorization and SHA-256 verification. Provider-specific Anthropic `text`, `image`, `document`, base64, citation, or future Files API blocks belong only inside the Anthropic adapter and must not leak into Evidence domain or persistence models.
@@ -1389,9 +1389,9 @@ R3 does not authorize a second extraction engine, new Evidence identity, provide
 
 ---
 
-## ADR-017 — Typed Source-Relationship Facts
+## ADR-017 - Typed Source-Relationship Facts
 
-**Status:** APPROVED — IMPLEMENTED
+**Status:** APPROVED - IMPLEMENTED
 
 **Date:** 2026-09-01
 
@@ -1411,7 +1411,7 @@ Treating an opaque provider-produced JSON object as a typed relationship would t
 
 #### R4 represents source assertions, not downstream conclusions
 
-Insert **Evidence Consumer Readiness R4 — Typed Relational Facts** after R3 and before A4b.
+Insert **Evidence Consumer Readiness R4 - Typed Relational Facts** after R3 and before A4b.
 
 R4 represents an individual source-supported assertion using the documented grammar:
 
@@ -1542,7 +1542,7 @@ Opaque `fact_value` JSONB alone is insufficient because it provides no enforceab
 
 R4 uses the smallest forward-only additive persistence structure after migration 016: a one-to-zero/one relationship extension keyed by `fact_id`. Critical enums and value-shape invariants are enforced through deterministic domain validation and database constraints where practical; bounded party, qualifier, source-specific, and precision metadata may remain validated JSONB snapshots.
 
-Migration 017 is authorized as the next migration. Migrations 010–016 remain immutable. Exact table/property names and the final split between typed columns and validated JSONB are reversible implementation details within this approved persistence direction.
+Migration 017 is authorized as the next migration. Migrations 010-016 remain immutable. Exact table/property names and the final split between typed columns and validated JSONB are reversible implementation details within this approved persistence direction.
 
 #### A4a remains the evaluation boundary
 
@@ -1576,9 +1576,9 @@ Architecture Authority approved the one-to-one extension model, initial versione
 
 ---
 
-## ADR-018 — Provisional Evidence Coverage, Completeness, and Comparable-Disagreement Assessment
+## ADR-018 - Provisional Evidence Coverage, Completeness, and Comparable-Disagreement Assessment
 
-**Status:** APPROVED — IMPLEMENTED
+**Status:** APPROVED - IMPLEMENTED
 
 **Date:** 2026-09-01
 
@@ -1679,7 +1679,7 @@ Future A4b implementation should use additive structures conceptually equivalent
 
 The same additive migration may include the approved typed set-assertion extension for legitimate-empty and complete-set source assertions. No existing status or mutable Fact JSON may be overloaded. Existing data requires no automatic backfill.
 
-Migration 018 is authorized as one additive forward-only migration after 017. Migrations 010–017 remain immutable.
+Migration 018 is authorized as one additive forward-only migration after 017. Migrations 010-017 remain immutable.
 
 #### Requirement lifecycle and downstream decision ownership are unchanged
 
@@ -1699,9 +1699,9 @@ This decision authorizes only bounded A4b implementation and Lab characterizatio
 
 ---
 
-## ADR-019 — Point-in-Time Evidence Reconstruction and Immutable Evidence Packages
+## ADR-019 - Point-in-Time Evidence Reconstruction and Immutable Evidence Packages
 
-**Status:** APPROVED — A5A AND A5B IMPLEMENTED
+**Status:** APPROVED - A5A AND A5B IMPLEMENTED
 
 **Date:** 2026-09-04
 
@@ -1723,8 +1723,8 @@ The same diagnosis also identifies a separate product need: an authorized recons
 
 The proposed next roadmap is:
 
-* **A5a — Evidence Ledger / Reconstruction**: an authorized, deterministic, point-in-time read projection over existing Evidence source-of-truth records; and
-* **A5b — Immutable Evidence Package**: an explicitly frozen, durable package created from an A5a reconstruction with its own identity, exact membership, canonical manifest, manifest fingerprint, and optional supersession lineage.
+* **A5a - Evidence Ledger / Reconstruction**: an authorized, deterministic, point-in-time read projection over existing Evidence source-of-truth records; and
+* **A5b - Immutable Evidence Package**: an explicitly frozen, durable package created from an A5a reconstruction with its own identity, exact membership, canonical manifest, manifest fingerprint, and optional supersession lineage.
 
 The two stages share a reconstruction model but have different write and authorization consequences. A5a must be proven before A5b freezes its output.
 
@@ -1802,7 +1802,7 @@ A package normally references canonical immutable Evidence identities rather tha
 
 Membership must identify the member kind, stable member reference, deterministic order/role, and the exact version or immutable record identity included. The package manifest should contain access-safe Evidence references and the metadata necessary to explain the package without exposing Blob URLs, storage keys, credentials, or repository internals. Internal foreign keys may use existing UUID identities, but external contracts should expose opaque stable references rather than table structure.
 
-The initial membership vocabulary should cover the A1–A4b/R1–R4 record types required for reconstruction. Because this vocabulary contains both UUID and composite-key records, A5b uses a constrained polymorphic member type plus a server-generated canonical member key/reference; it does not pretend that one generic UUID foreign key can enforce every target. The package service must resolve and validate every reference within the authorized A5a projection in the same freeze transaction. A free-form, browser-supplied list of arbitrary IDs is not sufficient.
+The initial membership vocabulary should cover the A1-A4b/R1-R4 record types required for reconstruction. Because this vocabulary contains both UUID and composite-key records, A5b uses a constrained polymorphic member type plus a server-generated canonical member key/reference; it does not pretend that one generic UUID foreign key can enforce every target. The package service must resolve and validate every reference within the authorized A5a projection in the same freeze transaction. A free-form, browser-supplied list of arbitrary IDs is not sufficient.
 
 Relational membership records retain Package ID, stable ordinal, constrained member type, canonical member reference/key, role, and only bounded authorization-resolution metadata where concretely required. The normalized A5a entries in the canonical manifest are the principal frozen Package content. They preserve category, occurrence and availability times, source record type/reference, safe summary/projection, status/outcome, applicable metadata, and limitations. If one source record legitimately produces several A5a chronology entries, those entries remain distinct Package members. Canonical Artifacts and their bytes are not copied: one canonical Artifact can be referenced by many Packages.
 
@@ -1844,7 +1844,7 @@ The authorized migration after 018 contains `evidence_packages` and `evidence_pa
 
 The member row holds Package ID, ordinal, constrained canonical member type, server-generated canonical reference/key, member role, and only bounded authorization-resolution metadata where necessary, with unique Package ordinal and appropriate indexes. Referential integrity to heterogeneous canonical records is enforced by server-side resolution inside the freeze transaction plus record-type-specific deterministic key validation; migration design must not introduce a generic unvalidated UUID or a duplicate Evidence registry/backfill merely to simulate a polymorphic foreign key.
 
-Freeze persists the Package row, ordered membership, canonical manifest bytes, and digest atomically. Migration 019 and bounded A5b implementation are authorized; migrations 010–018 remain immutable and no historical backfill is permitted.
+Freeze persists the Package row, ordered membership, canonical manifest bytes, and digest atomically. Migration 019 and bounded A5b implementation are authorized; migrations 010-018 remain immutable and no historical backfill is permitted.
 
 #### Decision ownership remains downstream
 
@@ -1862,9 +1862,9 @@ Architecture Authority approved the detailed A5b freeze-source, immutable member
 
 ---
 
-## ADR-020 — Evidence Core V1 Public Consumer Façade
+## ADR-020 - Evidence Core V1 Public Consumer Façade
 
-**Status:** APPROVED — IMPLEMENTED AND ACCEPTED
+**Status:** APPROVED - IMPLEMENTED AND ACCEPTED
 
 **Date:** 2026-09-08
 

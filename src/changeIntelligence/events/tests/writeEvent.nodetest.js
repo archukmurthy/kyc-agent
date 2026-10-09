@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const { writeEvent } = require('../writeEvent');
 const { makeFakeDb, baseEvent } = require('../fakeDb');
 
-// ── writeEvent — happy path ──
+// ── writeEvent - happy path ──
 
 test('appends an event and returns the stored row with a server-assigned id', async () => {
   const db = makeFakeDb();
@@ -71,7 +71,7 @@ test('records engine output and provenance verbatim', async () => {
   assert.equal(row.jurisdiction, 'GB');
 });
 
-// ── writeEvent — validation ──
+// ── writeEvent - validation ──
 
 test('rejects a caller-supplied id', async () => {
   const db = makeFakeDb();

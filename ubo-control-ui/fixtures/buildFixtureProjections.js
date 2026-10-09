@@ -258,7 +258,7 @@ function buildProjectionFixtures() {
       fixture("UI01", "Simple direct owner", "One qualifying natural person directly owns the customer.", direct),
       fixture("UI02", "Multilayer effective ownership", "Alice owns 80% of HoldCo; HoldCo owns 50% of the customer.", multilayer),
       fixture("UI03", "Multiple paths", "Two independent paths contribute 30% and 10% to Alice's recorded aggregate.", multipath),
-      fixture("UI04", "Range ownership", "An open/closed 25–50% ownership range is preserved.", ranged),
+      fixture("UI04", "Range ownership", "An open/closed 25-50% ownership range is preserved.", ranged),
       fixture("UI05", "Economic and voting", "Economic ownership and voting rights use distinct visual semantics.", economicVoting),
       fixture("UI06", "Appointment control", "Non-percentage board appointment control is shown independently.", appointment),
       fixture("UI07", "Unresolved partial structure", "Known economic, voting and control candidates remain non-qualifying while a foreign branch and currentness are unresolved.", unresolved),

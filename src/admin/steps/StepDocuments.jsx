@@ -3,7 +3,7 @@ import WizardCard from "../components/WizardCard";
 import DocumentCard from "../components/DocumentCard";
 import { adminColors, adminStyles } from "../adminDesign";
 
-// Step 5 — Document Collection.
+// Step 5 - Document Collection.
 //
 // Manages config.documentLibrary (global catalog of every doc the admin can
 // pick from) and config.documents[entityTypeId] (per-entity-type collection,
@@ -11,7 +11,7 @@ import { adminColors, adminStyles } from "../adminDesign";
 //
 // Persisted shape stays compatible with App.js: documents[entityTypeId] is an
 // array of full doc objects, not just ids. The admin still uses the library
-// as a "source of truth" for doc definitions — checking a card copies the
+// as a "source of truth" for doc definitions - checking a card copies the
 // library entry into the entity's array; unchecking removes it.
 
 const BLANK_DOC = () => ({
@@ -72,7 +72,7 @@ export default function StepDocuments({
     [config?.documents, selectedEntityType]
   );
 
-  // The library may be missing on old configs — synthesize it from the
+  // The library may be missing on old configs - synthesize it from the
   // documents map so the UI has something to work with regardless.
   const effectiveLibrary = useMemo(() => {
     const lib = config?.documentLibrary || [];
@@ -85,7 +85,7 @@ export default function StepDocuments({
     // A library doc is visible in "suggested" view if either:
     //   - it's tagged as a default for this entity type, OR
     //   - it's already in this entity's collection (e.g. just copied from
-    //     another entity type) — otherwise the just-copied docs would vanish.
+    //     another entity type) - otherwise the just-copied docs would vanish.
     const included = new Set((documentsForEntity || []).map((d) => d.id));
     return effectiveLibrary.filter((d) =>
       (d.defaultForEntityTypes || []).includes(selectedEntityType)

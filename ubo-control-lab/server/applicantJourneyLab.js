@@ -295,7 +295,7 @@ function startApplicantFixture({ fixtureId = "AJV2-01", profileId = null } = {})
     orchestrationState: { status: "READY", operationId: null },
     fixtureReviewConfiguration: fixture.mode === "OWNERSHIP" ? {
       contractVersion: "ubo-applicant-fixture-review-decisions-v1",
-      label: "DEMO FIXTURE — PRECONFIGURED REVIEW DECISIONS",
+      label: "DEMO FIXTURE - PRECONFIGURED REVIEW DECISIONS",
       identityDecisionStatus: "RESOLVED",
       claimResultingState: "OPERATIVE",
       reasonCode: "EXPLICIT_LAB_REVIEW_DECISION",

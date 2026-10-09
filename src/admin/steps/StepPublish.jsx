@@ -6,7 +6,7 @@ import { getTenantId } from "../../utils/tenant";
 import { adminColors, adminStyles } from "../adminDesign";
 import { flagFor } from "../countries";
 
-// Step 7 — Review & Publish.
+// Step 7 - Review & Publish.
 // Computes readiness, surfaces gaps, renders the matrix + version history,
 // and runs the publish itself (POST /api/config with the admin token).
 
@@ -69,7 +69,7 @@ export default function StepPublish({
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-      // Clear staged preview — same config is now live, so an open preview tab
+      // Clear staged preview - same config is now live, so an open preview tab
       // refreshing should fetch the published version, not the pre-publish snapshot.
       try {
         sessionStorage.removeItem("preview_config");

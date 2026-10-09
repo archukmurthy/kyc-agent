@@ -1,6 +1,6 @@
 /* eslint-env node */
 /*
- * Shared KYC research / scoring pipeline — SINGLE SOURCE OF TRUTH.
+ * Shared KYC research / scoring pipeline - SINGLE SOURCE OF TRUTH.
  *
  * Extracted verbatim from src/App.js. CommonJS so it can be require()'d by
  * Node (api/benchmark.js) and imported by webpack (src/App.js) via CJS
@@ -20,7 +20,7 @@ const {
 
    Per-country lists of authoritative registries
    and regulators. Anything matching (case-insensitive
-   substring) is treated as "authoritative" — those
+   substring) is treated as "authoritative" - those
    items go on the Confirm page as pre-checked.
 
    Anything else (Wikipedia, LinkedIn, Crunchbase,
@@ -101,7 +101,7 @@ const LICENSED_MARKETS = ["GB"];
 
 /* ═══════════════════════════════════════════
    SHARED GAP SECTIONS (account + bank are
-   identical structure across jurisdictions —
+   identical structure across jurisdictions -
    only the currency label differs)
    ═══════════════════════════════════════════ */
 const VOLUME_OPTIONS = ["Under 10,000", "10,000 - 50,000", "50,000 - 250,000", "250,000 - 1,000,000", "1,000,000 - 5,000,000", "Over 5,000,000"];
@@ -163,7 +163,7 @@ const UK_SCHEMA = {
     // Stakeholder collection for Corporate flow. Mirrors fiStakeholderFields'
     // stakeholder_note pattern. directors_full_details uses a distinct id
     // because the research field "directors" is already populated by the AI.
-    { field: "directors_full_details", label: "Directors / Officers — full details", inputType: "textarea", required: true, section: "stakeholders",
+    { field: "directors_full_details", label: "Directors / Officers - full details", inputType: "textarea", required: true, section: "stakeholders",
       placeholder: "For each director or officer, include: Full Name, Position, Date of Birth, Nationality, Email, PEP status (Yes/No), and Residential Address." },
     { field: "stakeholder_note", label: "Other Stakeholder Details (UBOs, Signatories)", inputType: "textarea", required: true, section: "stakeholders",
       placeholder: "List all UBOs (>25% ownership) and authorised signatories. For each include: Full Name, Position, Date of Birth, Nationality, Email, Share Percentage (if applicable), PEP status (Yes/No), and Residential Address." },
@@ -221,7 +221,7 @@ const SG_SCHEMA = {
     // Stakeholder collection for Corporate flow. Mirrors fiStakeholderFields'
     // stakeholder_note pattern. directors_full_details uses a distinct id
     // because the research field "directors" is already populated by the AI.
-    { field: "directors_full_details", label: "Directors / Officers — full details", inputType: "textarea", required: true, section: "stakeholders",
+    { field: "directors_full_details", label: "Directors / Officers - full details", inputType: "textarea", required: true, section: "stakeholders",
       placeholder: "For each director or officer, include: Full Name, Position, Date of Birth, Nationality, Email, PEP status (Yes/No), and Residential Address." },
     { field: "stakeholder_note", label: "Other Stakeholder Details (UBOs, Signatories)", inputType: "textarea", required: true, section: "stakeholders",
       placeholder: "List all UBOs (>25% ownership) and authorised signatories. For each include: Full Name, Position, Date of Birth, Nationality, Email, Share Percentage (if applicable), PEP status (Yes/No), and Residential Address." },
@@ -230,7 +230,7 @@ const SG_SCHEMA = {
 };
 
 /* ═══════════════════════════════════════════
-   FI SCHEMAS — shared building blocks
+   FI SCHEMAS - shared building blocks
    The two FI schemas (UK and SG) are structurally
    identical. Only Section 5 (Account Usage) differs
    in currency labelling, so it's parameterised by
@@ -239,7 +239,7 @@ const SG_SCHEMA = {
 const fiResearchFields = [
   // Identity & registry
   { field: "business_name", label: "Business Name", tier: 1, section: "business_entity", searchHint: "Full registered legal name from Companies House or equivalent official registry" },
-  { field: "trading_name", label: "Doing Business As / Trade Name", tier: 1, section: "business_entity", searchHint: "Any trading or DBA name — check Companies House previous names" },
+  { field: "trading_name", label: "Doing Business As / Trade Name", tier: 1, section: "business_entity", searchHint: "Any trading or DBA name - check Companies House previous names" },
   { field: "registration_number", label: "Business Registration Number", tier: 1, section: "business_entity", searchHint: "Company registration number from Companies House or equivalent registry" },
   { field: "business_activity_description", label: "Business Activity Description", tier: 2, section: "business_entity", searchHint: "What does this company do? Check annual report, Companies House SIC code, company website" },
   { field: "website", label: "Website", tier: 1, section: "business_entity", searchHint: "Official company website" },
@@ -251,74 +251,74 @@ const fiResearchFields = [
   { field: "registered_address_country", label: "Country", tier: 1, section: "registered_address", searchHint: "Full registered address from Companies House or equivalent registry" },
   { field: "incorporation_date", label: "Date of Incorporation", tier: 1, section: "business_entity", searchHint: "Date of incorporation from Companies House or equivalent registry" },
   // Operations & size
-  { field: "employee_count", label: "Number of Employees", tier: 2, section: "business_activity", searchHint: "Number of employees — check annual report, LinkedIn, or Companies House accounts" },
-  { field: "annual_turnover", label: "Annual Turnover", tier: 2, section: "business_activity", searchHint: "Annual revenue/turnover band — check annual report or Companies House accounts" },
-  { field: "operating_countries", label: "Operating Countries", tier: 2, section: "business_activity", searchHint: "Countries where the company operates — check annual report geographic breakdown" },
-  { field: "payout_transaction_countries", label: "Payout Transaction Countries", tier: 2, section: "business_activity", searchHint: "Countries the company sends payments to — check annual report" },
-  { field: "industry_sector", label: "Industry Sector (multi)", tier: 1, section: "business_activity", searchHint: "Primary industry sector — check Companies House SIC code and annual report" },
+  { field: "employee_count", label: "Number of Employees", tier: 2, section: "business_activity", searchHint: "Number of employees - check annual report, LinkedIn, or Companies House accounts" },
+  { field: "annual_turnover", label: "Annual Turnover", tier: 2, section: "business_activity", searchHint: "Annual revenue/turnover band - check annual report or Companies House accounts" },
+  { field: "operating_countries", label: "Operating Countries", tier: 2, section: "business_activity", searchHint: "Countries where the company operates - check annual report geographic breakdown" },
+  { field: "payout_transaction_countries", label: "Payout Transaction Countries", tier: 2, section: "business_activity", searchHint: "Countries the company sends payments to - check annual report" },
+  { field: "industry_sector", label: "Industry Sector (multi)", tier: 1, section: "business_activity", searchHint: "Primary industry sector - check Companies House SIC code and annual report" },
   // Listing
   { field: "publicly_listed", label: "Publicly Listed", tier: 2, section: "business_activity", searchHint: "Is the company or its parent listed on a stock exchange? Check LSE, NYSE, SGX" },
   { field: "listed_where", label: "Listed Exchanges", tier: 2, section: "business_activity", searchHint: "Which stock exchange? Check LSE, annual report" },
   // Regulatory
   { field: "has_licence", label: "Do you hold a licence or permit to operate?", tier: 1, section: "regulatory", searchHint: "Does the company hold a financial services licence? Check FCA register (register.fca.org.uk), MAS directory, or equivalent regulatory database for the country" },
-  { field: "regulatory_authority", label: "Regulatory Authority Name", tier: 1, section: "regulatory", searchHint: "Which regulatory authority? e.g. FCA, MAS, ASIC, SEC — check official regulatory register" },
-  { field: "licence_number", label: "Licence Number", tier: 1, section: "regulatory", searchHint: "FCA FRN or equivalent licence number — check FCA register or MAS directory" },
+  { field: "regulatory_authority", label: "Regulatory Authority Name", tier: 1, section: "regulatory", searchHint: "Which regulatory authority? e.g. FCA, MAS, ASIC, SEC - check official regulatory register" },
+  { field: "licence_number", label: "Licence Number", tier: 1, section: "regulatory", searchHint: "FCA FRN or equivalent licence number - check FCA register or MAS directory" },
   // Branches & services
   { field: "has_branches", label: "Do you have physical branches or office locations?", tier: 2, section: "operations", searchHint: "Does the company have physical branches or offices? Check annual report" },
-  { field: "branch_count", label: "How many branches?", tier: 2, section: "operations", searchHint: "How many branches — check annual report" },
-  { field: "branch_countries", label: "Where are your main offices located? (multi)", tier: 2, section: "operations", searchHint: "Countries with offices — check annual report" },
+  { field: "branch_count", label: "How many branches?", tier: 2, section: "operations", searchHint: "How many branches - check annual report" },
+  { field: "branch_countries", label: "Where are your main offices located? (multi)", tier: 2, section: "operations", searchHint: "Countries with offices - check annual report" },
   { field: "services_other_fis", label: "Do you service other financial institutions?", tier: 2, section: "operations", searchHint: "Does the company provide services to other financial institutions? Check annual report" },
   { field: "cross_border_services", label: "Do you provide cross-border services?", tier: 2, section: "operations", searchHint: "Does the company provide cross-border payment services? Check annual report and website" },
   { field: "issues_prepaid_cards", label: "Do you issue prepaid cards?", tier: 2, section: "operations", searchHint: "Does the company issue prepaid cards? Check annual report and website" },
   { field: "non_resident_customers", label: "Do you have non-resident customers?", tier: 2, section: "operations", searchHint: "Does the company serve non-resident or international customers? Check annual report" },
   { field: "products_offered", label: "What products / services do you offer to your customers? (multi)", tier: 2, section: "operations", searchHint: "What products and services does the company offer? Check annual report and website" },
   // Ownership
-  { field: "director_names", label: "Directors / Officers", tier: 2, section: "ownership", searchHint: "Names and roles of directors — check Companies House officers section or equivalent registry" },
-  { field: "ubo_parent_company", label: "UBO / Parent Company", tier: 2, section: "ownership", searchHint: "Ultimate beneficial owner or parent company — check Companies House PSC register or equivalent" },
-  { field: "ubo_share_percentage", label: "UBO Share Percentage", tier: 2, section: "ownership", searchHint: "Ownership percentage — check Companies House PSC register" },
+  { field: "director_names", label: "Directors / Officers", tier: 2, section: "ownership", searchHint: "Names and roles of directors - check Companies House officers section or equivalent registry" },
+  { field: "ubo_parent_company", label: "UBO / Parent Company", tier: 2, section: "ownership", searchHint: "Ultimate beneficial owner or parent company - check Companies House PSC register or equivalent" },
+  { field: "ubo_share_percentage", label: "UBO Share Percentage", tier: 2, section: "ownership", searchHint: "Ownership percentage - check Companies House PSC register" },
   // Disclosures
   { field: "licence_suspended", label: "Has your business ever had a licence suspended or revoked?", tier: 2, section: "regulatory", searchHint: "Has the company ever had a licence suspended or been subject to regulatory enforcement? Check FCA enforcement actions page (fca.org.uk/news/enforcement-actions), regulatory notices, news" },
   { field: "administration_proceedings", label: "Has your business ever been entered into administration proceedings?", tier: 2, section: "regulatory", searchHint: "Has the company been in administration? Check Companies House and news" },
 
   // ───────────────────────────────────────────────────────────────────────────
-  // FI field merge (CHANGE 1 — source of truth: benchmark/fi-schema-fields-patch.js).
+  // FI field merge (CHANGE 1 - source of truth: benchmark/fi-schema-fields-patch.js).
   // Inlined here rather than required from benchmark/ because CRA's
   // ModuleScopePlugin forbids src/ importing from outside src/. Keep the two
   // copies in sync. Three groups:
-  //   1. researchable  — tier 1/2 with a searchHint; counted in the researchable
+  //   1. researchable  - tier 1/2 with a searchHint; counted in the researchable
   //                      denominator; the agent attempts to fill them.
-  //   2. researchable-list — findable country LIST, but the % split is private;
+  //   2. researchable-list - findable country LIST, but the % split is private;
   //                      splitIsCustomerSupplied:true. Agent fills the list only.
-  //   3. customerSupplied — forward-looking / private / declaration fields. No
+  //   3. customerSupplied - forward-looking / private / declaration fields. No
   //                      searchHint; customerSupplied:true keeps them OUT of the
   //                      researchable denominator (computeCoverage) and out of
   //                      the research prompt (buildResearchPrompt).
   // ───────────────────────────────────────────────────────────────────────────
 
-  // GROUP 1 — researchable
-  { field: "vat_number", label: "VAT Number", tier: 2, section: "business_entity", searchHint: "VAT / tax registration number. Check the company website footer, terms and invoicing pages. Validate format against HMRC VAT checker (GB) or EU VIES (vies.ec.europa.eu). This is distinct from the company registration number — do not reuse the Companies House / registry number here." },
+  // GROUP 1 - researchable
+  { field: "vat_number", label: "VAT Number", tier: 2, section: "business_entity", searchHint: "VAT / tax registration number. Check the company website footer, terms and invoicing pages. Validate format against HMRC VAT checker (GB) or EU VIES (vies.ec.europa.eu). This is distinct from the company registration number - do not reuse the Companies House / registry number here." },
   { field: "additional_urls", label: "Additional URLs / Linked Websites", tier: 2, section: "business_entity", searchHint: "Any additional domains beyond the primary website: regional/country sites, separate brand or product sites, subsidiary sites, and app-store listings operated by the entity or its group. Check the main website footer and any 'our brands' / 'our companies' / 'group' pages." },
   { field: "is_business_address_same_as_registered", label: "Is your business address the same as your registered address?", tier: 1, section: "registered_address", searchHint: "Compare the registered address (from the company registry) with the principal place of business / head-office / contact address shown on the company website's contact page. Set 'No' only where a clearly different principal operating address is stated; otherwise 'Yes'. For most large entities the head office and registered office are the same." },
-  { field: "regulatory_enforcement_action", label: "Has your business been subject to regulatory enforcement action?", tier: 1, section: "regulatory", searchHint: "Check the relevant regulator's enforcement / final-notices pages (e.g. FCA fca.org.uk/news/enforcement-actions, MAS enforcement actions, ASIC, SEC) and reputable news for fines, monetary penalties, Voluntary Requirements (VREQs), business restrictions, censures or sanctions against the entity. Broader than licence suspension — capture monetary penalties and supervisory/enforcement actions even where the licence was not suspended. Yes/No, with detail where found." },
-  { field: "individual_customer_pct", label: "Individual Customers %", tier: 2, section: "business_activity", searchHint: "Estimate the retail/individual vs corporate customer mix from segment reporting in the annual report (Retail/Personal Banking vs Commercial/Corporate & Institutional divisions). NOTE this is a revenue/asset split, not a customer-count split — flag the basis. Digital retail banks skew heavily individual; wholesale-tilted banks skew corporate. Mark indicative; pair with corporate_customer_pct so the two sum to ~100." },
-  { field: "corporate_customer_pct", label: "Corporate Customers %", tier: 2, section: "business_activity", searchHint: "See individual_customer_pct — derive the complementary figure from the same annual-report segment reporting. Revenue/asset basis, not customer count; flag the basis. Mark indicative." },
-  { field: "top_corporate_industries", label: "Top 5 industries your corporate customers operate in (multi)", tier: 2, section: "business_activity", searchHint: "For large disclosed banks, use the credit-risk / loan-exposure-by-industry-sector breakdown in the annual report risk-management notes or the Pillar 3 report (often NACE/SIC groupings) as a ranked proxy. Strategy decks naming 'focus sectors' are marketing, not exposure data — prefer the risk disclosures. Not findable for smaller or private FIs; leave blank if no disclosure. Mark indicative." },
-  { field: "deals_virtual_currencies", label: "Do you deal with virtual currencies (crypto, points, rewards)?", tier: 2, section: "business_activity", searchHint: "Check annual report, strategy sections and press/news for digital-asset activity (custody, exchange, tokenisation, stablecoins). NOTE the field conflates crypto, loyalty points and rewards — answer the crypto sub-question from public sources and add a note on which sense is being affirmed; a card-rewards programme is 'rewards' but not 'crypto'. Consider splitting into crypto vs rewards (see schema note). Mark indicative." },
-  { field: "accepts_cash", label: "Do you accept cash?", tier: 2, section: "operations", searchHint: "Infer from the business model: digital-only / branchless entities typically do not accept cash; branch-network banks and money-services businesses typically do. Check product pages and branch/ATM information. Mark indicative — this is a model-based inference, not a stated fact." },
+  { field: "regulatory_enforcement_action", label: "Has your business been subject to regulatory enforcement action?", tier: 1, section: "regulatory", searchHint: "Check the relevant regulator's enforcement / final-notices pages (e.g. FCA fca.org.uk/news/enforcement-actions, MAS enforcement actions, ASIC, SEC) and reputable news for fines, monetary penalties, Voluntary Requirements (VREQs), business restrictions, censures or sanctions against the entity. Broader than licence suspension - capture monetary penalties and supervisory/enforcement actions even where the licence was not suspended. Yes/No, with detail where found." },
+  { field: "individual_customer_pct", label: "Individual Customers %", tier: 2, section: "business_activity", searchHint: "Estimate the retail/individual vs corporate customer mix from segment reporting in the annual report (Retail/Personal Banking vs Commercial/Corporate & Institutional divisions). NOTE this is a revenue/asset split, not a customer-count split - flag the basis. Digital retail banks skew heavily individual; wholesale-tilted banks skew corporate. Mark indicative; pair with corporate_customer_pct so the two sum to ~100." },
+  { field: "corporate_customer_pct", label: "Corporate Customers %", tier: 2, section: "business_activity", searchHint: "See individual_customer_pct - derive the complementary figure from the same annual-report segment reporting. Revenue/asset basis, not customer count; flag the basis. Mark indicative." },
+  { field: "top_corporate_industries", label: "Top 5 industries your corporate customers operate in (multi)", tier: 2, section: "business_activity", searchHint: "For large disclosed banks, use the credit-risk / loan-exposure-by-industry-sector breakdown in the annual report risk-management notes or the Pillar 3 report (often NACE/SIC groupings) as a ranked proxy. Strategy decks naming 'focus sectors' are marketing, not exposure data - prefer the risk disclosures. Not findable for smaller or private FIs; leave blank if no disclosure. Mark indicative." },
+  { field: "deals_virtual_currencies", label: "Do you deal with virtual currencies (crypto, points, rewards)?", tier: 2, section: "business_activity", searchHint: "Check annual report, strategy sections and press/news for digital-asset activity (custody, exchange, tokenisation, stablecoins). NOTE the field conflates crypto, loyalty points and rewards - answer the crypto sub-question from public sources and add a note on which sense is being affirmed; a card-rewards programme is 'rewards' but not 'crypto'. Consider splitting into crypto vs rewards (see schema note). Mark indicative." },
+  { field: "accepts_cash", label: "Do you accept cash?", tier: 2, section: "operations", searchHint: "Infer from the business model: digital-only / branchless entities typically do not accept cash; branch-network banks and money-services businesses typically do. Check product pages and branch/ATM information. Mark indicative - this is a model-based inference, not a stated fact." },
 
-  // GROUP 2 — researchable list (country list findable; % split is customer-supplied)
-  { field: "top_countries_payin", label: "Top Transaction Countries — Payin (multi, with % split)", tier: 2, section: "business_activity", splitIsCustomerSupplied: true, searchHint: "Populate the COUNTRY LIST only, from operating_countries and any corridor disclosures in the annual report / corporate site. Leave the % split BLANK — transaction-volume percentages by country are not publicly disclosed and must come from the customer. Do not estimate percentages." },
-  { field: "top_countries_payout", label: "Top Transaction Countries — Payout (multi, with % split)", tier: 2, section: "business_activity", splitIsCustomerSupplied: true, searchHint: "Populate the COUNTRY LIST only, from operating_countries / payout_transaction_countries and corridor disclosures. Leave the % split BLANK — not publicly disclosed; customer-supplied. Do not estimate percentages." },
+  // GROUP 2 - researchable list (country list findable; % split is customer-supplied)
+  { field: "top_countries_payin", label: "Top Transaction Countries - Payin (multi, with % split)", tier: 2, section: "business_activity", splitIsCustomerSupplied: true, searchHint: "Populate the COUNTRY LIST only, from operating_countries and any corridor disclosures in the annual report / corporate site. Leave the % split BLANK - transaction-volume percentages by country are not publicly disclosed and must come from the customer. Do not estimate percentages." },
+  { field: "top_countries_payout", label: "Top Transaction Countries - Payout (multi, with % split)", tier: 2, section: "business_activity", splitIsCustomerSupplied: true, searchHint: "Populate the COUNTRY LIST only, from operating_countries / payout_transaction_countries and corridor disclosures. Leave the % split BLANK - not publicly disclosed; customer-supplied. Do not estimate percentages." },
 
-  // GROUP 3 — customer-supplied (excluded from researchable denominator; not auto-researched)
-  { field: "payout_c2c_pct", label: "Payout — C2C %", section: "usage", customerSupplied: true },
-  { field: "payout_b2b_pct", label: "Payout — B2B %", section: "usage", customerSupplied: true },
-  { field: "payout_b2c_pct", label: "Payout — B2C %", section: "usage", customerSupplied: true },
-  { field: "payout_c2b_pct", label: "Payout — C2B %", section: "usage", customerSupplied: true },
-  { field: "collections_c2c_pct", label: "Collections — C2C %", section: "usage", customerSupplied: true },
-  { field: "collections_b2b_pct", label: "Collections — B2B %", section: "usage", customerSupplied: true },
-  { field: "collections_b2c_pct", label: "Collections — B2C %", section: "usage", customerSupplied: true },
-  { field: "collections_c2b_pct", label: "Collections — C2B %", section: "usage", customerSupplied: true },
+  // GROUP 3 - customer-supplied (excluded from researchable denominator; not auto-researched)
+  { field: "payout_c2c_pct", label: "Payout - C2C %", section: "usage", customerSupplied: true },
+  { field: "payout_b2b_pct", label: "Payout - B2B %", section: "usage", customerSupplied: true },
+  { field: "payout_b2c_pct", label: "Payout - B2C %", section: "usage", customerSupplied: true },
+  { field: "payout_c2b_pct", label: "Payout - C2B %", section: "usage", customerSupplied: true },
+  { field: "collections_c2c_pct", label: "Collections - C2C %", section: "usage", customerSupplied: true },
+  { field: "collections_b2b_pct", label: "Collections - B2B %", section: "usage", customerSupplied: true },
+  { field: "collections_b2c_pct", label: "Collections - B2C %", section: "usage", customerSupplied: true },
+  { field: "collections_c2b_pct", label: "Collections - C2B %", section: "usage", customerSupplied: true },
   { field: "expected_monthly_credit_volume", label: "Expected Monthly Credit Volume", section: "usage", customerSupplied: true },
   { field: "expected_monthly_credit_count", label: "Expected Number of Monthly Credit Transactions", section: "usage", customerSupplied: true },
   { field: "expected_avg_credit_value", label: "Expected Average Credit Transaction Value", section: "usage", customerSupplied: true },
@@ -327,9 +327,9 @@ const fiResearchFields = [
   { field: "expected_avg_debit_value", label: "Expected Average Debit Transaction Value", section: "usage", customerSupplied: true },
   { field: "top_senders", label: "Top Senders", section: "usage", customerSupplied: true },
   { field: "top_beneficiaries", label: "Top Beneficiaries", section: "usage", customerSupplied: true },
-  { field: "top_countries_payin_split", label: "Top Transaction Countries — Payin (% split)", section: "usage", customerSupplied: true },
-  { field: "top_countries_payout_split", label: "Top Transaction Countries — Payout (% split)", section: "usage", customerSupplied: true },
-  { field: "owner_director_criminal_conviction", label: "Have any owners or directors been convicted of any crime?", section: "disclosures", customerSupplied: true, doNotAutoResearch: true, note: "Self-declaration only. Do NOT auto-research criminal-conviction status of named individuals via news scraping — accuracy, fairness and data-protection risk; false positives on a named person are a serious harm. PEP / adverse-media screening is a SEPARATE governed process with its own controls and must not be wired into this auto-fill field." },
+  { field: "top_countries_payin_split", label: "Top Transaction Countries - Payin (% split)", section: "usage", customerSupplied: true },
+  { field: "top_countries_payout_split", label: "Top Transaction Countries - Payout (% split)", section: "usage", customerSupplied: true },
+  { field: "owner_director_criminal_conviction", label: "Have any owners or directors been convicted of any crime?", section: "disclosures", customerSupplied: true, doNotAutoResearch: true, note: "Self-declaration only. Do NOT auto-research criminal-conviction status of named individuals via news scraping - accuracy, fairness and data-protection risk; false positives on a named person are a serious harm. PEP / adverse-media screening is a SEPARATE governed process with its own controls and must not be wired into this auto-fill field." },
 ];
 
 const fiBusinessGapFields = [
@@ -355,7 +355,7 @@ const fiBusinessGapFields = [
 // cross_border_services, issues_prepaid_cards, non_resident_customers,
 // products_offered) moved to fiResearchFields so the AI tries to find them.
 // The free-text/details children still live here and use dependsOn to read
-// the parent's value — dependsOnSatisfied falls back to research.found when
+// the parent's value - dependsOnSatisfied falls back to research.found when
 // the parent isn't a gap field.
 const fiSpecificFields = [
   { field: "no_licence_reason", label: "If no licence, please explain why one is not required", inputType: "textarea", required: true, section: "fi", dependsOn: { has_licence: "No" } },
@@ -373,14 +373,14 @@ const fiSpecificFields = [
 const fiStakeholderFields = [
   { field: "stakeholder_note", label: "Stakeholder Details", inputType: "textarea", required: true, section: "stakeholders",
     placeholder: "List all directors, UBOs (>25% ownership), and authorised signatories. For each include: Full Name, Position, Date of Birth, Nationality, Email, Share Percentage (if applicable), PEP status (Yes/No), and Residential Address." },
-  { field: "payout_c2c_pct", label: "Payout — C2C %", inputType: "text", required: true, section: "stakeholders" },
-  { field: "payout_b2b_pct", label: "Payout — B2B %", inputType: "text", required: true, section: "stakeholders" },
-  { field: "payout_b2c_pct", label: "Payout — B2C %", inputType: "text", required: true, section: "stakeholders" },
-  { field: "payout_c2b_pct", label: "Payout — C2B %", inputType: "text", required: true, section: "stakeholders" },
-  { field: "collections_c2c_pct", label: "Collections — C2C %", inputType: "text", required: true, section: "stakeholders" },
-  { field: "collections_b2b_pct", label: "Collections — B2B %", inputType: "text", required: true, section: "stakeholders" },
-  { field: "collections_b2c_pct", label: "Collections — B2C %", inputType: "text", required: true, section: "stakeholders" },
-  { field: "collections_c2b_pct", label: "Collections — C2B %", inputType: "text", required: true, section: "stakeholders" },
+  { field: "payout_c2c_pct", label: "Payout - C2C %", inputType: "text", required: true, section: "stakeholders" },
+  { field: "payout_b2b_pct", label: "Payout - B2B %", inputType: "text", required: true, section: "stakeholders" },
+  { field: "payout_b2c_pct", label: "Payout - B2C %", inputType: "text", required: true, section: "stakeholders" },
+  { field: "payout_c2b_pct", label: "Payout - C2B %", inputType: "text", required: true, section: "stakeholders" },
+  { field: "collections_c2c_pct", label: "Collections - C2C %", inputType: "text", required: true, section: "stakeholders" },
+  { field: "collections_b2b_pct", label: "Collections - B2B %", inputType: "text", required: true, section: "stakeholders" },
+  { field: "collections_b2c_pct", label: "Collections - B2C %", inputType: "text", required: true, section: "stakeholders" },
+  { field: "collections_c2b_pct", label: "Collections - C2B %", inputType: "text", required: true, section: "stakeholders" },
 ];
 
 // licence_suspended and administration_proceedings moved to fiResearchFields;
@@ -395,8 +395,8 @@ const fiDisclosureFields = [
 ];
 
 const fiUsageFields = (fmt) => {
-  const volumeOpts = [`${fmt("1")}–${fmt("100,000")}`, `${fmt("100,001")}–${fmt("250,000")}`, `${fmt("250,001")}–${fmt("500,000")}`, `${fmt("500,001")}–${fmt("800,000")}`, `Over ${fmt("800,000")}`];
-  const avgTxOpts = [`Under ${fmt("1,000")}`, `${fmt("1,001")}–${fmt("10,000")}`, `${fmt("10,001")}–${fmt("20,000")}`, `${fmt("20,001")}–${fmt("50,000")}`, `${fmt("50,001")}–${fmt("100,000")}`, `${fmt("100,001")}–${fmt("300,000")}`, `${fmt("300,001")}–${fmt("600,000")}`, `${fmt("600,001")}–${fmt("1,000,000")}`, `Over ${fmt("1,000,000")}`];
+  const volumeOpts = [`${fmt("1")}-${fmt("100,000")}`, `${fmt("100,001")}-${fmt("250,000")}`, `${fmt("250,001")}-${fmt("500,000")}`, `${fmt("500,001")}-${fmt("800,000")}`, `Over ${fmt("800,000")}`];
+  const avgTxOpts = [`Under ${fmt("1,000")}`, `${fmt("1,001")}-${fmt("10,000")}`, `${fmt("10,001")}-${fmt("20,000")}`, `${fmt("20,001")}-${fmt("50,000")}`, `${fmt("50,001")}-${fmt("100,000")}`, `${fmt("100,001")}-${fmt("300,000")}`, `${fmt("300,001")}-${fmt("600,000")}`, `${fmt("600,001")}-${fmt("1,000,000")}`, `Over ${fmt("1,000,000")}`];
   return [
     { field: "intended_use", label: "Intended Use of Account", inputType: "select", required: true, section: "usage",
       options: ["Payroll", "Supplier Payments", "Cross-Border Trade", "FX Conversion", "Expense Management", "Collections", "Treasury", "Other"] },
@@ -404,8 +404,8 @@ const fiUsageFields = (fmt) => {
     { field: "monthly_credit_volume", label: "Expected Monthly Credit Volume", inputType: "select", required: true, section: "usage", options: volumeOpts },
     { field: "monthly_tx_count_credit", label: "Expected Number of Monthly Credit Transactions", inputType: "text", required: true, section: "usage" },
     { field: "avg_tx_value_credit", label: "Expected Average Credit Transaction Value", inputType: "select", required: true, section: "usage", options: avgTxOpts },
-    { field: "top_payin_countries", label: "Top Transaction Countries — Payin (multi, with % split)", inputType: "text", required: true, section: "usage" },
-    { field: "top_payout_countries", label: "Top Transaction Countries — Payout (multi, with % split)", inputType: "text", required: true, section: "usage" },
+    { field: "top_payin_countries", label: "Top Transaction Countries - Payin (multi, with % split)", inputType: "text", required: true, section: "usage" },
+    { field: "top_payout_countries", label: "Top Transaction Countries - Payout (multi, with % split)", inputType: "text", required: true, section: "usage" },
     { field: "top_senders", label: "Top Senders", inputType: "textarea", required: true, section: "usage" },
     { field: "monthly_debit_volume", label: "Expected Monthly Debit Volume", inputType: "select", required: true, section: "usage", options: volumeOpts },
     { field: "monthly_tx_count_debit", label: "Expected Number of Monthly Debit Transactions", inputType: "text", required: true, section: "usage" },
@@ -505,7 +505,7 @@ function computeResearchStrategy(ownershipTypeId, countryCode /*, entityTypeId *
     );
   } else {
     strategyNotes.push(
-      "This is a private company. Do NOT search stock exchanges — focus on official company registries (" +
+      "This is a private company. Do NOT search stock exchanges - focus on official company registries (" +
         getRegistriesForCountry(countryCode) +
         ") and the company's own website."
     );
@@ -547,7 +547,7 @@ const getSchema = (code, entityType) => {
 const getApplicableLicence = (code) => LICENSED_MARKETS.includes(code) ? code : "SG";
 
 /* ═══════════════════════════════════════════
-   STAKEHOLDER DATA — Phase 1 scaffolding
+   STAKEHOLDER DATA - Phase 1 scaffolding
 
    Stakeholder research fields (directors, UBOs, shareholders, signatories)
    are special: they describe people, not single values. The AI is asked
@@ -631,7 +631,7 @@ const REGISTRY_EXEMPTION_PATTERNS = [
 // True when a parsed "stakeholder" is really a registry exemption notice rather
 // than a real person or corporate owner. Matches on name OR role text, plus a
 // structural heuristic (a long, punctuated "name" is a sentence, not a person).
-// NOTE: a genuine corporate UBO like "Barclays PLC" is NOT a notice — none of
+// NOTE: a genuine corporate UBO like "Barclays PLC" is NOT a notice - none of
 // the patterns match a plain company name, and it is short with no sentence
 // punctuation, so it passes through.
 const isRegistryExemptionNotice = (stakeholder) => {
@@ -665,7 +665,7 @@ const makeStakeholder = (overrides = {}) => {
     sourceUrl: "",
     sourceTier: "tier1",
     fetchedAt: null,
-    // Gap fields — customer fills (Phase 3). PERSON stakeholders.
+    // Gap fields - customer fills (Phase 3). PERSON stakeholders.
     nationality: "",
     date_of_birth: "",
     residential_country: "",
@@ -717,7 +717,7 @@ const looksLikeRealName = (fullName) => {
   // "Verified") is a label, not a name, so it is NOT treated as a real name and
   // is left for the description patterns below to filter.
   if (words.length < 2 || words.length > 6) {
-    // Single-word entries can still be corporates in rare cases — fall through
+    // Single-word entries can still be corporates in rare cases - fall through
     // to the corporate-suffix check rather than rejecting outright.
     if (words.length !== 1) return false;
   }
@@ -743,7 +743,7 @@ const looksLikeRealName = (fullName) => {
 };
 
 // True when a "name" is actually a description / metadata field rather than a
-// real person name — e.g. the model returns "Director (British national, born
+// real person name - e.g. the model returns "Director (British national, born
 // April 1967)" or "Appointed: 25 May 2022" instead of extracting "Nicholas
 // Gliddon" from the same registry record. Such entries must be dropped: we never
 // want a metadata blurb sitting in the name field, and keeping it would corrupt
@@ -761,7 +761,7 @@ const isDescriptionNotName = (fullName) => {
   // (British national...".
   const rolePrefix = /^(director|officer|secretary|manager|trustee)\s*\(/i;
 
-  // Contains both "national" and "born" — a demographic description.
+  // Contains both "national" and "born" - a demographic description.
   const demographicPattern = /national.*born|born.*national/i;
 
   // Just a bare role word with no actual name.
@@ -782,7 +782,7 @@ const isDescriptionNotName = (fullName) => {
   // Identity-verification strings the registry shows beside an officer.
   const verificationPattern = /^(verified|identity verification|verification requirements)/i;
 
-  // NOTE: an address pattern is intentionally NOT included here — corporate
+  // NOTE: an address pattern is intentionally NOT included here - corporate
   // entities like "VODAFONE HOUSE HOLDINGS LIMITED" would be wrongly filtered.
   // Address strings (long, comma-laden) are already excluded because
   // looksLikeRealName returns false for them, and they match none of the
@@ -799,7 +799,7 @@ const isDescriptionNotName = (fullName) => {
   );
 };
 
-// Normalise an AI-returned date of birth to "YYYY-MM" (year + month only — the
+// Normalise an AI-returned date of birth to "YYYY-MM" (year + month only - the
 // public registry never exposes the day). Accepts the formats the model tends
 // to emit: "YYYY-MM", "YYYY-MM-DD", or "April 1967".
 const normaliseDateOfBirth = (value) => {
@@ -809,7 +809,7 @@ const normaliseDateOfBirth = (value) => {
   // Already YYYY-MM.
   if (/^\d{4}-\d{2}$/.test(v)) return v;
 
-  // YYYY-MM-DD — strip the day.
+  // YYYY-MM-DD - strip the day.
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v.slice(0, 7);
 
   // "April 1967" → "1967-04".
@@ -908,7 +908,7 @@ const parseStakeholdersFromString = (rawString, source, sourceUrl, sourceTier, f
     // Remove leading numbering: "1. " "1) " "- "
     const cleaned = entry.replace(/^[\d]+[.)]\s*/, "").replace(/^[-•]\s*/, "").trim();
 
-    // "Name (45%)" — capture percentage
+    // "Name (45%)" - capture percentage
     const pctMatch = cleaned.match(/^(.+?)\s*\((\d+(?:\.\d+)?)\s*%\)\s*$/);
     if (pctMatch) {
       return makeStakeholder({
@@ -922,7 +922,7 @@ const parseStakeholdersFromString = (rawString, source, sourceUrl, sourceTier, f
       });
     }
 
-    // "Name (Role)" — capture role from brackets
+    // "Name (Role)" - capture role from brackets
     const bracketMatch = cleaned.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
     if (bracketMatch) {
       return makeStakeholder({
@@ -935,8 +935,8 @@ const parseStakeholdersFromString = (rawString, source, sourceUrl, sourceTier, f
       });
     }
 
-    // "Name — Role" or "Name - Role"
-    const dashMatch = cleaned.match(/^(.+?)\s*[—-]\s*(.+)$/);
+    // "Name - Role" or "Name - Role"
+    const dashMatch = cleaned.match(/^(.+?)\s*[—–-]\s*(.+)$/);
     if (dashMatch) {
       return makeStakeholder({
         full_name: dashMatch[1].trim(),
@@ -962,7 +962,7 @@ const parseStakeholdersFromString = (rawString, source, sourceUrl, sourceTier, f
 };
 
 // Augment a research-result list with parsed .stakeholders arrays for any
-// stakeholder field. Idempotent — items that already have a .stakeholders
+// stakeholder field. Idempotent - items that already have a .stakeholders
 // array pass through unchanged.
 // Heuristic: is this stakeholder a company rather than a natural person?
 // Matches a corporate suffix in the name OR a company-ish role word.
@@ -977,7 +977,7 @@ const looksLikeCompany = (name, role) => {
 // Normalise a stakeholder's type: set is_company (heuristic for AI-found,
 // honoured verbatim for customer-added), and for companies seed `positions`
 // from the legacy single `role` so the corporate form has something to show.
-// Idempotent — safe to run on every re-enrichment.
+// Idempotent - safe to run on every re-enrichment.
 const normalizeStakeholderType = (s) => {
   if (!s) return s;
   const isCompany =
@@ -1045,7 +1045,7 @@ const validateSharePercentage = (value) => {
 
   const str = String(value).trim();
 
-  // Already contains a qualifier — registry language preserved correctly.
+  // Already contains a qualifier - registry language preserved correctly.
   const qualifierPatterns = [
     /or more/i,
     /or above/i,
@@ -1065,7 +1065,7 @@ const validateSharePercentage = (value) => {
 
   const hasQualifier = qualifierPatterns.some((p) => p.test(str));
   if (hasQualifier) {
-    // Value already contains registry language — no warning needed.
+    // Value already contains registry language - no warning needed.
     return { value: str, warning: null, isExactThreshold: false };
   }
 
@@ -1074,7 +1074,7 @@ const validateSharePercentage = (value) => {
   const numericValue = numericMatch ? parseFloat(numericMatch[1]) : null;
 
   // Known Companies House band thresholds. These exact values are suspicious
-  // when returned without a qualifier — they are the boundaries of ownership
+  // when returned without a qualifier - they are the boundaries of ownership
   // bands, not exact ownership figures.
   const knownBandThresholds = [25, 50, 75];
   const isExactThreshold =
@@ -1091,14 +1091,14 @@ const validateSharePercentage = (value) => {
       value: str,
       warning:
         `Value "${str}" matches a Companies House ownership band threshold. ` +
-        `The registry likely states "${bandMap[numericValue]}" — verify the ` +
+        `The registry likely states "${bandMap[numericValue]}" - verify the ` +
         `exact qualifier was not stripped from the source.`,
       isExactThreshold: true,
       suggestedValue: bandMap[numericValue],
     };
   }
 
-  // 100% is unambiguous — no warning needed. Any other numeric value is fine
+  // 100% is unambiguous - no warning needed. Any other numeric value is fine
   // (not a known band threshold).
   return { value: str, warning: null, isExactThreshold: false };
 };
@@ -1112,7 +1112,7 @@ const validateDirectorRecord = (stakeholder, researchResult) => {
   // Work on a copy so callers never see half-mutated input on an early return.
   const sh = { ...stakeholder };
 
-  // Rule 1 — name source must be an official registry.
+  // Rule 1 - name source must be an official registry.
   const officialRegistrySources = [
     "companies house",
     "acra",
@@ -1129,12 +1129,12 @@ const validateDirectorRecord = (stakeholder, researchResult) => {
       `Name source may not be official registry: "${sh.source || researchResult.source || ""}". ` +
         `Director names must come from official registry only.`
     );
-    // Downgrade verification status but do not remove — flag for review.
+    // Downgrade verification status but do not remove - flag for review.
     sh.verificationStatus = "probable";
     sh.requiresReview = true;
   }
 
-  // Rule 2 — resignation / inactive signals in role or notes → exclude.
+  // Rule 2 - resignation / inactive signals in role or notes → exclude.
   const resignationSignals = [
     "resign",
     "resigned",
@@ -1158,7 +1158,7 @@ const validateDirectorRecord = (stakeholder, researchResult) => {
     isValid = false; // Exclude this record.
   }
 
-  // Rule 3 — cross-source attribute signals in notes → strip demographics.
+  // Rule 3 - cross-source attribute signals in notes → strip demographics.
   const crossSourceSignals = [
     "inferred",
     "assumed",
@@ -1175,7 +1175,7 @@ const validateDirectorRecord = (stakeholder, researchResult) => {
       `Cross-source attribute merging detected for "${sh.full_name}". ` +
         `Stripping unverified attributes.`
     );
-    // Strip potentially cross-sourced attributes — keep name and role only.
+    // Strip potentially cross-sourced attributes - keep name and role only.
     // Field ids in this codebase: date_of_birth, nationality, residential_country.
     delete sh.date_of_birth;
     delete sh.nationality;
@@ -1183,7 +1183,7 @@ const validateDirectorRecord = (stakeholder, researchResult) => {
     delete sh.residential_address; // legacy / defensive
     sh.verificationStatus = "probable";
     sh.requiresReview = true;
-    sh.notes = (sh.notes || "") + " | Details stripped — cross-source attribute merging detected.";
+    sh.notes = (sh.notes || "") + " | Details stripped - cross-source attribute merging detected.";
   }
 
   if (warnings.length > 0) {
@@ -1212,7 +1212,7 @@ const validateAllDirectors = (researchResults) => {
     const fieldId = result.field || result.fieldId || "";
 
     // Standalone share-percentage research field (scalar value, no stakeholders
-    // array) — e.g. ubo_share_percentage. Flag a stripped band qualifier without
+    // array) - e.g. ubo_share_percentage. Flag a stripped band qualifier without
     // changing verificationStatus or removing the field.
     const isShareField =
       fieldId.includes("share_percentage") ||
@@ -1251,7 +1251,7 @@ const validateAllDirectors = (researchResults) => {
         removedStakeholders.push({ name: s.full_name, reason: warnings.join("; ") });
         return;
       }
-      // Share-percentage band check — flag stakeholders whose ownership value
+      // Share-percentage band check - flag stakeholders whose ownership value
       // looks like a stripped registry band (e.g. "75%" → likely "75% or more").
       // Applied to the returned copy so it reaches the displayed object.
       const shareValidation = validateSharePercentage(stakeholder.share_percentage);
@@ -1288,7 +1288,7 @@ const validateAllDirectors = (researchResults) => {
 // ── Publicly-listed detection ───────────────────────────────────────────
 // Decide whether the company being onboarded is publicly listed, from the
 // research.found rows. Strong signals (A, B) are each sufficient on their own;
-// medium signals (C–F) need at least two together. Note: research rows here
+// medium signals (C-F) need at least two together. Note: research rows here
 // use `.field` (not `.fieldId`). The field-id lists below include both the
 // canonical ids from the spec and the real schema ids in this codebase
 // (e.g. corporate uses `stockListing` / `listedExchange`, `businessType`).
@@ -1297,7 +1297,7 @@ const detectPubliclyListed = (research) => {
 
   const found = research.found;
 
-  // ── STRONG SIGNALS — either alone confirms ──
+  // ── STRONG SIGNALS - either alone confirms ──
   // Signal A: publicly_listed field = "Yes" from a tier1 source
   const listedField = found.find((r) => r.field === "publicly_listed");
   if (listedField) {
@@ -1305,7 +1305,7 @@ const detectPubliclyListed = (research) => {
     if ((val === "yes" || val === "true") && listedField.sourceTier === "tier1") {
       return true;
     }
-    // Explicitly not listed — return false early so medium signals don't override.
+    // Explicitly not listed - return false early so medium signals don't override.
     if (val === "no" || val === "false" || val === "not listed" || val === "n/a") {
       return false;
     }
@@ -1321,13 +1321,13 @@ const detectPubliclyListed = (research) => {
   );
   if (exchangeField) {
     const val = (exchangeField.value || "").toLowerCase().trim();
-    const notListed = ["", "n/a", "not listed", "none", "not applicable", "private", "no", "—", "-"];
+    const notListed = ["", "n/a", "not listed", "none", "not applicable", "private", "no", "-", "-"];
     if (val && !notListed.includes(val)) {
       return true;
     }
   }
 
-  // ── MEDIUM SIGNALS — need at least two together ──
+  // ── MEDIUM SIGNALS - need at least two together ──
   let mediumSignals = 0;
 
   // Signal C: a source URL / name matches a known exchange domain
@@ -1390,7 +1390,7 @@ const needsStakeholderDetails = (stakeholder, fieldId, isPubliclyListed) => {
   if (!isUboLikeField(fieldId)) return false;
 
   const pct = stakeholder ? stakeholder.share_percentage : null;
-  if (pct === null || pct === undefined || String(pct).trim() === "") return true; // unknown — conservative
+  if (pct === null || pct === undefined || String(pct).trim() === "") return true; // unknown - conservative
 
   // share_percentage may be a number OR exact registry text ("75% or more",
   // "25% to 50%", "Significant influence or control"). Parse the leading number
@@ -1450,12 +1450,12 @@ const pickLicence = (countryCode, tenantConfig) => {
 
 // Infer a section for a field that doesn't have one. Used as a fallback for
 // legacy configs in KV that were saved before research fields were grouped
-// into sections — so the Confirm and Fill Gaps pages still render address
+// into sections - so the Confirm and Fill Gaps pages still render address
 // fields in their own block instead of dumping everything into "Other".
 const inferSection = (fieldId) => {
   if (!fieldId) return null;
   const id = String(fieldId);
-  // Registered address — both snake_case (fi) and camelCase (corporate) shapes.
+  // Registered address - both snake_case (fi) and camelCase (corporate) shapes.
   if (/^registered_address_/.test(id)) return "registered_address";
   if (/^(addressLine\d|city|state|postcode|country)$/.test(id)) return "registered_address";
   // Business address gap fields.
@@ -1466,7 +1466,7 @@ const inferSection = (fieldId) => {
 // Normalise a single field definition coming out of admin/seed config so the
 // customer flow can consume it uniformly. Three things change:
 //   1. showIf/showWhen (admin SchemaFieldPanel's representation) is translated
-//      to dependsOn:{ [key]: value } — what dependsOnSatisfied() expects.
+//      to dependsOn:{ [key]: value } - what dependsOnSatisfied() expects.
 //   2. options are coerced to { value, label } objects so the renderer can
 //      treat string and object option shapes the same way downstream. Legacy
 //      hardcoded gap fields use plain strings (e.g. ["Yes","No"]); admin-saved
@@ -1560,7 +1560,7 @@ const fieldTypeOf = (field) => {
 
 // Display value resolver for the Confirm page. For dropdown fields, the AI
 // (or document extraction) may return either the option value, the option
-// label, or a free-text variant — collapse all three to the option label so
+// label, or a free-text variant - collapse all three to the option label so
 // the customer sees a sensible string. Date fields are reformatted to a
 // human-readable string (e.g. "12 January 2005") rather than leaving the
 // YYYY-MM-DD wire format on display.
@@ -1568,7 +1568,7 @@ const resolveDisplayValue = (fieldDef, rawValue) => {
   const v = rawValue == null ? "" : String(rawValue);
   const t = fieldTypeOf(fieldDef);
   if (t === "date") {
-    if (!v) return "—";
+    if (!v) return "-";
     const iso = normaliseDate(v);
     if (iso) {
       try {
@@ -1579,9 +1579,9 @@ const resolveDisplayValue = (fieldDef, rawValue) => {
     }
     return v;
   }
-  if (t !== "select") return v || "—";
+  if (t !== "select") return v || "-";
   const opts = Array.isArray(fieldDef.options) ? fieldDef.options : [];
-  if (!opts.length) return v || "—";
+  if (!opts.length) return v || "-";
   const lc = v.toLowerCase();
   const exact = opts.find((o) => String(o.value).toLowerCase() === lc);
   if (exact) return exact.label;
@@ -1592,7 +1592,7 @@ const resolveDisplayValue = (fieldDef, rawValue) => {
     return ol && (ol.includes(lc) || lc.includes(ol));
   });
   if (partial) return partial.label;
-  return v || "—";
+  return v || "-";
 };
 
 // Coerce free-text AI values into one of the configured option values for any
@@ -1633,13 +1633,13 @@ const mapAIValuesToOptions = (foundItems, schema) => {
 // tenant's primary/secondary patterns. Falls back to the hardcoded
 // SOURCE_TRUST tables when the config has no matching pattern, which keeps
 // jurisdiction-specific authoritative recognition working.
-// Known third-party domains/keywords — always tier 3 regardless of where they
+// Known third-party domains/keywords - always tier 3 regardless of where they
 // sit in a (possibly stale) config, so e.g. LinkedIn never ranks as tier 2.
 const THIRD_PARTY_PATTERNS = [
   "linkedin", "wikipedia", "crunchbase", "bloomberg", "reuters",
   "news article", "business directory", "directory", "facebook", "twitter",
 ];
-// Company-owned hints — tier 2 fallback when the config doesn't list them.
+// Company-owned hints - tier 2 fallback when the config doesn't list them.
 const COMPANY_OWNED_PATTERNS = [
   "corporate website", "investor relations", "annual report", "about us",
   "own website", "company website", "press release", "careers",
@@ -1660,7 +1660,7 @@ const classifySourceFromConfig = (source, countryCode, tenantConfig) => {
 
   const tiers = tenantConfig?.sourceTiers;
 
-  // Tier 1 — official registries/regulators/exchanges (config primary).
+  // Tier 1 - official registries/regulators/exchanges (config primary).
   if (tiers) {
     for (const entry of (tiers.primary || [])) {
       if (entry.active !== false && entry.pattern && s.includes(String(entry.pattern).toLowerCase())) return "tier1";
@@ -1669,7 +1669,7 @@ const classifySourceFromConfig = (source, countryCode, tenantConfig) => {
   // Hardcoded authoritative fallback so a stale config still flags tier 1.
   if (classifySource(source, countryCode) === "authoritative") return "tier1";
 
-  // Tier 3 — known third-party domains, checked BEFORE config secondary so a
+  // Tier 3 - known third-party domains, checked BEFORE config secondary so a
   // stale config that still lists these as "secondary" can't mis-rank them.
   if (THIRD_PARTY_PATTERNS.some((p) => s.includes(p))) return "tier3";
   if (tiers) {
@@ -1678,7 +1678,7 @@ const classifySourceFromConfig = (source, countryCode, tenantConfig) => {
     }
   }
 
-  // Tier 2 — company-owned (config secondary, skipping any stale third-party).
+  // Tier 2 - company-owned (config secondary, skipping any stale third-party).
   if (tiers) {
     for (const entry of (tiers.secondary || [])) {
       const p = entry.pattern ? String(entry.pattern).toLowerCase() : "";
@@ -1705,15 +1705,15 @@ const getVerificationStatus = (sourceTier) => {
 };
 
 /* ═══════════════════════════════════════════
-   PHASE 2 — COVERAGE ANALYSIS
+   PHASE 2 - COVERAGE ANALYSIS
    Research rows carry `.field` (not `.fieldId`) in this codebase, and schema
-   research fields key off `.field` too — the helpers below use those.
+   research fields key off `.field` too - the helpers below use those.
    ═══════════════════════════════════════════ */
 function computeCoverage(found, schema) {
   const list = Array.isArray(found) ? found : [];
   const allResearchFields = (schema && schema.researchFields) || [];
   // Customer-supplied fields (forward-looking projections, private
-  // counterparties, declarations — flagged customerSupplied:true, see
+  // counterparties, declarations - flagged customerSupplied:true, see
   // benchmark/fi-schema-fields-patch.js) belong to the "human half" of the
   // form. They are excluded from the researchable denominator so they don't
   // depress fill rates, excluded from missingFields so the gap-recovery pass
@@ -1753,7 +1753,7 @@ function computeCoverage(found, schema) {
   };
 }
 
-// Fields likely findable at tier1/tier2 if searched more specifically — used to
+// Fields likely findable at tier1/tier2 if searched more specifically - used to
 // pick tier3 rows worth re-attempting in the gap-recovery pass. Covers both the
 // FI and corporate schema field ids in this codebase.
 const UPGRADEABLE_FIELDS = new Set([
@@ -1771,7 +1771,7 @@ function hasPlausibleHigherTierSource(fieldId) {
   return UPGRADEABLE_FIELDS.has(fieldId);
 }
 
-// Targeted Phase 3 prompt — only the gap-recovery fields.
+// Targeted Phase 3 prompt - only the gap-recovery fields.
 function buildGapRecoveryPrompt(company, missingFields, upgradeableFields, strategy) {
   const allTargets = [...missingFields, ...upgradeableFields];
   return (
@@ -1829,7 +1829,7 @@ function mergeResearchResults(existing, newResults) {
 const RESEARCH_TOOLS = [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }];
 
 const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, ownershipType) => {
-  // Customer-supplied fields (customerSupplied / doNotAutoResearch — see
+  // Customer-supplied fields (customerSupplied / doNotAutoResearch - see
   // benchmark/fi-schema-fields-patch.js) are never auto-researched. They are
   // omitted from the JSON template and every guide block below, so the agent
   // is never even asked for them. This matters most for declaration fields
@@ -1864,16 +1864,16 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
         desc += `  Each entry is either a PERSON or a CORPORATE ENTITY.\n`;
         desc += `  Each object must have:\n`;
         desc += `  {\n`;
-        desc += `    "full_name": the actual name — either a person's legal name OR a company name (e.g. "VODAFONE UK TRADING HOLDINGS LIMITED"). NEVER use a demographic description.\n`;
+        desc += `    "full_name": the actual name - either a person's legal name OR a company name (e.g. "VODAFONE UK TRADING HOLDINGS LIMITED"). NEVER use a demographic description.\n`;
         desc += `    "role": "Person with Significant Control" or "Corporate Entity" or equivalent\n`;
-        desc += `    "share_percentage": the EXACT ownership text as the official registry states it — a string. Return the registry's own wording verbatim; do NOT convert, round, average, or simplify it.\n`;
+        desc += `    "share_percentage": the EXACT ownership text as the official registry states it - a string. Return the registry's own wording verbatim; do NOT convert, round, average, or simplify it.\n`;
         desc += `      Examples of correct behaviour:\n`;
         desc += `        Registry says "75% or more"                        → return "75% or more"\n`;
         desc += `        Registry says "25% to 50%"                         → return "25% to 50%"\n`;
-        desc += `        Registry says "Ownership of shares — 75% or more"  → return "75% or more"\n`;
+        desc += `        Registry says "Ownership of shares - 75% or more"  → return "75% or more"\n`;
         desc += `        Registry says "100%"                               → return "100%"\n`;
         desc += `        Registry says "Significant influence or control"   → return "Significant influence or control"\n`;
-        desc += `      Do NOT: convert "75% or more" to "75%"; convert "25% to 50%" to "37.5%"; average a range into a single number; or strip qualifiers like "or more", "to", "approximately". The qualifier is legally significant — losing it misrepresents what the registry actually states.\n`;
+        desc += `      Do NOT: convert "75% or more" to "75%"; convert "25% to 50%" to "37.5%"; average a range into a single number; or strip qualifiers like "or more", "to", "approximately". The qualifier is legally significant - losing it misrepresents what the registry actually states.\n`;
         desc += `    "nationality": if person and available\n`;
         desc += `    "date_of_birth": "YYYY-MM" if person and available\n`;
         desc += `    "country_of_residence": if person and shown on the register (e.g. "United Kingdom")\n`;
@@ -1886,7 +1886,7 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
           desc += `\n`;
         }
         desc += `  For corporate entities, the "full_name" is the company name.\n`;
-        desc += `  ONLY include current/active PSCs — ignore ceased ones.\n`;
+        desc += `  ONLY include current/active PSCs - ignore ceased ones.\n`;
         desc += `  COMPLETENESS: return EVERY current PSC / beneficial owner you can find, not just the first. Read the full register before answering and do not truncate the array.\n`;
         if (f.searchHint) {
           desc += `  Additional hint: ${f.searchHint}\n`;
@@ -1895,14 +1895,14 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
       }
 
       // UK (GB) director/officer fields are sourced deterministically from the
-      // Companies House Officers API (Layer 1 — see lib/applyOfficersLayer.js +
+      // Companies House Officers API (Layer 1 - see lib/applyOfficersLayer.js +
       // agents/registries/companiesHouseOfficers.js) and injected into the
       // result after this AI call. So the model must NOT spend web-search budget
-      // re-searching director names for UK companies — it returns an empty array
+      // re-searching director names for UK companies - it returns an empty array
       // and that field is overwritten with the authoritative registry data.
       if (countryCode === "GB") {
         let ukDesc = `- "${f.label}" (id: ${f.field})\n`;
-        ukDesc += `  UK DIRECTOR/OFFICER DATA — DO NOT SEARCH. For this UK company, director and officer names are fetched directly from the Companies House Officers API (Layer 1, authoritative) and injected automatically. Return an empty JSON array [] for this field — do NOT run web searches for director names. Spend your search budget on all OTHER fields instead.\n`;
+        ukDesc += `  UK DIRECTOR/OFFICER DATA - DO NOT SEARCH. For this UK company, director and officer names are fetched directly from the Companies House Officers API (Layer 1, authoritative) and injected automatically. Return an empty JSON array [] for this field - do NOT run web searches for director names. Spend your search budget on all OTHER fields instead.\n`;
         return ukDesc;
       }
 
@@ -1912,13 +1912,13 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
       desc += `  IMPORTANT: Return as a JSON array.\n`;
       desc += `  Each object must have:\n`;
       desc += `  {\n`;
-      desc += `    "full_name": "SURNAME, Firstname" or "Firstname Surname" — the ACTUAL person's legal name as it appears on the registry. NEVER use a description like "Director (British national)" as the name.\n`;
+      desc += `    "full_name": "SURNAME, Firstname" or "Firstname Surname" - the ACTUAL person's legal name as it appears on the registry. NEVER use a description like "Director (British national)" as the name.\n`;
       desc += `    "role": "Director" or "Secretary" etc.\n`;
-      desc += `    "nationality": "British" or equivalent — OPTIONAL, include only if shown\n`;
-      desc += `    "date_of_birth": "YYYY-MM" — OPTIONAL. Include it when the registry shows a date of birth (Companies House shows "Month YYYY" for person directors; year and month only — do not guess the day)\n`;
-      desc += `    "country_of_residence": the officer's country of residence (e.g. "United Kingdom", "England") — OPTIONAL, include only if shown\n`;
+      desc += `    "nationality": "British" or equivalent - OPTIONAL, include only if shown\n`;
+      desc += `    "date_of_birth": "YYYY-MM" - OPTIONAL. Include it when the registry shows a date of birth (Companies House shows "Month YYYY" for person directors; year and month only - do not guess the day)\n`;
+      desc += `    "country_of_residence": the officer's country of residence (e.g. "United Kingdom", "England") - OPTIONAL, include only if shown\n`;
       desc += `  }\n`;
-      desc += `  REQUIRED vs OPTIONAL: only "full_name" (and ideally "role") is required per officer. "nationality", "date_of_birth" and "country_of_residence" are OPTIONAL — include them when the registry shows them, otherwise simply omit that one key. NEVER drop an officer from the array just because their nationality, date of birth, or country of residence is missing. Always list the officer with whatever fields you do have.\n`;
+      desc += `  REQUIRED vs OPTIONAL: only "full_name" (and ideally "role") is required per officer. "nationality", "date_of_birth" and "country_of_residence" are OPTIONAL - include them when the registry shows them, otherwise simply omit that one key. NEVER drop an officer from the array just because their nationality, date of birth, or country of residence is missing. Always list the officer with whatever fields you do have.\n`;
       desc += `  SOURCE: ${country}'s official company officers register.`;
       if (countryCode === "GB") {
         desc += ` For the UK this is the Companies House officers page at:\n`;
@@ -1957,9 +1957,9 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
       }
       desc += `  CRITICAL: The NAME field is always the person's actual name (e.g. "GLIDDON, Nicholas Francis" or "TAYLOR, Max"). It is NEVER a demographic description.\n`;
       desc += `  NEVER put appointment dates, addresses, status labels ("Active"/"Resigned"), or "Appointed on XX" in the full_name field.\n`;
-      desc += `  NAME ONLY: if an officer entry shows demographic details (nationality, birth month) but you genuinely cannot determine the person's NAME, do NOT invent a name — omit just that one nameless entry. This rule is about a MISSING NAME only: never omit an officer who HAS a name but is missing other details.\n`;
-      desc += `  ONLY include current/active officers — ignore resigned officers.\n`;
-      desc += `  COMPLETENESS — this matters most: a company normally has SEVERAL current/active officers. Return EVERY active officer, not just the first one or two you see, and INCLUDE an officer even if all you have is their name and role. Run a dedicated search for this company's officers (e.g. "${name} officers${countryCode === "GB" ? " Companies House" : ""}") and read the FULL active-officers list — registry officer lists are often long and paginated, with resigned officers mixed in. Keep going until you have listed all currently-appointed officers. Do not truncate the array, and do not trade list completeness for per-officer detail.\n`;
+      desc += `  NAME ONLY: if an officer entry shows demographic details (nationality, birth month) but you genuinely cannot determine the person's NAME, do NOT invent a name - omit just that one nameless entry. This rule is about a MISSING NAME only: never omit an officer who HAS a name but is missing other details.\n`;
+      desc += `  ONLY include current/active officers - ignore resigned officers.\n`;
+      desc += `  COMPLETENESS - this matters most: a company normally has SEVERAL current/active officers. Return EVERY active officer, not just the first one or two you see, and INCLUDE an officer even if all you have is their name and role. Run a dedicated search for this company's officers (e.g. "${name} officers${countryCode === "GB" ? " Companies House" : ""}") and read the FULL active-officers list - registry officer lists are often long and paginated, with resigned officers mixed in. Keep going until you have listed all currently-appointed officers. Do not truncate the array, and do not trade list completeness for per-officer detail.\n`;
       if (f.searchHint) {
         desc += `  Additional hint: ${f.searchHint}\n`;
       }
@@ -1984,9 +1984,9 @@ const buildPrompt = (name, country, countryCode, schema, wolfsbergFields, owners
   // belongs in data a reviewer can see and change, not in a prompt compiled
   // into the bundle.
   const directorThreeRules = `
-DIRECTOR AND UBO DATA — THREE MANDATORY RULES:
+DIRECTOR AND UBO DATA - THREE MANDATORY RULES:
 
-RULE 1 — OFFICIAL REGISTRY NAMES ONLY.
+RULE 1 - OFFICIAL REGISTRY NAMES ONLY.
 Director and UBO names must come exclusively from the official company
 registry for this jurisdiction:
   UK: Companies House only
@@ -1997,12 +1997,12 @@ Do NOT use names from:
   LinkedIn profiles
   Wikipedia
   News articles or press releases
-  Annual reports (for names only — these are acceptable for financials)
+  Annual reports (for names only - these are acceptable for financials)
   Any secondary or tertiary source
 If a name cannot be confirmed in the official registry, do not include that
 person. A gap is better than a wrong name.
 
-RULE 2 — ACTIVE APPOINTMENT STATUS REQUIRED.
+RULE 2 - ACTIVE APPOINTMENT STATUS REQUIRED.
 Only return a director or officer if BOTH of these conditions are true in the
 official registry record:
   ✓ An appointment date is present
@@ -2012,11 +2012,11 @@ Resigned directors must never be returned, even if they appear on the registry
 page. The test is not "is this person listed" but "does this person have an
 active unresigned appointment right now".
 
-RULE 3 — NO CROSS-PERSON ATTRIBUTE MERGING.
+RULE 3 - NO CROSS-PERSON ATTRIBUTE MERGING.
 Every detail you return for a person must come from a source that explicitly
 names that specific individual alongside those details in the same record.
   Acceptable: Companies House lists "Anupam Pahuja, born March 1975,
-    nationality British" — all three attributes from the same record for the
+    nationality British" - all three attributes from the same record for the
     same named person.
   NOT acceptable: Name "Anupam Pahuja" from Companies House, DOB from a
     LinkedIn profile, nationality inferred from a different source.
@@ -2028,17 +2028,17 @@ that specific individual, return:
     "full_name": "Anupam Pahuja",
     "role": "Director",
     "verificationStatus": "probable",
-    "notes": "Name confirmed in registry. DOB and nationality not confirmed from same source — details require verification."
+    "notes": "Name confirmed in registry. DOB and nationality not confirmed from same source - details require verification."
   }
 Never combine attributes from different individuals into one record under any
 circumstances.
 
-DIRECTOR DATA EXAMPLE — correct output for a UK company with one active director
+DIRECTOR DATA EXAMPLE - correct output for a UK company with one active director
 and one resigned director:
 
 Companies House shows:
-  Prajit Nanu — appointed 2015, resigned 2019
-  Anupam Pahuja — appointed 2019, no resignation date
+  Prajit Nanu - appointed 2015, resigned 2019
+  Anupam Pahuja - appointed 2019, no resignation date
 
 CORRECT output:
   "directors": [
@@ -2060,21 +2060,21 @@ WRONG output (do not do this):
     website or in news articles
 `;
   const stakeholderRulesBlock = stakeholderRules
-    ? `\nSTAKEHOLDER FIELDS — return structured per-person data:\n${stakeholderRules}\n${directorThreeRules}`
+    ? `\nSTAKEHOLDER FIELDS - return structured per-person data:\n${stakeholderRules}\n${directorThreeRules}`
     : "";
 
   const countryAuthoritative = SOURCE_TRUST[countryCode] || [];
   const countryMatchesFramework = countryCode === "GB" || countryCode === "SG";
   const preferredLine = countryAuthoritative.length > 0
     ? `Preferred authoritative sources for ${country}: ${countryAuthoritative.slice(0, 8).join(", ")}.`
-    : `No specific registry list provided for ${country} — use the country's national company registry, securities regulator, and tax authority.`;
+    : `No specific registry list provided for ${country} - use the country's national company registry, securities regulator, and tax authority.`;
 
   const fieldGuide = researchableFields
     .filter(f => f.searchHint)
     .map(f => `- ${f.field}: ${f.searchHint}`)
     .join("\n");
   const fieldGuideBlock = fieldGuide
-    ? `\nFIELD SEARCH GUIDE — for each field, here is where/what to look for:\n${fieldGuide}\n`
+    ? `\nFIELD SEARCH GUIDE - for each field, here is where/what to look for:\n${fieldGuide}\n`
     : "";
 
   // Dropdown fields are stricter than free-text: the AI must return one of
@@ -2096,13 +2096,13 @@ WRONG output (do not do this):
     })
     .join("\n");
   const dropdownGuideBlock = dropdownGuide
-    ? `\nDROPDOWN FIELDS — these fields have a fixed list of allowed values:\n${dropdownGuide}\n`
+    ? `\nDROPDOWN FIELDS - these fields have a fixed list of allowed values:\n${dropdownGuide}\n`
     : "";
 
   const hasWolfsberg = wolfsbergFields && Object.keys(wolfsbergFields).length > 0;
   const wolfsbergBlock = hasWolfsberg
     ? `\nWOLFSBERG CBDDQ DATA ALREADY EXTRACTED:
-The following fields have been extracted from the institution's Wolfsberg questionnaire. Treat these as confirmed values with source = 'Wolfsberg CBDDQ' and sourceTier = 'tier1'. Do not re-search for these fields — focus your web research on finding the remaining fields not covered below.
+The following fields have been extracted from the institution's Wolfsberg questionnaire. Treat these as confirmed values with source = 'Wolfsberg CBDDQ' and sourceTier = 'tier1'. Do not re-search for these fields - focus your web research on finding the remaining fields not covered below.
 
 ${JSON.stringify(wolfsbergFields, null, 2)}
 
@@ -2116,13 +2116,13 @@ Map Wolfsberg keys onto our schema field ids by name similarity (e.g. legal_name
     : "";
 
   const fiPrioritySources = schema.flow === "fi"
-    ? `\nPRIORITY SOURCES FOR FI RESEARCH — search these in order:
-1. Companies House (find-and-update.company-information.service.gov.uk) for UK — gets you: registration number, registered address, incorporation date, directors, PSC/UBO, SIC code
-2. FCA Register (register.fca.org.uk) for UK — gets you: FRN, regulatory permissions, any enforcement history
-3. MAS Financial Institutions Directory (mas.gov.sg/financial-institutions) for Singapore — gets you: licence type, licence number
-4. Annual Report — gets you: employees, turnover, operating countries, products, branch info, cross-border services, customer types, listed status
-5. LSE / SGX / stock exchange website — gets you: listing confirmation, exchange name
-6. FCA enforcement actions page — gets you: any licence suspensions or regulatory actions
+    ? `\nPRIORITY SOURCES FOR FI RESEARCH - search these in order:
+1. Companies House (find-and-update.company-information.service.gov.uk) for UK - gets you: registration number, registered address, incorporation date, directors, PSC/UBO, SIC code
+2. FCA Register (register.fca.org.uk) for UK - gets you: FRN, regulatory permissions, any enforcement history
+3. MAS Financial Institutions Directory (mas.gov.sg/financial-institutions) for Singapore - gets you: licence type, licence number
+4. Annual Report - gets you: employees, turnover, operating countries, products, branch info, cross-border services, customer types, listed status
+5. LSE / SGX / stock exchange website - gets you: listing confirmation, exchange name
+6. FCA enforcement actions page - gets you: any licence suspensions or regulatory actions
 
 Do NOT leave any of these fields blank without having checked all 5 sources above.\n`
     : "";
@@ -2147,7 +2147,7 @@ ${strategy.strategyNotes}
 ${strategyBlock}${wolfsbergBlock}
 JURISDICTION CONTEXT (read carefully, this is two separate things):
 1. Regulatory framework applied: ${schema.label}. This determines what data fields we need to collect.
-2. Country of registration: ${country} (${countryCode}). This is where the company actually exists, and therefore WHERE YOU MUST SEARCH FOR DATA.${countryMatchesFramework ? " The framework country and registration country are the same here." : ` We hold no licence in ${country}, so the ${schema.label} framework defines our requirements, but the company itself is registered in ${country} — its records live in ${country}'s registries, not ${schema.label}'s.`}
+2. Country of registration: ${country} (${countryCode}). This is where the company actually exists, and therefore WHERE YOU MUST SEARCH FOR DATA.${countryMatchesFramework ? " The framework country and registration country are the same here." : ` We hold no licence in ${country}, so the ${schema.label} framework defines our requirements, but the company itself is registered in ${country} - its records live in ${country}'s registries, not ${schema.label}'s.`}
 
 WHERE TO SEARCH:
 - Search ${country}'s public records, registries, and regulators for "${name}".
@@ -2172,8 +2172,8 @@ ${fieldList}
 OUTPUT RULES:
 - Only include a field in "found" if you have ACTUAL data with a real source. Omit fields you couldn't find rather than inventing values.
 - The "source" field must be the actual ${country} authority/source you used (e.g. for India: "Ministry of Corporate Affairs (MCA)", "BSE", "RBI"; for Brazil: "Receita Federal", "CVM"). Never cite a foreign registry that wouldn't have data for ${country}.
-- For stakeholder fields (directors / UBOs / shareholders / signatories) "value" MUST be a JSON array of person objects as specified above — NOT a string. For all other fields "value" stays a string.
-- Do NOT include a "gaps" array — the client already knows the gap fields from the schema.
+- For stakeholder fields (directors / UBOs / shareholders / signatories) "value" MUST be a JSON array of person objects as specified above - NOT a string. For all other fields "value" stays a string.
+- Do NOT include a "gaps" array - the client already knows the gap fields from the schema.
 - Return ONLY the raw JSON object.`;
 };
 
@@ -2182,7 +2182,7 @@ OUTPUT RULES:
    HEADLESS ORCHESTRATOR (for api/benchmark.js)
 
    A framework-free version of App.js's doResearch(): no document uploads, no
-   UI/state — just the research → coverage → gap-recovery → classification
+   UI/state - just the research → coverage → gap-recovery → classification
    sequence. The HTTP call is INJECTED via `fetchResearch` so the same logic
    runs from the browser proxy or a server-side Anthropic call. Token usage
    from each Claude response is captured and totalled (the browser flow never
@@ -2306,7 +2306,7 @@ async function runResearchPipeline(opts) {
       merged = enrichStakeholders(mapAIValuesToOptions(mergeResearchResults(merged, gapRows), schema));
       coverage = computeCoverage(merged, schema);
     } catch (gapErr) {
-      // Gap recovery is best-effort — keep the first-pass results on failure.
+      // Gap recovery is best-effort - keep the first-pass results on failure.
       calls.push({ phase: "gap_recovery", error: gapErr.message, usage: null });
     }
   }

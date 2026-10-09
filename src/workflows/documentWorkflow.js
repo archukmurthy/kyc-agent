@@ -10,7 +10,7 @@ import { mapExtractedKey } from "../utils/extractionMapping";
    be imported into the browser bundle.
    ═══════════════════════════════════════════ */
 
-// HARDCODED — see PRODUCTION_READINESS.md PR-001
+// HARDCODED - see PRODUCTION_READINESS.md PR-001
 export function mapToDocAgentOwnershipType(
   ownershipTypeId,
   entityTypeId,
@@ -70,7 +70,7 @@ export const extractFromDoc = async (docType, file, schema, flow, fetchTs, { hea
     const txt = (respData.content || []).filter(b => b.type === "text").map(b => b.text).join("");
     const cleaned = txt.replace(/^```json\s*/i, "").replace(/^```/i, "").replace(/```\s*$/i, "").trim();
     if (docType.returnsObject) {
-      // Wolfsberg legacy shape — let the web prompt do the field-id mapping.
+      // Wolfsberg legacy shape - let the web prompt do the field-id mapping.
       try {
         const parsed = JSON.parse(cleaned);
         const filtered = Object.fromEntries(Object.entries(parsed).filter(([, v]) => v !== null && v !== ""));
@@ -110,7 +110,7 @@ export const extractFromDoc = async (docType, file, schema, flow, fetchTs, { hea
 
   // Pre-check document required for the NEW ownership type (Phase 0 #4 mapping).
   // Extend this map as ops confirm more types; the default is a clearly-commented
-  // fallback (closest constitutional/registration document) — never a guess of a
+  // fallback (closest constitutional/registration document) - never a guess of a
   // specific named certificate.
 export const preCheckDocForOwnershipType = (typeId) => {
     switch (typeId) {

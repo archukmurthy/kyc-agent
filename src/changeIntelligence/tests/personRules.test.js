@@ -1,9 +1,9 @@
 /**
- * CD-03 (ratified 26 Jul 2026) — person-scoped correction rules.
+ * CD-03 (ratified 26 Jul 2026) - person-scoped correction rules.
  *
  * The headline assertion this whole commit rests on: the SAME attribute
  * correction produces a document for a UBO and NO document for a director-only
- * person, because person type — not the attribute — keys the document rule.
+ * person, because person type - not the attribute - keys the document rule.
  */
 const { classifyChange } = require('../classifyChange');
 const {
@@ -238,7 +238,7 @@ describe('the two deliberate UNDECIDED sub-rules (need real ownership data)', ()
 
   // Updated 2026-08-01: crossing is now COMPUTED from the real percentages, and
   // Archana ratified that a crossing must ASK for the ownership chart rather
-  // than only flag an analyst — the request IS the analyst trigger, as it is
+  // than only flag an analyst - the request IS the analyst trigger, as it is
   // for removal and add-a-person.
   it('ownership %: a threshold crossing requests the ownership chart', () => {
     expect(classifyChange(person({ attribute: 'ownership_pct', thresholdCrossing: 'crossed_below' })))

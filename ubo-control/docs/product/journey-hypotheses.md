@@ -8,7 +8,7 @@ The review-only successor applicant Lab now exercises the approved fact-led jour
 
 Only projection-carried approved question content is executable. Real-policy A-02, A-04 and A-17 blocks remain visible to Lab diagnostics and fail closed in the applicant view. External Evidence and delegation are data-only handoffs; no upload, ingestion, message delivery, authorization or production onboarding behavior is implied.
 
-## JH-001 — Suppress unnecessary customer questions
+## JH-001 - Suppress unnecessary customer questions
 
 **Statement:** A customer question should normally be suppressed when the relevant policy requirement has already been resolved to the required evidential standard.
 
@@ -16,11 +16,11 @@ Only projection-carried approved question content is executable. Real-policy A-0
 
 **Source evidence:** `PRACTITIONER-001`
 
-**Target gate:** `Gate 5 — Journey Design`
+**Target gate:** `Gate 5 - Journey Design`
 
 **Caution:** This does not change the underlying requirement itself.
 
-## JH-002 — Governance documents are targeted resolution evidence
+## JH-002 - Governance documents are targeted resolution evidence
 
 **Statement:** Articles, shareholder agreements, LLP agreements and similar governance documents should generally be requested to resolve specific outstanding InformationNeeds rather than universally requested from all applicants.
 
@@ -28,23 +28,23 @@ Only projection-carried approved question content is executable. Real-policy A-0
 
 **Source evidence:** `PRACTITIONER-001`
 
-**Target gate:** `Gates 4–5`
+**Target gate:** `Gates 4-5`
 
 **Caution:** Document sufficiency/certification remains governed by applicable policy.
 
-## JH-003 — Ownership charts are primarily navigational/declarative
+## JH-003 - Ownership charts are primarily navigational/declarative
 
 **Statement:** A customer ownership chart should normally be treated as a candidate description/navigation aid unless applicable policy determines that it provides sufficient proof for the relevant requirement.
 
-**Status:** `SUPPORTED / APPROVED PRODUCT BEHAVIOR — POLICY-OPTION-GATED`
+**Status:** `SUPPORTED / APPROVED PRODUCT BEHAVIOR - POLICY-OPTION-GATED`
 
 **Source evidence:** `PRACTITIONER-001`
 
-**Target gate:** `Gates 4–5`
+**Target gate:** `Gates 4-5`
 
 **Caution:** Do not automatically treat an ownership chart as independently corroborative evidence.
 
-## JH-004 — Rare control complexity should be progressively disclosed
+## JH-004 - Rare control complexity should be progressively disclosed
 
 **Statement:** The engine should support the complete ownership/control model while customer-facing voting, appointment-right, share-class and significant-control questions should appear only when case state and policy make them necessary.
 
@@ -56,7 +56,7 @@ Only projection-carried approved question content is executable. Real-policy A-0
 
 **Caution:** Capability breadth must not become questionnaire breadth.
 
-## JH-005 — Fact-led rather than document-led resolution
+## JH-005 - Fact-led rather than document-led resolution
 
 **Statement:** Journey progression should be organized around unresolved required facts/InformationNeeds rather than around completion of document checklists.
 
@@ -76,11 +76,11 @@ Policy requires Fact X
 
 **Source evidence:** `PRACTITIONER-001`
 
-**Target gate:** `Gates 4–5`
+**Target gate:** `Gates 4-5`
 
 **Caution:** A document may support multiple requirements independently.
 
-## JH-006 — Candidate resolution priority
+## JH-006 - Candidate resolution priority
 
 **Approved v1 tier/wave doctrine:**
 
@@ -96,11 +96,11 @@ Discovery and interpretation of already-held artifacts share the zero-customer-f
 
 **Source evidence:** `PRACTITIONER-001`
 
-**Target gate:** `Gate 5 — Resolution/Journey Design`
+**Target gate:** `Gate 5 - Resolution/Journey Design`
 
 **Caution:** This is the pinned `ubo-low-friction-planner-v1` operational planning profile, not regulatory authority, a numeric friction score, provider ranking or a rigid capability sequence.
 
-## JH-007 — Registry availability is dynamic
+## JH-007 - Registry availability is dynamic
 
 **Statement:** Journey/resolution logic should treat registry/source availability as a runtime capability outcome rather than a static property of a jurisdiction.
 
@@ -108,7 +108,7 @@ Discovery and interpretation of already-held artifacts share the zero-customer-f
 
 **Source evidence:** `PRACTITIONER-001`
 
-**Target gate:** `Gates 3–5`
+**Target gate:** `Gates 3-5`
 
 **Caution:** Do not encode rules such as `UK = available` or `Netherlands = unavailable`.
 
@@ -118,7 +118,7 @@ Discovery and interpretation of already-held artifacts share the zero-customer-f
 
 One artifact may yield several candidate facts, each affecting a different policy requirement. Capturing those candidate facts does not itself evaluate or resolve R04, R05 or R06.
 
-## JH-008 — Existing Artifact demonstration boundary
+## JH-008 - Existing Artifact demonstration boundary
 
 **Statement:** A review-only journey may satisfy a plan-derived Evidence handoff from an already-ingested, authorized Artifact, provided the host keeps Artifact correlation outside the immutable handoff, exposes extracted facts as candidates, and requires explicit identity/claim decisions before re-evaluation.
 

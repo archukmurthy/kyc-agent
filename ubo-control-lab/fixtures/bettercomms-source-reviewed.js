@@ -31,7 +31,7 @@ const SIZE_BYTES = 582094;
 const DIMENSIONS = Object.freeze({ width: 841, height: 595 });
 const REVIEW_RECORDED_AT = "2026-09-13T13:30:00.000Z";
 const CERTIFICATION_DATE = "2026-05-05";
-const ARTIFACT_LABEL = "Ownership chart-Bettercomms.png — source-backed reviewed fixture";
+const ARTIFACT_LABEL = "Ownership chart-Bettercomms.png - source-backed reviewed fixture";
 const DOCUMENT_PARTY = Object.freeze({
   partyType: "legal_entity",
   name: "Better Comms VOIP Ltd",
@@ -42,7 +42,7 @@ const DOCUMENT_PARTY = Object.freeze({
 
 const HISTORICAL_LEADS = Object.freeze({
   status: "REPORTED_NOT_REVALIDATED",
-  contextIssue: "Historical screen places the upload under TESCO PLC — evidence_lab; Bettercomms tenant/context authority is not established.",
+  contextIssue: "Historical screen places the upload under TESCO PLC - evidence_lab; Bettercomms tenant/context authority is not established.",
   artifactId: "f3b768a9-4f34-4fae-9743-d33220a99f0a",
   laterOperationId: "8c4aa135-9b87-437b-946e-992bb460000d",
   laterRunId: "ad15b4fd-23c0-42b6-8cff-b153f9671409",

@@ -17,7 +17,7 @@
 //   --nonkeep <path>    optional JSON array of non-keep field ids (over-collection)
 //   --out <dir>         default benchmark/out
 //
-// Env: BENCHMARK_ADMIN_TOKEN — the tenant's admin password; /api/benchmark
+// Env: BENCHMARK_ADMIN_TOKEN - the tenant's admin password; /api/benchmark
 // requires it. Put the tenant in --endpoint (…/api/benchmark?tenant=<id>).
 // -----------------------------------------------------------------------------
 
@@ -196,7 +196,7 @@ function metricsFor(res, csvRow, timeMin) {
   const formPreFillRate = totalFieldCount ? populated / totalFieldCount : null;
   const tier1 = found.filter(f => f.sourceTier === 'tier1' || f.sourceTier === 'document').length;
   // #4 Evidence coverage (Path A): of the fields the agent FILLED, how many rest
-  // on a CREDIBLE source — tier-1 (authoritative registry / document) or tier-2
+  // on a CREDIBLE source - tier-1 (authoritative registry / document) or tier-2
   // (company-owned). tier-3 (aggregators, inferred) does NOT count as evidenced.
   // Distinct from #1 coverage (how much was filled) and from tier1Share (tier-1
   // only). The old presence-of-any-source check is retained as a floor.
@@ -211,7 +211,7 @@ function metricsFor(res, csvRow, timeMin) {
 
   // #3 research reduction, computed for BOTH baseline bounds. timeMin may be
   // null when recomputing over stored output that never persisted per-entity
-  // timing — guard so the band degrades to null rather than NaN.
+  // timing - guard so the band degrades to null rather than NaN.
   const tMin = (timeMin != null && !Number.isNaN(timeMin)) ? timeMin : null;
   const rrLow  = (BASELINE_LOW  && tMin != null) ? (BASELINE_LOW  - tMin) / BASELINE_LOW  : null;
   const rrHigh = (BASELINE_HIGH && tMin != null) ? (BASELINE_HIGH - tMin) / BASELINE_HIGH : null;
@@ -222,12 +222,12 @@ function metricsFor(res, csvRow, timeMin) {
     onboardingCoverage: cov.fillRate ?? null,                 // #1 required-field coverage
     formPreFillRate,                                          // #1b whole-form pre-fill
     totalFieldCount,
-    // Fields flagged customerSupplied (benchmark/fi-schema-fields-patch.js) —
+    // Fields flagged customerSupplied (benchmark/fi-schema-fields-patch.js) -
     // excluded from the researchable denominator by computeCoverage, reported
     // here so the scorecard shows the human-half / agent-half split.
     customerSuppliedFields: cov.customerSuppliedFieldCount ?? 0,
     researchableFields: cov.totalResearchFields ?? null,
-    // #2 — data-point level. verified+probable = avoided; indicative = predrafted.
+    // #2 - data-point level. verified+probable = avoided; indicative = predrafted.
     // SCHEMA_WEIGHTS is optional (mode b); null computes purely from `found`
     // (mode a, works retroactively over stored output).
     ...(() => {
@@ -301,7 +301,7 @@ function aggregate(ms) {
 
 // --- derive a segment label from a stored result (recompute mode has no CSV) -
 // Keys off the input's ownershipType to reproduce the pilot's CSV-based
-// segmentation. NOTE: do NOT fall back to res.isPubliclyListed — the agent sets
+// segmentation. NOTE: do NOT fall back to res.isPubliclyListed - the agent sets
 // that flag on private entities with listed parents (e.g. Shein, Trafigura),
 // which would wrongly pull them into the public segment.
 function deriveSegment(result) {
@@ -318,7 +318,7 @@ let runId = null;
 const t0 = Date.now();
 
 if (FROM) {
-  // Recompute over stored output — the agent is NOT re-run. #1/#1b/#2/#4/#5 come
+  // Recompute over stored output - the agent is NOT re-run. #1/#1b/#2/#4/#5 come
   // straight from the stored found/coverage objects. Per-entity platform time
   // was not persisted in early pilot artifacts, so the #3/#6 time band falls
   // back to the recorded per-segment mean (then overall mean) platform time;
@@ -331,7 +331,7 @@ if (FROM) {
   for (const s of SEGMENTS) segTimeMean[s] = prior.perSeg?.[s]?.platformMin?.mean ?? null;
   const overallTimeMean = prior.overall?.platformMin?.mean ?? null;
   const haveExactTiming = Object.keys(priorByName).length > 0;
-  console.log(`\nRecomputing over stored output: ${priorRaw.length} entit(ies) from ${FROM} — agent NOT re-run.`);
+  console.log(`\nRecomputing over stored output: ${priorRaw.length} entit(ies) from ${FROM} - agent NOT re-run.`);
   if (!haveExactTiming)
     console.log(`  Note: per-entity timing absent from artifact; #3/#6 time band uses recorded per-segment mean platform time.`);
   results = priorRaw.map((result) => {
@@ -407,7 +407,7 @@ const trow = (label, a) => console.log(
   ('$' + f1(a.costUsd.mean)).padStart(7),
   f1(a.analystMinSavedLow.mean).padStart(9),
 );
-console.log('By jurisdiction (the fair comparison — UK and SG schemas differ in size):');
+console.log('By jurisdiction (the fair comparison - UK and SG schemas differ in size):');
 console.log(HDR); console.log(SEP);
 for (const j of jurisdictions) if (perJur[j].n) trow(j, perJur[j]);
 console.log('\nBy segment:');

@@ -3,12 +3,12 @@
  * Contract version: 1.1 (PR-025 + PR-026)
  *
  * Orchestrates both document retrieval agents and produces:
- *   1. registry      — selfSourceAgent output (registry HTML/screenshot/metadata)
- *   2. webDocs       — docSearchAgent output (Wolfsberg, Annual Report etc.) UNCHANGED
- *   3. selfSourcedFields — PR-026: mapped field values ready to merge into researchResults
- *   4. manualReviewItems — PR-025: items that need analyst manual retrieval
- *   5. mergedTable   — unified view for UI / dossier
- *   6. duplicateFlags — overlap between both agents for review
+ *   1. registry      - selfSourceAgent output (registry HTML/screenshot/metadata)
+ *   2. webDocs       - docSearchAgent output (Wolfsberg, Annual Report etc.) UNCHANGED
+ *   3. selfSourcedFields - PR-026: mapped field values ready to merge into researchResults
+ *   4. manualReviewItems - PR-025: items that need analyst manual retrieval
+ *   5. mergedTable   - unified view for UI / dossier
+ *   6. duplicateFlags - overlap between both agents for review
  *
  * Called by the main KYC agent after Step 1 classifiers are confirmed.
  *
@@ -21,7 +21,7 @@
  *     ownershipType:            "public_fi",
  *     niumEntityType:           "fi",
  *     drsChecklist:             checklist,
- *     companyRegistrationNumber: "00014259",   // optional — improves second-pass
+ *     companyRegistrationNumber: "00014259",   // optional - improves second-pass
  *     outputDir:                "./downloads/case-001",
  *   });
  *
@@ -71,7 +71,7 @@ async function orchestrateDocuments(params) {
   // ── Run both agents in parallel ────────────────────────────────────────────
   const [selfSourceResult, docSearchResult] = await Promise.allSettled([
 
-    // Agent 1: Registry self-sourcing (DRS-driven) — PR-025 second-pass enabled
+    // Agent 1: Registry self-sourcing (DRS-driven) - PR-025 second-pass enabled
     selfSourceAgent({
       companyName,
       incorporationCountry,
@@ -81,7 +81,7 @@ async function orchestrateDocuments(params) {
       preferredOnly,
     }),
 
-    // Agent 2: Web document search (Wolfsberg, Annual Report, etc.) — UNCHANGED
+    // Agent 2: Web document search (Wolfsberg, Annual Report, etc.) - UNCHANGED
     docSearchAgent({
       companyName,
       country:        incorporationCountry,
@@ -141,11 +141,11 @@ async function orchestrateDocuments(params) {
     ownershipType,
     niumEntityType,
 
-    // Agent outputs — kept separate for independent ownership
+    // Agent outputs - kept separate for independent ownership
     registry,
     webDocs,
 
-    // PR-026: pre-population output — merge into researchResults in App.js
+    // PR-026: pre-population output - merge into researchResults in App.js
     // Shape: { [fieldId]: { value, tier, source, sourceLabel, sourceUrl, evidenceRef, retrievedAt, confidence } }
     selfSourcedFields,
 
@@ -221,8 +221,8 @@ function buildMergedTable(companyName, registryResults, webDocResults) {
     retrievedAt:      r.retrievedAt,
     sourceUrl:        r.searchUrl || r.sourceUrl,
     filesCount:       r.files?.length ?? 0,
-    matchConf:        r.extracted?.matchConfidence ?? "—",
-    costUSD:          r.cost?.totalCostUSD?.toFixed(5) ?? "—",
+    matchConf:        r.extracted?.matchConfidence ?? "-",
+    costUSD:          r.cost?.totalCostUSD?.toFixed(5) ?? "-",
     notes:            r.manualReviewReason || r.extracted?.notes || "",
   }));
 
@@ -233,11 +233,11 @@ function buildMergedTable(companyName, registryResults, webDocResults) {
     tier:             "Web search",
     status:           d.status,
     manualReviewFlag: false,
-    retrievedAt:      d.cost?.timestamp ?? "—",
-    sourceUrl:        d.sourceUrl || "—",
+    retrievedAt:      d.cost?.timestamp ?? "-",
+    sourceUrl:        d.sourceUrl || "-",
     filesCount:       d.localPath ? 1 : 0,
-    matchConf:        d.confidence || "—",
-    costUSD:          d.cost?.totalCostUSD?.toFixed(5) ?? "—",
+    matchConf:        d.confidence || "-",
+    costUSD:          d.cost?.totalCostUSD?.toFixed(5) ?? "-",
     notes:            d.notes || "",
   }));
 

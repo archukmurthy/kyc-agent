@@ -169,7 +169,7 @@ function UploadPanel({ file, error, busy, progress, startedAt, retryAvailable, o
   return <section className="ubo-customer-card ubo-customer-upload-card">
     <div className="ubo-customer-card-title"><span className="ubo-customer-icon" aria-hidden="true">↥</span><div><small>One document</small><h2>Upload your ownership chart</h2></div></div>
     <p>Provide the chart that shows the people and companies in your ownership structure, including percentages where available.</p>
-    <aside className="ubo-customer-certified-note"><span aria-hidden="true">✓</span><div><strong>A certified chart can make verification quicker</strong><p>If you have one signed or certified by an accountant, lawyer or another qualified professional, upload that version. A regular ownership chart is also fine—we may ask follow-up questions later.</p></div></aside>
+    <aside className="ubo-customer-certified-note"><span aria-hidden="true">✓</span><div><strong>A certified chart can make verification quicker</strong><p>If you have one signed or certified by an accountant, lawyer or another qualified professional, upload that version. A regular ownership chart is also fine-we may ask follow-up questions later.</p></div></aside>
     <input ref={input} className="ubo-customer-file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" onChange={(event) => onChoose(event.target.files?.[0] || null)} />
     {!file ? <button type="button" className="ubo-customer-dropzone" onClick={() => input.current?.click()}>
       <span className="ubo-customer-file-glyph" aria-hidden="true">▤</span>
@@ -194,7 +194,7 @@ function SavedExtractionsPanel({ records, onUse }) {
       <strong>{record.result.artifact.originalFilename || "Ownership chart"}</strong>
       <span>{record.result.candidateFacts?.length || 0} assertions · {record.result.sourceGraph?.relationships?.length || 0} relationships · saved {new Date(record.savedAt).toLocaleString()}</span>
       {coverage.state === "REVIEW_REQUIRED" && <span>Incomplete map · relationship chain does not reach the customer</span>}
-      <small>Use saved extraction — no provider call</small>
+      <small>Use saved extraction - no provider call</small>
     </button>; })}</div>
   </section>;
 }

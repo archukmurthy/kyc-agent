@@ -1,38 +1,38 @@
 /**
- * confirmState.js — the SINGLE source of truth for Confirm-page item state.
+ * confirmState.js - the SINGLE source of truth for Confirm-page item state.
  *
  * ONE predicate, three consumers: the amber row styling, the "Needs You" tile,
  * and the submit gate. Deriving it more than once is exactly how a page ends up
  * reading "0 items need your input" next to a button that refuses to advance,
  * so all three read rowState() / computeConfirmCounts() / submitBlockers() from
  * here and nowhere else. submitBlockers' kind-(a) set is computed by the SAME
- * rowState() call the styling and the tile use — they cannot diverge.
+ * rowState() call the styling and the tile use - they cannot diverge.
  *
- * Pure — plain data in, plain values out. No React, no refs, no fetch.
+ * Pure - plain data in, plain values out. No React, no refs, no fetch.
  *
  * The three row states are mutually exclusive and computed from data that
  * already exists on the page:
  *
- *   corrected — the customer saved a replacement value (gapRef
+ *   corrected - the customer saved a replacement value (gapRef
  *               `corrected_<field>`, written by the inline editor).
- *   needsYou  — EITHER a disputed row whose corrected value hasn't been
+ *   needsYou  - EITHER a disputed row whose corrected value hasn't been
  *               supplied yet, OR a low-confidence row (verificationStatus
  *               probable/indicative) the customer hasn't affirmed yet.
- *   confirmed — everything else: high-confidence rows left ticked, plus
+ *   confirmed - everything else: high-confidence rows left ticked, plus
  *               low-confidence rows the customer explicitly ticked.
  *
  * Why affirmation exists: every row arrives pre-ticked (checks defaults to
  * true), so `checks[idx] === true` alone cannot distinguish "the customer
  * agreed" from "the customer hasn't looked yet". The product decision is that
  * untouched low-confidence rows MUST block, so the gate needs the stronger
- * signal — an explicit tick — or it could never open. Affirming is additive UI
+ * signal - an explicit tick - or it could never open. Affirming is additive UI
  * state; it never touches `checks`, the dialogue, or capture.
  *
- * SCOPE — vital (research.found) rows only. A stakeholder's per-person fields
+ * SCOPE - vital (research.found) rows only. A stakeholder's per-person fields
  * are still next-page work until commit 6 brings per-person editing onto
  * Confirm, so counting them here would block a gate on work this page cannot
  * do. The person cards carry their own badge meanwhile. When commit 6 lands,
- * people join the gate by extending THIS module — not by adding a second
+ * people join the gate by extending THIS module - not by adding a second
  * predicate somewhere else.
  */
 
@@ -52,10 +52,10 @@ export const BLOCKER_KIND = {
 };
 
 /**
- * PERSON ATTRIBUTES — the per-person data points the person cards show.
+ * PERSON ATTRIBUTES - the per-person data points the person cards show.
  *
- * `resolvableHere` — research returned a value, so the card has a tick and an
- * inline correction — is the whole distinction:
+ * `resolvableHere` - research returned a value, so the card has a tick and an
+ * inline correction - is the whole distinction:
  *
  *   resolvable  → COUNTS in needsYou and BLOCKS. It is a real ask: an
  *                 unverified-source value the customer must confirm or correct.
@@ -111,7 +111,7 @@ export function rowState(item, { checked = true, affirmed = false, correction } 
   if (hasValue(correction)) return ROW_STATE.CORRECTED;
   // Settled on the Applicant page's gate and read-only here. Stated rather
   // than derived, because a low-confidence source would otherwise make this
-  // needsYou — and the row has no tick to clear it with, which is precisely
+  // needsYou - and the row has no tick to clear it with, which is precisely
   // the unresolvable blocker the gate scoping rule exists to prevent.
   if (isGateConfirmedField(item && item.field)) return ROW_STATE.CONFIRMED;
   if (!checked) return ROW_STATE.NEEDS_YOU; // disputed; correction not supplied yet
@@ -130,7 +130,7 @@ export function rowContext(item, idx, { checks = {}, affirmed = {}, corrections 
 
 /**
  * Normalise the row input to [{item, idx}] pairs. `idx` MUST stay the original
- * index into research.found — that is what `checks` is keyed by — so callers
+ * index into research.found - that is what `checks` is keyed by - so callers
  * that render a filtered subset (the vital-row table excludes stakeholder
  * fields, which render as person cards) pass `rows` with the original indices
  * rather than a re-indexed array. Passing `found` keeps positional indices and
@@ -144,9 +144,9 @@ function toRows({ rows, found }) {
 /**
  * Documents whose classification currently requires them, read from the
  * persisted dialogue snapshots. Each snapshot carries its classification event
- * verbatim, so this is the LIVE view — correct in dev with no DB, and correct
+ * verbatim, so this is the LIVE view - correct in dev with no DB, and correct
  * before the read endpoint has caught up. Re-checking a row deletes its
- * snapshot, which is what drops the document — the same "latest event wins"
+ * snapshot, which is what drops the document - the same "latest event wins"
  * semantics as deriveAmendmentDocuments server-side.
  */
 export function docsNeededFrom(dialogueState = {}) {
@@ -161,7 +161,7 @@ export function docsNeededFrom(dialogueState = {}) {
 }
 
 /**
- * COMPANY-WIDE DOCUMENT TYPES — the artefact describes the whole company, so
+ * COMPANY-WIDE DOCUMENT TYPES - the artefact describes the whole company, so
  * ONE upload covers it however many people's changes asked for it.
  *
  * An ownership chart maps the entire ownership structure and a directors list
@@ -169,14 +169,14 @@ export function docsNeededFrom(dialogueState = {}) {
  * identity evidence (Proof of Identity / Proof of Address / Source of Wealth),
  * where John's passport genuinely is not Jane's.
  *
- * Complete as of the current policy table — these are every non-identity
+ * Complete as of the current policy table - these are every non-identity
  * docType any rule emits (BASE_RULES + PERSON_RULES). Anything NOT listed and
  * triggered by a person is treated as per-person, which is the fail-safe
  * direction: a new identity-ish document over-collects rather than letting one
  * person's file silently satisfy everybody else's requirement.
  */
 /**
- * DOCUMENT-TYPE ALIASES — two rule paths, one real document.
+ * DOCUMENT-TYPE ALIASES - two rule paths, one real document.
  *
  * The policy table names the same artefact differently depending on which path
  * asked for it: a company-level director edit emits 'Updated Director Registry'
@@ -186,7 +186,7 @@ export function docsNeededFrom(dialogueState = {}) {
  * Deliberately resolved HERE and not in the policy table. classifyChange and
  * policyTable stay authoritative and untouched, so `change_events.doc_type`
  * keeps the precise rule-level name and the audit trail can still show WHICH
- * rule fired. This layer only decides what the customer is asked to upload —
+ * rule fired. This layer only decides what the customer is asked to upload -
  * and it applies to already-persisted events too, so historic rows collapse
  * correctly rather than reappearing as a second request.
  */
@@ -204,7 +204,7 @@ export const COMPANY_WIDE_DOC_TYPES = new Set([
 ]);
 
 /**
- * PER-FIELD DOCUMENT TYPES — one placeholder name standing in for several
+ * PER-FIELD DOCUMENT TYPES - one placeholder name standing in for several
  * genuinely different filings, so it must NOT collapse.
  *
  * 'Supporting Registration Document' is the policy table's acknowledged
@@ -212,7 +212,7 @@ export const COMPANY_WIDE_DOC_TYPES = new Set([
  * Those are different documents wearing one name, so a single upload must not
  * satisfy all of them: each triggering field gets its own request. That
  * over-collects if they ever turn out to be one filing, which is the
- * fail-safe direction — the same call made for unknown person documents.
+ * fail-safe direction - the same call made for unknown person documents.
  *
  * When O3 lands and each field has its real document name, these become
  * ordinary distinct docTypes and this set can go away.
@@ -222,12 +222,12 @@ export const PER_FIELD_DOC_TYPES = new Set([
 ]);
 
 /**
- * GROUP-SCOPED DOCUMENT TYPES — one per address, not one per address line.
+ * GROUP-SCOPED DOCUMENT TYPES - one per address, not one per address line.
  *
  * A Notice of Change of Address covers ONE address: changing line 1, the city
  * and the postcode of the registered address is one move and one notice. But
  * changing the registered address AND an operating address is two different
- * addresses and two notices — so this cannot collapse to a single company-wide
+ * addresses and two notices - so this cannot collapse to a single company-wide
  * document either.
  *
  * The group is the schema `section` the field belongs to (registered_address,
@@ -250,13 +250,13 @@ export const isPerFieldDocType = (docType) =>
   PER_FIELD_DOC_TYPES.has(canonicalDocType(docType));
 
 /**
- * DOCUMENT SCOPE — the correction that makes identity evidence safe.
+ * DOCUMENT SCOPE - the correction that makes identity evidence safe.
  *
  * Scope is a property of the DOCUMENT, not of the change that triggered it.
  * Deriving it from the fieldId alone was the bug: a person-scoped trigger
  * (`<personType>::<stakeholderId>::<attribute>`) made every document it asked
  * for per-person, so removing two UBOs opened two Ownership Chart requests for
- * one chart — and uploading it once could not close the other.
+ * one chart - and uploading it once could not close the other.
  *
  * So: company-wide docType → company scope, whoever triggered it. Otherwise a
  * person-scoped trigger means the document belongs to that person.
@@ -278,7 +278,7 @@ export function docScope(d = {}) {
  * NEITHER form contains the fieldId, and that is deliberate. The old company
  * form was `<fieldId>::<docType>`, but a company document can be triggered by
  * several different fields (or several different people), and which one lands
- * in the canonical entry depends on list order — which differs between the
+ * in the canonical entry depends on list order - which differs between the
  * Confirm page and the Fill Gaps panel. Keying on the docType alone is what
  * makes "upload it once, anywhere" actually true.
  */
@@ -291,7 +291,7 @@ export const docKey = (d) => {
   return `company::${type}`;
 };
 
-/** The DEDUPE key — what collapses into one visible request. */
+/** The DEDUPE key - what collapses into one visible request. */
 export const docDedupeKey = (d) => {
   const scope = docScope(d);
   const type = canonicalDocType(d.docType);
@@ -326,7 +326,7 @@ export function canonicalDocs(...sources) {
       const isPerson = scope.kind === "person";
       out.push({
         fieldId: d.fieldId,
-        // The merged name — this is what the customer is asked to upload. The
+        // The merged name - this is what the customer is asked to upload. The
         // rule-level name survives untouched on the change event itself.
         docType: canonicalDocType(d.docType),
         fieldClass: d.fieldClass || null,
@@ -338,8 +338,8 @@ export function canonicalDocs(...sources) {
         fieldLabel: scope.kind === "field" ? d.fieldLabel || null : null,
         // Carried so the panel can say WHOSE document this is. A company-wide
         // document belongs to nobody in particular even when a person's change
-        // asked for it, so it must NOT inherit that person's name — labelling
-        // the single ownership chart "— John Smith" is what made it look like
+        // asked for it, so it must NOT inherit that person's name - labelling
+        // the single ownership chart "- John Smith" is what made it look like
         // one of several per-person requests.
         stakeholderId: isPerson ? scope.stakeholderId : null,
         personName: isPerson ? d.personName || null : null,
@@ -355,7 +355,7 @@ export function isSatisfied(upload) {
 }
 
 /**
- * PRE-FILL BREAKDOWN — how much research delivered, and from where.
+ * PRE-FILL BREAKDOWN - how much research delivered, and from where.
  *
  * A RESEARCH metric, not a progress metric: it describes what arrived on the
  * page and is invariant to what the customer then does with it. Confirming,
@@ -363,7 +363,7 @@ export function isSatisfied(upload) {
  * with the Confirmed tile only while nothing has been touched yet.)
  *
  * Counts DATA POINTS, not rows. A stakeholder row carrying three people with
- * five known attributes each delivered fifteen pre-filled values, not one —
+ * five known attributes each delivered fifteen pre-filled values, not one -
  * counting the row as 1 understated every people-heavy research run, which is
  * exactly the kind of skew that would poison later metrics.
  *
@@ -411,7 +411,7 @@ export function computeConfirmCounts({
     else if (state === ROW_STATE.NEEDS_YOU) needsYou += 1;
     else confirmed += 1;
   });
-  // People count on the same footing as vital rows — but only for what is
+  // People count on the same footing as vital rows - but only for what is
   // actionable HERE. A pure gap is next-page work, not an unmet ask.
   const personPending = personOutstanding(personItems);
   const personActionable = personPending.filter((p) => p.resolvableHere);
@@ -426,7 +426,7 @@ export function computeConfirmCounts({
     corrected,
     // Counted in needsYou and blocking.
     personPending: personActionable.length,
-    // Counted nowhere — informational, so the UI can say how much Fill Gaps
+    // Counted nowhere - informational, so the UI can say how much Fill Gaps
     // still owes without dressing it up as an outstanding ask.
     personDeferred: personPending.length - personActionable.length,
     docsNeeded: outstandingDocs.length,
@@ -440,18 +440,18 @@ export function computeConfirmCounts({
  * THE GATE. Returns a structured blocker list; the gate is blocked iff it is
  * non-empty, and the button's message is derived from the same list.
  *
- * (a) attention_row      — rowState === needsYou. IDENTICAL to what the amber
+ * (a) attention_row      - rowState === needsYou. IDENTICAL to what the amber
  *                          styling marks and the Needs You tile counts, because
  *                          it is the same rowState() call. An untouched
  *                          high-confidence row is never in this set.
- * (b) missing_document   — a currently-required document with no successful
+ * (b) missing_document   - a currently-required document with no successful
  *                          upload. INDEPENDENT of (a): correcting a
  *                          document-triggering field resolves (a) but leaves
  *                          (b) blocking until the file lands. That
  *                          independence is the compliance-first behaviour, and
  *                          it falls out of the two conditions being separate
  *                          rather than from any special-casing.
- * (c) empty_required_gap — a required gap with no value. Callers pass the gaps
+ * (c) empty_required_gap - a required gap with no value. Callers pass the gaps
  *                          that are actionable on THEIR surface; see the note
  *                          at the Confirm call site about why blocking on
  *                          fields the customer cannot see would be a trap.
@@ -484,7 +484,7 @@ export function submitBlockers({
   });
 
   // Person attributes the customer CAN act on here. The deferred ones (no
-  // value returned, so no control on the card) are counted but not blocking —
+  // value returned, so no control on the card) are counted but not blocking -
   // see the note on personOutstanding.
   personOutstanding(personItems).forEach((p) => {
     if (!p.resolvableHere) return;
@@ -499,7 +499,7 @@ export function submitBlockers({
 
   // Person-scoped documents are counted PER PERSON: uploading John's Proof of
   // Identity clears John's blocker and leaves Jane's standing. The scope-aware
-  // docKey is what guarantees that — one person's file can never satisfy
+  // docKey is what guarantees that - one person's file can never satisfy
   // another's requirement.
   canonicalDocs(docs).forEach((d) => {
     if (isSatisfied(uploads[docKey(d)])) return;
@@ -528,7 +528,7 @@ export function submitBlockers({
   return blockers;
 }
 
-/** The button's message, derived from the same list that blocks it — never a
+/** The button's message, derived from the same list that blocks it - never a
  *  silent grey-out. Prefers a short combined form when kinds mix. */
 export function blockerSummary(blockers = []) {
   const items = blockers.filter((b) => b.kind !== BLOCKER_KIND.MISSING_DOCUMENT).length;

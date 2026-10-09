@@ -1,5 +1,5 @@
 /**
- * demoGuard.test.jsx — safety net for the two paid-research guards added to
+ * demoGuard.test.jsx - safety net for the two paid-research guards added to
  * App.js: (1) doResearch (the REAL, paid Anthropic + web-search path) refuses
  * to run without a window.confirm() accept when the demo toggle is visible
  * (dev/testing contexts) and demo mode is off; (2) setDemoMode persists an
@@ -7,7 +7,7 @@
  *
  * Drives the real app the same way JourneyPicker.render.test.jsx does: fill
  * Company Lookup, open the journey picker, pick card B ("Let AI research your
- * company" — journeyType "ai_only", no document phase, so doResearch reaches
+ * company" - journeyType "ai_only", no document phase, so doResearch reaches
  * fetch("/api/research") directly with nothing else in the way), Continue.
  */
 import React from "react";
@@ -85,7 +85,7 @@ async function driveToResearchKickoff() {
 describe("doResearch paid-call confirm guard", () => {
   // demoMode starts false under Jest (NODE_ENV === "test" gates the new
   // localhost default off), and demoToggleVisible is true (jsdom host is
-  // "localhost") — exactly the conditions the guard fires under.
+  // "localhost") - exactly the conditions the guard fires under.
 
   it("aborts and never calls /api/research when the user declines the confirm", async () => {
     window.confirm.mockReturnValueOnce(false);
@@ -147,7 +147,7 @@ describe("research request shape (server-built prompts)", () => {
     await driveToResearchKickoff();
     await settle(0);
 
-    expect(screen.getAllByText(/Too many requests — please try again in 2 minutes/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Too many requests - please try again in 2 minutes/).length).toBeGreaterThan(0);
   });
 });
 
@@ -158,7 +158,7 @@ describe("setDemoMode persistence", () => {
     });
     await settle(0);
 
-    // The DemoToggle only mounts on the journey picker — reach it the same
+    // The DemoToggle only mounts on the journey picker - reach it the same
     // way driveToResearchKickoff does, minus the card click.
     fireEvent.change(screen.getByPlaceholderText(/Tesco PLC/i), {
       target: { value: "Britannia Group Limited" },
@@ -176,7 +176,7 @@ describe("setDemoMode persistence", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Continue/ }));
     await settle(0);
 
-    // Flip it on then off — the off flip is the explicit opt-out under test.
+    // Flip it on then off - the off flip is the explicit opt-out under test.
     const toggle = screen
       .getByTitle(/Skip API calls/i)
       .querySelector('input[type="checkbox"]');

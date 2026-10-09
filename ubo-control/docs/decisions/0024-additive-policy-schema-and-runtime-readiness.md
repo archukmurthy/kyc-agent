@@ -16,7 +16,7 @@ UK Corporate 1.5-RC is an immutable schema-1.2 Lab and characterization baseline
 - `assessUboPolicyPackReadiness` is the separate public, stateless `ubo-policy-readiness-v1` operation. It requires explicit evaluation time and returns deeply immutable provider-neutral data.
 - `LAB` may assess review packs and requires a watermark when they are not production-ready. `PRODUCTION` fails closed when any declared release, effective-period, approval, sign-off, feature, algorithm, schema, or integrity condition is not ready. `HISTORICAL_RECONSTRUCTION` requires an exact pinned identity/hash and never authorizes a new production determination.
 - Decision Application v1 and v2 remain unchanged. No readiness enforcement is inserted into those historical/current compatibility contracts.
-- The Lab displays `REVIEW POLICY — NOT APPROVED FOR PRODUCTION` from the current pack's LAB assessment.
+- The Lab displays `REVIEW POLICY - NOT APPROVED FOR PRODUCTION` from the current pack's LAB assessment.
 
 ## Consequences
 

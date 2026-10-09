@@ -84,7 +84,7 @@ async function makeStoredFixtureLookLikeExplicitLiveDemo(page) {
   });
   await page.reload({ waitUntil: "networkidle" });
   await page.getByRole("tab", { name: "Applicant journey v2" }).click();
-  await page.getByText("LIVE LAB CASE — NOT SAVED", { exact: true }).waitFor();
+  await page.getByText("LIVE LAB CASE - NOT SAVED", { exact: true }).waitFor();
 }
 
 async function main() {
@@ -123,7 +123,7 @@ async function main() {
   await page.getByText("Our review team needs to verify it.", { exact: true }).waitFor();
   await screenshot(page, "09-structured-ownership-pending-review");
   await page.getByRole("tab", { name: "Decision history" }).click();
-  await page.getByText("DEMO FIXTURE — PRECONFIGURED REVIEW DECISIONS", { exact: true }).waitFor();
+  await page.getByText("DEMO FIXTURE - PRECONFIGURED REVIEW DECISIONS", { exact: true }).waitFor();
   await screenshot(page, "10-fixture-review-helper");
   await page.getByRole("button", { name: "Complete fixture review and refresh journey" }).click();
   await page.getByRole("tab", { name: "Applicant journey v2" }).click();
@@ -133,7 +133,7 @@ async function main() {
   await choose(page, "AJV2-05");
   await openAction(page, "evidence");
   await page.getByRole("button", { name: "Continue securely" }).click();
-  await page.getByText("EVIDENCE HANDOFF READY — EXECUTION NOT CONNECTED", { exact: true }).waitFor();
+  await page.getByText("EVIDENCE HANDOFF READY - EXECUTION NOT CONNECTED", { exact: true }).waitFor();
   await page.reload({ waitUntil: "networkidle" });
   await page.getByRole("tab", { name: "Applicant journey v2" }).click();
   await screenshot(page, "12-evidence-handoff-restored");
@@ -152,7 +152,7 @@ async function main() {
   await makeStoredFixtureLookLikeExplicitLiveDemo(page);
   await screenshot(page, "14-live-not-saved-by-default");
   await page.getByRole("button", { name: "Save this Lab session locally for demo/testing" }).click();
-  await page.getByText("Saved only in this browser — Lab testing, not production case storage", { exact: true }).waitFor();
+  await page.getByText("Saved only in this browser - Lab testing, not production case storage", { exact: true }).waitFor();
   await screenshot(page, "15-live-explicit-local-save");
 
   await choose(page, "AJV2-11");

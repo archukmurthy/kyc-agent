@@ -10,7 +10,7 @@ test("committed journey fixtures exactly equal deterministic public-contract fix
   assert.deepEqual(buildJourneyFixtures(), committed);
 });
 
-test("catalogue is exactly CUI01–CUI17 and CUI17 has before/after host states", () => {
+test("catalogue is exactly CUI01-CUI17 and CUI17 has before/after host states", () => {
   assert.deepEqual(committed.fixtures.map(({ id }) => id), Array.from({ length: 17 }, (_, index) => `CUI${String(index + 1).padStart(2, "0")}`));
   assert.deepEqual(committed.fixtures.find(({ id }) => id === "CUI17").states.map(({ id }) => id), ["before", "after"]);
 });

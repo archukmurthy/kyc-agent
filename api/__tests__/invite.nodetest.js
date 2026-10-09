@@ -234,7 +234,7 @@ test("a provider error reports a fixed code, never the raw provider response", a
 
 test("a thrown send error reports a fixed code, never the raw error text", async (t) => {
   const { handler } = setup(t, {
-    sendEmail: async () => { throw new Error("connect ECONNREFUSED 10.0.0.1:443 — internal detail"); },
+    sendEmail: async () => { throw new Error("connect ECONNREFUSED 10.0.0.1:443 - internal detail"); },
   });
   process.env.RESEND_API_KEY = "test-key";
   const res = fakeRes();

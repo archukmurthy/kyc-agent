@@ -1,12 +1,12 @@
 /**
- * AskMorePanel.jsx — the analyst "ask for more information" surface.
+ * AskMorePanel.jsx - the analyst "ask for more information" surface.
  *
  * EXTRACTED FROM App.js as a PURE MOVE, zero behaviour change. Two bodies moved
  * together because one wraps the other: AskMoreButton renders the toggle and, when
  * open, the panel. Mounted from the dossier's Customer Request section.
  *
  * THIS COMPONENT OWNS NO STATE. The open-section key and the in-progress question
- * both live in App.js — the question is read by the dossier payload, so it cannot
+ * both live in App.js - the question is read by the dossier payload, so it cannot
  * move here.
  */
 

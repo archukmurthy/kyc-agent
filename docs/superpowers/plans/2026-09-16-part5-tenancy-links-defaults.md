@@ -1,4 +1,4 @@
-# Part 5 — Tenancy, Links and Default Settings Implementation Plan
+# Part 5 - Tenancy, Links and Default Settings Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - **CommonJS in `api/` and `lib/`** (`module.exports` / `require`) so `src/setupProxy.js` can mount the same handlers under `npm start`.
-- **Every new handler is registered in `src/setupProxy.js`** by requiring the real handler — never by copying its body.
+- **Every new handler is registered in `src/setupProxy.js`** by requiring the real handler - never by copying its body.
 - **Backend tests** are `*.nodetest.js` using `node:test` + `node:assert`, with fakes injected through a `__setDeps` seam; they must be matched by the `test:node` glob in `package.json:26` (`lib/__tests__/*.nodetest.js api/__tests__/*.nodetest.js`).
 - **Frontend tests** are CRA Jest render tests asserting real DOM behaviour.
 - **Tenant resolution stays 3-strict:** no `"nium"` fallback anywhere, client or server.
@@ -64,7 +64,7 @@
 | `src/admin/AdminDashboard.jsx` | Preview URL always carries the tenant. |
 | `src/admin/steps/StepPublish.jsx` | Preview + "View live flow" always carry the tenant; "Apply default settings" action. |
 | `src/superadmin/components/TenantCard.jsx` | URLs always carry the tenant; pre-boarding toggle. |
-| `src/superadmin/components/CredentialsModal.jsx` | URLs already carry the tenant — add the pre-boarding URL. |
+| `src/superadmin/components/CredentialsModal.jsx` | URLs already carry the tenant - add the pre-boarding URL. |
 | `src/superadmin/components/CreateTenantModal.jsx` | Template label wording. |
 | `src/superadmin/SuperAdminDashboard.jsx` | Wire the pre-boarding toggle. |
 | `lib/seedSchemas.js`, `src/pipeline.js` | Brand-neutral FI labels. |
@@ -90,14 +90,14 @@
 **Interfaces:**
 - Consumes: `lib/storage.js` (`get`, `set`).
 - Produces:
-  - `readRegistry(): Promise<Array<Entry>>` — `[]` when absent.
+  - `readRegistry(): Promise<Array<Entry>>` - `[]` when absent.
   - `findTenant(id): Promise<Entry|null>`
   - `tenantExists(id): Promise<boolean>`
-  - `isTenantActive(id): Promise<boolean>` — `false` when missing; `true` unless `isActive === false`.
-  - `isPreboardingEnabled(id): Promise<boolean>` — `true` only when `preboardingEnabled === true`.
-  - `isProtectedTenant(id): Promise<boolean>` — `true` when `isProtected === true` or `isInternal === true`.
+  - `isTenantActive(id): Promise<boolean>` - `false` when missing; `true` unless `isActive === false`.
+  - `isPreboardingEnabled(id): Promise<boolean>` - `true` only when `preboardingEnabled === true`.
+  - `isProtectedTenant(id): Promise<boolean>` - `true` when `isProtected === true` or `isInternal === true`.
   - `upsertEntry(id, patch): Promise<Array<Entry>>`
-  - `__setDeps({ storage })` — test seam.
+  - `__setDeps({ storage })` - test seam.
   - `Entry = { tenantId, companyName, createdAt, createdBy, lastPublishedAt, isActive, isInternal, isBlank, isProtected?, preboardingEnabled? }`
   - `REGISTRY_KEY = "tenant-registry"`
 
@@ -185,7 +185,7 @@ test("a storage failure degrades to an empty registry instead of throwing", asyn
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `node --test lib/__tests__/tenantRegistry.nodetest.js`
-Expected: FAIL — `Cannot find module '../tenantRegistry'`.
+Expected: FAIL - `Cannot find module '../tenantRegistry'`.
 
 - [ ] **Step 3: Implement `lib/tenantRegistry.js`**
 
@@ -203,7 +203,7 @@ const storage = require("./storage");
 
 const REGISTRY_KEY = "tenant-registry";
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { storage };
 
 async function readRegistry() {
@@ -211,7 +211,7 @@ async function readRegistry() {
     const stored = await _deps.storage.get(REGISTRY_KEY);
     return Array.isArray(stored) ? stored : [];
   } catch (_) {
-    // A storage blip must never read as "this tenant exists" — callers treat
+    // A storage blip must never read as "this tenant exists" - callers treat
     // an empty registry as "unknown tenant", which fails closed.
     return [];
   }
@@ -276,14 +276,14 @@ module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `node --test lib/__tests__/tenantRegistry.nodetest.js`
-Expected: PASS — 7 tests.
+Expected: PASS - 7 tests.
 
 - [ ] **Step 5: Write the failing test for 3-strict server resolution**
 
 Replace the `TENANT_ID` case in `lib/__tests__/tenant.nodetest.js` (the test asserting the env fallback resolves) with:
 
 ```js
-test("TENANT_ID env var is NOT a fallback — the server is 3-strict like the client", async (t) => {
+test("TENANT_ID env var is NOT a fallback - the server is 3-strict like the client", async (t) => {
   const prev = process.env.TENANT_ID;
   process.env.TENANT_ID = "nium";
   t.after(() => {
@@ -299,7 +299,7 @@ test("TENANT_ID env var is NOT a fallback — the server is 3-strict like the cl
 - [ ] **Step 6: Run it to verify it fails**
 
 Run: `node --test lib/__tests__/tenant.nodetest.js`
-Expected: FAIL — returns `"nium"`, expected `""`.
+Expected: FAIL - returns `"nium"`, expected `""`.
 
 - [ ] **Step 7: Drop the env fallback**
 
@@ -307,14 +307,14 @@ In `lib/tenant.js`, replace the final line of `getTenantIdFromRequest` (`return 
 
 ```js
   // 3-strict: no TENANT_ID fallback. A request that names no tenant HAS no
-  // tenant — callers return tenant_required rather than silently serving one.
+  // tenant - callers return tenant_required rather than silently serving one.
   return "";
 ```
 
 Update the doc comment above it (priority list item 3) to read:
 
 ```js
- *   3. "" — no tenant. Callers MUST treat this as "tenant required", not
+ *   3. "" - no tenant. Callers MUST treat this as "tenant required", not
  *      silently serve/seed anything for it. There is no env-var fallback.
 ```
 
@@ -328,7 +328,7 @@ Expected: PASS.
 Replace the `TENANT_ID=nium` line with:
 
 ```
-# TENANT_ID is no longer used — tenant resolution is 3-strict (?tenant= or the
+# TENANT_ID is no longer used - tenant resolution is 3-strict (?tenant= or the
 # x-tenant-id header). Set nothing here; a request without a tenant is refused.
 ```
 
@@ -341,7 +341,7 @@ git commit -m "feat(tenancy): tenant registry helper; drop the server TENANT_ID 
 
 ---
 
-## Task 2: `api/config.js` — stop auto-creating tenants
+## Task 2: `api/config.js` - stop auto-creating tenants
 
 **Files:**
 - Modify: `api/config.js:56-87` (`seedTenant`, `readConfig`), `:110-119` (GET)
@@ -417,7 +417,7 @@ test("a legacy tenant (config exists, no registry entry) is served and back-fill
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node --test api/__tests__/config.nodetest.js`
-Expected: FAIL — `handler.__setDeps is not a function`.
+Expected: FAIL - `handler.__setDeps is not a function`.
 
 - [ ] **Step 3: Implement the seam and the gate**
 
@@ -426,7 +426,7 @@ In `api/config.js`, after the `require` block add:
 ```js
 const tenantRegistry = require("../lib/tenantRegistry");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { storage, registry: tenantRegistry };
 ```
 
@@ -435,7 +435,7 @@ Replace every `storage.` call in the file with `_deps.storage.` and every regist
 ```js
 // Seed a tenant that doesn't yet have a config. Only tenants that exist (a
 // registry entry, or a pre-existing config from before the registry) are ever
-// seeded — a typo must not conjure a tenant into being.
+// seeded - a typo must not conjure a tenant into being.
 async function seedTenant(tenant) {
   const seeded = (await _deps.registry.isProtectedTenant(tenant))
     ? buildDefaultConfig(tenant)
@@ -475,7 +475,7 @@ async function readConfig(tenant) {
     const hasLicences = Array.isArray(stored.licences) && stored.licences.length > 0;
     if (!hasLicences) {
       // eslint-disable-next-line no-console
-      console.warn(`Protected tenant "${tenant}" config missing licences — self-healing from the default template`);
+      console.warn(`Protected tenant "${tenant}" config missing licences - self-healing from the default template`);
       // Archive the broken config first: self-heal must never be the only
       // copy of what was there (it used to overwrite silently).
       const brokenVersion = stored._version || 0;
@@ -518,7 +518,7 @@ module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };
 - [ ] **Step 4: Run to verify it passes**
 
 Run: `node --test api/__tests__/config.nodetest.js`
-Expected: PASS. The pre-existing `?tenant=<id> resolves normally` test now needs a registry entry — update it to seed `"tenant-registry": [{ tenantId: TENANT }]` into the fake storage it injects, keeping its cleanup.
+Expected: PASS. The pre-existing `?tenant=<id> resolves normally` test now needs a registry entry - update it to seed `"tenant-registry": [{ tenantId: TENANT }]` into the fake storage it injects, keeping its cleanup.
 
 - [ ] **Step 5: Commit**
 
@@ -719,7 +719,7 @@ test("self-heal archives the broken config before overwriting it", async (t) => 
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node --test api/__tests__/config-protection.nodetest.js`
-Expected: FAIL — DELETE returns 200; the publish guard only fires for `"nium"`; `versionsHandler.__setDeps` is undefined.
+Expected: FAIL - DELETE returns 200; the publish guard only fires for `"nium"`; `versionsHandler.__setDeps` is undefined.
 
 - [ ] **Step 3: Implement in `api/config.js`**
 
@@ -745,7 +745,7 @@ async function authorizeAdmin(tenant, token) {
 Replace the empty-publish guard:
 
 ```js
-      // Protected-tenant protection — refuse empty publishes that would wipe
+      // Protected-tenant protection - refuse empty publishes that would wipe
       // the live schemas. Self-healing only catches reads; this catches writes.
       if (await _deps.registry.isProtectedTenant(tenant)) {
         const lic = Array.isArray(body.licences) ? body.licences.length : 0;
@@ -775,7 +775,7 @@ Add after the requires:
 ```js
 const tenantRegistry = require("../lib/tenantRegistry");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { storage, registry: tenantRegistry };
 ```
 
@@ -824,7 +824,7 @@ git commit -m "feat(tenancy): protect platform tenants by registry flag across d
 
 ---
 
-## Task 4: `api/tenants.js` — registry helper, protection back-fill, pre-boarding toggle
+## Task 4: `api/tenants.js` - registry helper, protection back-fill, pre-boarding toggle
 
 **Files:**
 - Modify: `api/tenants.js:57-91` (registry helpers), `:126-201` (create), `:204-241` (PUT actions)
@@ -951,7 +951,7 @@ test("the seeded platform entry is marked protected", async (t) => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node --test api/__tests__/tenants.nodetest.js`
-Expected: FAIL — `handler.__setDeps is not a function`.
+Expected: FAIL - `handler.__setDeps is not a function`.
 
 - [ ] **Step 3: Implement**
 
@@ -1046,7 +1046,7 @@ Add that named export at the end of `api/config.js`:
 
 ```js
 // Shared reader for other server modules (api/benchmark.js, api/research.js).
-// Returns null for an unknown tenant — callers decide how to respond.
+// Returns null for an unknown tenant - callers decide how to respond.
 module.exports.readConfigForTenant = readConfig;
 ```
 
@@ -1078,8 +1078,8 @@ git commit -m "feat(tenancy): registry-backed tenant flags, pre-boarding toggle,
 **Interfaces:**
 - Consumes: `lib/seedConfig.js#buildDefaultConfig`, `lib/tenantRegistry.js`.
 - Produces:
-  - `listTemplates(): Array<{ id, label, description }>` — currently one entry, `id: "nium-default"`.
-  - `buildTemplateConfig(id, tenantId): Object|null` — brand-cleared config, `_templateId` stamped.
+  - `listTemplates(): Array<{ id, label, description }>` - currently one entry, `id: "nium-default"`.
+  - `buildTemplateConfig(id, tenantId): Object|null` - brand-cleared config, `_templateId` stamped.
   - `GET /api/config-templates` → `{ templates: [...] }` (admin-authed).
   - `GET /api/config-templates?id=nium-default&tenant=<id>` → the built config (admin-authed).
 
@@ -1120,7 +1120,7 @@ test("an unknown template id returns null", () => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node --test lib/__tests__/configTemplates.nodetest.js`
-Expected: FAIL — `Cannot find module '../configTemplates'`.
+Expected: FAIL - `Cannot find module '../configTemplates'`.
 
 - [ ] **Step 3: Implement `lib/configTemplates.js`**
 
@@ -1129,7 +1129,7 @@ Expected: FAIL — `Cannot find module '../configTemplates'`.
 //
 // A template is reference configuration a tenant can START FROM (at creation,
 // via super-admin, or later via the admin "Apply default settings" action).
-// Templates live in code, so they cannot be deleted at runtime — that is the
+// Templates live in code, so they cannot be deleted at runtime - that is the
 // point: the platform must always have something to seed from.
 //
 // Brand fields are CLEARED here. The reference data (licences, entity types,
@@ -1301,7 +1301,7 @@ test("an unknown template id is a 404", async (t) => {
 - [ ] **Step 7: Run to verify it fails**
 
 Run: `node --test api/__tests__/config-templates.nodetest.js`
-Expected: FAIL — `Cannot find module '../config-templates'`.
+Expected: FAIL - `Cannot find module '../config-templates'`.
 
 - [ ] **Step 8: Implement `api/config-templates.js`**
 
@@ -1309,8 +1309,8 @@ Expected: FAIL — `Cannot find module '../config-templates'`.
 // Named configuration templates for the admin "Apply default settings" action
 // and for super-admin tenant creation.
 //
-// GET                       — list available templates (admin-authed)
-// GET ?id=<templateId>      — build that template for the resolved tenant
+// GET                       - list available templates (admin-authed)
+// GET ?id=<templateId>      - build that template for the resolved tenant
 //
 // Admin-authed because a template response is configuration shaped: it is not
 // secret, but it is not public surface either. CommonJS, mirroring api/config.js.
@@ -1321,7 +1321,7 @@ const { getTenantIdFromRequest } = require("../lib/tenant");
 const { verifyPassword } = require("../lib/auth");
 const { listTemplates, buildTemplateConfig } = require("../lib/configTemplates");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { storage, registry: tenantRegistry };
 
 async function authorizeAdmin(tenant, token) {
@@ -1434,7 +1434,7 @@ In `src/__tests__/characterization.pure.test.js`, replace the `MANUAL_FORM_URL` 
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/__tests__/characterization.pure.test.js`
-Expected: FAIL — `expected '' but received 'Nium'`.
+Expected: FAIL - `expected '' but received 'Nium'`.
 
 - [ ] **Step 3: Neutralise the offline fallback**
 
@@ -1467,7 +1467,7 @@ and the offline fallback (lines 42-43) with:
 
 ```js
       // Offline fallback: a neutral local config so the admin UI still renders.
-      // No tenant is special-cased — the live config is the only source of a
+      // No tenant is special-cased - the live config is the only source of a
       // tenant's real settings, and "Apply default settings" (Step 5) is how a
       // template is pulled in deliberately.
       setTenantConfig({ ...buildLocalDefaultConfig(), _tenantId: tenantId, _isBlank: true });
@@ -1507,7 +1507,7 @@ git commit -m "refactor(config): delete the drifted client default-config copy; 
 - Test: `src/admin/steps/__tests__/StepPublish.applyDefaults.test.jsx` (new)
 
 **Interfaces:**
-- Consumes: `GET /api/config-templates?id=nium-default&tenant=<id>` (Task 5); `onChange(patch)` — the existing prop the wizard already passes.
+- Consumes: `GET /api/config-templates?id=nium-default&tenant=<id>` (Task 5); `onChange(patch)` - the existing prop the wizard already passes.
 - Produces: a button labelled `Apply default settings`; on confirm it fetches the template and calls `onChange(templateConfig)`; nothing is published.
 
 - [ ] **Step 1: Write the failing test**
@@ -1577,7 +1577,7 @@ test("declining the confirmation leaves the draft untouched", async () => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/admin/steps/__tests__/StepPublish.applyDefaults.test.jsx`
-Expected: FAIL — no button named "Apply default settings".
+Expected: FAIL - no button named "Apply default settings".
 
 - [ ] **Step 3: Implement**
 
@@ -1725,11 +1725,11 @@ test("an ordinary tenant's URLs carry its own id", () => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/superadmin/components/__tests__/TenantCard.urls.test.jsx`
-Expected: FAIL — the platform tenant renders `/admin` and `/`.
+Expected: FAIL - the platform tenant renders `/admin` and `/`.
 
 - [ ] **Step 3: Fix the URLs**
 
-`src/superadmin/components/TenantCard.jsx` — replace the two URL constants:
+`src/superadmin/components/TenantCard.jsx` - replace the two URL constants:
 
 ```js
   // Every URL carries its tenant. Tenant resolution is 3-strict: a bare /admin
@@ -1745,7 +1745,7 @@ and add a third `UrlRow` under the existing two:
           <UrlRow label="Pre-boarding URL" value={origin + preboardingUrl} />
 ```
 
-`src/admin/AdminDashboard.jsx` — replace the tenant-param logic in `handlePreview`:
+`src/admin/AdminDashboard.jsx` - replace the tenant-param logic in `handlePreview`:
 
 ```js
     const tenantParam = tenantId ? `&tenant=${encodeURIComponent(tenantId)}` : "";
@@ -1758,7 +1758,7 @@ and the `preview_tenant_id` write:
       sessionStorage.setItem(PREVIEW_TENANT_KEY, tenantId);
 ```
 
-`src/admin/steps/StepPublish.jsx` — same two changes in its `handlePreview`:
+`src/admin/steps/StepPublish.jsx` - same two changes in its `handlePreview`:
 
 ```js
       sessionStorage.setItem("preview_tenant_id", activeTenant);
@@ -1775,7 +1775,7 @@ and the "View live flow" button:
             onClick={() => window.open(`/?tenant=${encodeURIComponent(activeTenant)}`, "_blank")}
 ```
 
-`src/superadmin/components/CredentialsModal.jsx` — add the pre-boarding URL beside the existing admin/customer URLs, matching their existing markup:
+`src/superadmin/components/CredentialsModal.jsx` - add the pre-boarding URL beside the existing admin/customer URLs, matching their existing markup:
 
 ```js
   const preboardingUrl = `${origin}/preboarding?tenant=${tenantId}`;
@@ -1854,7 +1854,7 @@ test("an enabled tenant offers Disable", () => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/superadmin/components/__tests__/TenantCard.preboarding.test.jsx`
-Expected: FAIL — no such button.
+Expected: FAIL - no such button.
 
 - [ ] **Step 3: Implement the card changes**
 
@@ -1915,7 +1915,7 @@ In `src/superadmin/components/CreateTenantModal.jsx`, change the second radio ca
 
 ```jsx
           title="Start from default settings"
-          body="UK/SG licences, entity types and reference schemas. Brand details stay blank — the client can modify everything."
+          body="UK/SG licences, entity types and reference schemas. Brand details stay blank - the client can modify everything."
 ```
 
 - [ ] **Step 6: Run the tests**
@@ -1943,13 +1943,13 @@ git commit -m "feat(super-admin): per-tenant pre-boarding toggle"
 **Interfaces:**
 - Consumes: `lib/tenantRegistry.js` (Task 1), `lib/tenant.js#getTenantIdFromRequest`.
 - Produces:
-  - `lib/auth.js#verifyEnvBearer(token, envName): boolean` — constant-time; `false` when the env var is unset or the token is empty.
+  - `lib/auth.js#verifyEnvBearer(token, envName): boolean` - constant-time; `false` when the env var is unset or the token is empty.
   - `GET /api/preboarding-auth?tenant=<id>` → `200 { available: boolean, reason: string|null, companyName }`; `reason` ∈ `tenant_not_found | tenant_inactive | preboarding_disabled | null`.
   - `POST /api/preboarding-auth?tenant=<id>` body `{ password }` → `200 { success: true, token, tenantId, companyName }` or `400 tenant_required` / `404 tenant_not_found` / `403 tenant_inactive` / `403 preboarding_disabled` / `500 not_configured` / `401 invalid_password`.
 
 - [ ] **Step 1: Add the constant-time helper test**
 
-Append to `lib/__tests__/tenant.nodetest.js`'s sibling — create `lib/__tests__/auth.nodetest.js`:
+Append to `lib/__tests__/tenant.nodetest.js`'s sibling - create `lib/__tests__/auth.nodetest.js`:
 
 ```js
 const { test } = require("node:test");
@@ -1980,7 +1980,7 @@ test("verifyEnvBearer matches only the exact value", (t) => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node --test lib/__tests__/auth.nodetest.js`
-Expected: FAIL — `verifyEnvBearer is not a function`.
+Expected: FAIL - `verifyEnvBearer is not a function`.
 
 - [ ] **Step 3: Implement `verifyEnvBearer`**
 
@@ -2066,7 +2066,7 @@ test("no tenant is a 400 before any other work", async (t) => {
   assert.deepStrictEqual(res.body, { error: "tenant_required" });
 });
 
-test("an unknown tenant is a 404 — a typo must not reach the password check", async (t) => {
+test("an unknown tenant is a 404 - a typo must not reach the password check", async (t) => {
   withPassword(t);
   storeWith({ tenantId: "acme", isActive: true, preboardingEnabled: true });
   const { req, res } = fakeReqRes({ query: { tenant: "acmee" }, body: { password: PASSWORD } });
@@ -2145,7 +2145,7 @@ test("GET for an available tenant reports available:true", async (t) => {
 - [ ] **Step 6: Run to verify it fails**
 
 Run: `node --test api/__tests__/preboarding-auth.nodetest.js`
-Expected: FAIL — `Cannot find module '../preboarding-auth'`.
+Expected: FAIL - `Cannot find module '../preboarding-auth'`.
 
 - [ ] **Step 7: Implement `api/preboarding-auth.js`**
 
@@ -2154,7 +2154,7 @@ Expected: FAIL — `Cannot find module '../preboarding-auth'`.
 //
 // Replaces the client-side constant that used to gate the pre-boarding screen
 // in the browser. The password is checked HERE, and the response carries the
-// tenant the server verified — the client uses that tenant for dossier saves
+// tenant the server verified - the client uses that tenant for dossier saves
 // and invite links instead of trusting whatever is in the URL.
 //
 //   GET  /api/preboarding-auth?tenant=<id>  → { available, reason, companyName }
@@ -2174,7 +2174,7 @@ const tenantRegistry = require("../lib/tenantRegistry");
 const { getTenantIdFromRequest } = require("../lib/tenant");
 const { verifyEnvBearer } = require("../lib/auth");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { storage, registry: tenantRegistry };
 
 function readBody(req) {
@@ -2275,7 +2275,7 @@ and next to `app.post("/api/admin-auth", ...)`:
 In `.env.example`, add:
 
 ```
-# Pre-boarding (analyst) access password — checked server-side by
+# Pre-boarding (analyst) access password - checked server-side by
 # /api/preboarding-auth. Shared across tenants for now; per-tenant analyst
 # passwords are tracked as backlog PREB-3.
 PREBOARDING_PASSWORD=change-me-preboarding
@@ -2310,7 +2310,7 @@ git commit -m "feat(preboarding): server-checked, tenant-verified pre-boarding g
 - Consumes: `GET`/`POST /api/preboarding-auth` (Task 10).
 - Produces:
   - `<KYCAgent preboarding />` renders the analyst flow.
-  - `App.js` state `preboardingTenantId` — the tenant returned by the auth response; `buildDossierPayload` and the invite screen use it.
+  - `App.js` state `preboardingTenantId` - the tenant returned by the auth response; `buildDossierPayload` and the invite screen use it.
   - `PreboardingGate` props: `{ tenantId, onUnlocked(token, resolvedTenantId), trackEvent }`.
   - `PreboardingUnavailable` props: `{ reason, tenantId }` where `reason ∈ "tenant_not_found" | "tenant_inactive" | "preboarding_disabled"`.
 
@@ -2353,7 +2353,7 @@ async function mountAtGate() {
 Replace `unlock` so a wrong code is rejected by the server stub:
 
 ```js
-/** Step 2 — the password is checked by /api/preboarding-auth, not the bundle. */
+/** Step 2 - the password is checked by /api/preboarding-auth, not the bundle. */
 async function unlock(code = "ARCH") {
   fireEvent.change(codeInput(), { target: { value: code } });
   fireEvent.click(buttonsWithText(/Access Pre-boarding Agent/i)[0]);
@@ -2364,7 +2364,7 @@ async function unlock(code = "ARCH") {
 Replace the "a wrong code does NOT unlock" test body with:
 
 ```js
-  it("a wrong code does NOT unlock — the server rejects it", async () => {
+  it("a wrong code does NOT unlock - the server rejects it", async () => {
     await mountAtGate();
     fetchRoutes["/api/preboarding-auth"] = (url, opts) =>
       Promise.resolve(
@@ -2406,7 +2406,7 @@ Add two new tests at the end of the "pre-boarding gate" describe:
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/components/preboarding/__tests__/Preboarding.render.test.jsx`
-Expected: FAIL — `KYCAgent` ignores the `preboarding` prop, so the gate never renders.
+Expected: FAIL - `KYCAgent` ignores the `preboarding` prop, so the gate never renders.
 
 - [ ] **Step 3: Add the route**
 
@@ -2448,7 +2448,7 @@ Add near the other early state (just after the `tenantId` line at `:176`):
 ```js
   // Pre-boarding entry. The path (/preboarding) is the real entry; the legacy
   // ?preboarding=1 param is redirected to it once, on mount, so old bookmarks
-  // and emailed links keep working. Read in ONE place — this used to be parsed
+  // and emailed links keep working. Read in ONE place - this used to be parsed
   // separately here and inside resetAll.
   const isPreboardingSurface = preboarding;
   useEffect(() => {
@@ -2516,7 +2516,7 @@ Replace the body of `src/components/preboarding/PreboardingGate.jsx` (keeping it
 
 ```jsx
 /**
- * PreboardingGate.jsx — the analyst access gate, screen 1 of pre-boarding.
+ * PreboardingGate.jsx - the analyst access gate, screen 1 of pre-boarding.
  *
  * The password is checked by the SERVER (POST /api/preboarding-auth). It used
  * to be compared in the browser against a constant in the bundle, which gated
@@ -2595,12 +2595,12 @@ Create `src/components/preboarding/PreboardingUnavailable.jsx`:
 
 ```jsx
 /**
- * PreboardingUnavailable.jsx — shown instead of the access gate when the
+ * PreboardingUnavailable.jsx - shown instead of the access gate when the
  * server says pre-boarding isn't available for this tenant. Three reasons, all
  * answered by the server so the browser never has to guess:
- *   tenant_not_found      — the tenant id in the URL isn't registered
- *   tenant_inactive       — the tenant exists but is deactivated
- *   preboarding_disabled  — pre-boarding is switched off for this tenant
+ *   tenant_not_found      - the tenant id in the URL isn't registered
+ *   tenant_inactive       - the tenant exists but is deactivated
+ *   preboarding_disabled  - pre-boarding is switched off for this tenant
  *
  * Deliberately says nothing about which tenants DO exist: this is a public,
  * unauthenticated surface.
@@ -2655,7 +2655,7 @@ Import it in `PreboardingGate.jsx`: `import { PreboardingUnavailable } from "./P
 
 - [ ] **Step 7: Handle `/preboarding` with no tenant at all**
 
-`src/App.js:4297` already returns `<NoTenantLanding />` when `tenantId` is empty, and that guard runs before the pre-boarding routing block — so `/preboarding` with no `?tenant=` lands there. Give it pre-boarding copy so the analyst is told what to add:
+`src/App.js:4297` already returns `<NoTenantLanding />` when `tenantId` is empty, and that guard runs before the pre-boarding routing block - so `/preboarding` with no `?tenant=` lands there. Give it pre-boarding copy so the analyst is told what to add:
 
 In `src/App.js`, change that guard to:
 
@@ -2696,7 +2696,7 @@ Add to `src/components/preboarding/__tests__/Preboarding.render.test.jsx`:
 - [ ] **Step 8: Run the suite**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/components/preboarding/__tests__/Preboarding.render.test.jsx src/__tests__/noTenantLanding.integration.test.jsx`
-Expected: PASS (all tests, including the two new availability tests and the no-tenant test). The existing no-tenant integration suite must stay green — `surface` defaults to `"onboarding"`, so its copy is unchanged.
+Expected: PASS (all tests, including the two new availability tests and the no-tenant test). The existing no-tenant integration suite must stay green - `surface` defaults to `"onboarding"`, so its copy is unchanged.
 
 - [ ] **Step 9: Verify the build**
 
@@ -2722,8 +2722,8 @@ git commit -m "feat(preboarding): /preboarding route with a server-checked, tena
 **Interfaces:**
 - Consumes: `tenantId`, `agentType` from `src/App.js`.
 - Produces:
-  - `saveDraft(state, { tenantId, agentType })` — stores `{ savedAt, tenantId, agentType, state }`.
-  - `loadDraft({ tenantId, agentType })` — returns the draft only when both match; `null` otherwise (including legacy drafts with no recorded tenant).
+  - `saveDraft(state, { tenantId, agentType })` - stores `{ savedAt, tenantId, agentType, state }`.
+  - `loadDraft({ tenantId, agentType })` - returns the draft only when both match; `null` otherwise (including legacy drafts with no recorded tenant).
   - `clearDraft()` unchanged.
 
 - [ ] **Step 1: Write the failing test**
@@ -2762,7 +2762,7 @@ describe('draft scoping', () => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/utils/__tests__/submissionDraft.test.js`
-Expected: FAIL — cross-tenant load returns the draft.
+Expected: FAIL - cross-tenant load returns the draft.
 
 - [ ] **Step 3: Implement**
 
@@ -2781,7 +2781,7 @@ export function saveDraft(state, scope) {
       agentType: (scope && scope.agentType) || "",
       state,
     }));
-  } catch (_) { /* quota/serialization — ignore, draft is a convenience not a guarantee */ }
+  } catch (_) { /* quota/serialization - ignore, draft is a convenience not a guarantee */ }
 }
 
 export function loadDraft(scope) {
@@ -2792,7 +2792,7 @@ export function loadDraft(scope) {
     if (!parsed || typeof parsed !== "object" || !parsed.state) return null;
     const wantTenant = (scope && scope.tenantId) || "";
     const wantAgent = (scope && scope.agentType) || "";
-    // Legacy drafts (written before scoping) carry no tenant — ignore them
+    // Legacy drafts (written before scoping) carry no tenant - ignore them
     // rather than guess which tenant they belonged to.
     if (!parsed.tenantId || parsed.tenantId !== wantTenant) return null;
     if (parsed.agentType !== wantAgent) return null;
@@ -2895,7 +2895,7 @@ test("a tenant with no configured company name falls back to its tenant id", asy
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node --test api/__tests__/invite.nodetest.js`
-Expected: FAIL — `res.body.subject` is undefined and the text still says "Nium".
+Expected: FAIL - `res.body.subject` is undefined and the text still says "Nium".
 
 - [ ] **Step 3: Implement the email change**
 
@@ -2917,7 +2917,7 @@ Before building the subject:
 Replace the subject/body/sender:
 
 ```js
-  const subject = `Your ${brandName} onboarding is ready${companyName ? ` — ${companyName}` : ""}`;
+  const subject = `Your ${brandName} onboarding is ready${companyName ? ` - ${companyName}` : ""}`;
   const text = `Dear ${contactName},
 
 Thank you for your interest in ${brandName}. We have begun reviewing your application${companyName ? ` for ${companyName}` : ""} and are ready to proceed with the next step.
@@ -2926,7 +2926,7 @@ Please complete your onboarding by clicking the link below:
 
 ${link}
 
-This link is unique to your application. Once you click it, you will be guided through a short onboarding form. The process typically takes 10–15 minutes.
+This link is unique to your application. Once you click it, you will be guided through a short onboarding form. The process typically takes 10-15 minutes.
 
 If you have any questions, please do not hesitate to reach out to your ${brandName} contact.
 
@@ -2975,14 +2975,14 @@ test("Card C renders when the tenant configured one", () => {
 - [ ] **Step 6: Run to verify it fails**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/components/companyLookup/__tests__/JourneyPicker.cardC.test.jsx`
-Expected: FAIL — Card C renders unconditionally.
+Expected: FAIL - Card C renders unconditionally.
 
 - [ ] **Step 7: Implement**
 
 In `src/components/companyLookup/JourneyPicker.jsx`, add `manualFormUrl` to the props and wrap the Card C block:
 
 ```jsx
-        {/* Card C — only when the tenant configured its own manual application
+        {/* Card C - only when the tenant configured its own manual application
             form. There is no platform-wide fallback: a link to someone else's
             form is worse than no card at all. */}
         {manualFormUrl ? (() => {
@@ -3022,7 +3022,7 @@ Expected: PASS.
 - [ ] **Step 9: Verify no customer-facing brand strings remain**
 
 Run: `npx rg -i "nium" src/components src/App.js api/invite.js lib/seedSchemas.js`
-Expected: only internal identifiers (`nium_api`, `niumRegNumber`, `niumBlue`, `nium_invite_`, the Nium API journey block) — all tracked by backlog BRAND-1. No customer-visible sentence, email text or URL.
+Expected: only internal identifiers (`nium_api`, `niumRegNumber`, `niumBlue`, `nium_invite_`, the Nium API journey block) - all tracked by backlog BRAND-1. No customer-visible sentence, email text or URL.
 
 - [ ] **Step 10: Commit**
 
@@ -3063,7 +3063,7 @@ The active tenant is resolved per request, with this priority:
 
 1. `?tenant=` URL query parameter (browser) / `req.query.tenant` (server)
 2. `x-tenant-id` request header
-3. none — a request that names no tenant is refused (`tenant_required`). There
+3. none - a request that names no tenant is refused (`tenant_required`). There
    is no `TENANT_ID` env fallback and no `"nium"` default.
 
 ### URLs

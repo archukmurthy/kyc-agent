@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { adminColors, adminStyles } from "../../admin/adminDesign";
 
 // Shown after tenant creation OR password reset. Can only be dismissed via
-// the explicit "Done" button — clicks outside and Escape are deliberately
+// the explicit "Done" button - clicks outside and Escape are deliberately
 // inert so the super-admin acknowledges they've saved the credentials.
 export default function CredentialsModal({
   tenantId,

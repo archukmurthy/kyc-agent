@@ -220,7 +220,7 @@ test("subject selection explains and highlights the complete subject-centred net
   try {
     rendered.click(byLabel(rendered.container, ".ug-node", "ASDA Delivery Limited"));
     assert.equal(rendered.container.querySelectorAll(".ug-edge.active").length, supplied.relationships.length);
-    assert.match(rendered.container.querySelector(".ug-detail-panel").textContent, /Customer under review — showing relationships that reach this entity/);
+    assert.match(rendered.container.querySelector(".ug-detail-panel").textContent, /Customer under review - showing relationships that reach this entity/);
     assert.match(rendered.container.querySelector(".ug-detail-panel").textContent, /Subject-centred relationship network/);
   } finally { rendered.cleanup(); }
 });

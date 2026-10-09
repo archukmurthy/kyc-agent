@@ -1,5 +1,5 @@
 /**
- * deriveChangeType.js — pure diff → 'add' | 'remove' | 'changed'.
+ * deriveChangeType.js - pure diff → 'add' | 'remove' | 'changed'.
  *
  * No engine dependency. No heuristics. This function is deliberately honest
  * about what values alone can and cannot tell you:
@@ -10,11 +10,11 @@
  *
  * It CANNOT distinguish "correct" (the AI read an existing value wrong) from
  * "update" (the real-world value genuinely changed). That distinction is the
- * customer's intent answer, resolved by the caller — NOT inferred here from
+ * customer's intent answer, resolved by the caller - NOT inferred here from
  * string similarity or any other heuristic. The caller maps:
  *   ai_correction  => 'correct'      genuine_update => 'update'
  *
- * Degenerate input (both empty) is reported as 'changed' — it is a no-op the
+ * Degenerate input (both empty) is reported as 'changed' - it is a no-op the
  * caller should never have flagged as a diff, and there is no 'nochange'
  * outcome in the contract.
  */

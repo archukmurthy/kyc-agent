@@ -1,5 +1,5 @@
 /**
- * CompanyLookupPage.jsx — the Company Lookup screen, step 0 of the wizard.
+ * CompanyLookupPage.jsx - the Company Lookup screen, step 0 of the wizard.
  *
  * EXTRACTED FROM App.js as a PURE MOVE, zero behaviour change. This is slice 2
  * and the FINAL piece of the Journey/Lookup extraction: slice 1 took the
@@ -19,7 +19,7 @@
  *   - setRegNumberSource is LOAD-BEARING and easy to lose. The reg-number input
  *     writes TWICE in one handler: setRegNumber(v) AND setRegNumberSource(
  *     v.trim() ? "customer" : null). A move that carries only the first looks
- *     entirely correct on this screen — the text still round-trips — and
+ *     entirely correct on this screen - the text still round-trips - and
  *     silently breaks provenance downstream, flipping the Applicant gate from
  *     "You provided this" to "Found by research". The oracle drives to that
  *     gate specifically to catch it.
@@ -27,19 +27,19 @@
  *     in App.js: the picker, the AI-Documents Back button and ConfirmStep all
  *     consume it.
  *
- * MOVED VERBATIM, DELIBERATELY NOT "FIXED" — three known oddities that are
+ * MOVED VERBATIM, DELIBERATELY NOT "FIXED" - three known oddities that are
  * logged decisions elsewhere, not defects to clean up in a pure move:
  *
  *   1. The Continue gate is INERT-BY-STYLE, not semantically disabled. App's
  *      <Btn> renders no `disabled` attribute; it only dims the button and
  *      withholds onClick. Assistive tech sees an enabled button that does
- *      nothing. Separate a11y decision — unchanged here.
+ *      nothing. Separate a11y decision - unchanged here.
  *   2. (Removed.) The dead pendingReseedMode === "re_derive" short-circuit is
  *      gone: a wrong entity type is now corrected inline on the Applicant page
  *      (App.js applyCorrections).
  *   3. The four inline validation messages cannot fire, because Continue's
  *      gating condition tests the same four fields as its onClick guards.
- *      Defensive code — kept intact.
+ *      Defensive code - kept intact.
  *
  * The oracle is CompanyLookupPage.render.test.jsx (24 assertions), written
  * against the inline screen BEFORE this move and green after it, UNCHANGED. If

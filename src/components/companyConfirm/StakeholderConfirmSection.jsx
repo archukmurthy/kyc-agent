@@ -1,9 +1,9 @@
 /**
- * StakeholderConfirmSection.jsx — the People section of the Confirm page.
+ * StakeholderConfirmSection.jsx - the People section of the Confirm page.
  *
  * EXTRACTED FROM App.js (slice 2), zero behaviour change. The four render
- * functions below — the section, a person's attribute row, that person's
- * documents, and a pending customer-added person — moved here VERBATIM. What
+ * functions below - the section, a person's attribute row, that person's
+ * documents, and a pending customer-added person - moved here VERBATIM. What
  * changed is only how they get their data: they used to close over App's
  * scope, and now arrive through the prop interface declared on the component.
  *
@@ -15,14 +15,14 @@
  * THE HELPER SPLIT. The PURE helpers of this family (stkConfirmFields,
  * stkFieldFound, stkFieldDisplay, isPersonLowConfidence) live in
  * peopleHelpers.js and are imported by both sides. The IMPURE ones did NOT
- * move — personWithEdits reads stakeholdersRef, isPersonAttributeCorrected
+ * move - personWithEdits reads stakeholdersRef, isPersonAttributeCorrected
  * reads research, isPersonAttributeSettled composes those with two state maps,
  * and stkNextPageFields / stkCorrectedFields build on them. Those stay in
  * App.js and arrive as props, so there is still ONE implementation of each
  * rule rather than a copy per side.
  *
  * REFS STAY REFS. dialogueStateRef is passed through as the ref it is and read
- * live via .current — never snapshotted, never lifted into state.
+ * live via .current - never snapshotted, never lifted into state.
  */
 
 import React from "react";
@@ -123,7 +123,7 @@ export function StakeholderConfirmSection({
       personEditing && personEditing.stakeholderId === s.id && personEditing.fieldKey === f.key;
     // "Edit on next page" is only true when it IS next-page work. While the
     // inline editor is open, or once the value has been corrected here, the
-    // edit is happening on this page — saying otherwise was simply wrong.
+    // edit is happening on this page - saying otherwise was simply wrong.
     const disputed = !ticked && !corrected && !editingThis;
     const openEditor = () =>
       setPersonEditing({
@@ -246,7 +246,7 @@ export function StakeholderConfirmSection({
      * ONE CARD PER DOCUMENT, not one per change.
      *
      * Correcting John's date of birth AND his nationality both classify to
-     * Proof of Identity — one passport answers both, and canonicalDocs already
+     * Proof of Identity - one passport answers both, and canonicalDocs already
      * collapses them to a single entry keyed (stakeholderId, docType). The
      * card, though, was rendered per dialogue snapshot, so the customer was
      * asked for the same passport twice. Both cards even drove the same upload
@@ -255,7 +255,7 @@ export function StakeholderConfirmSection({
      * Scope rules are unchanged: identity evidence stays per person, and a
      * company-wide document still renders on its anchor person only.
      *
-     * The analyst strip stays per SNAPSHOT — it audits each change, so one per
+     * The analyst strip stays per SNAPSHOT - it audits each change, so one per
      * attribute is correct there.
      */
     const seenDocKeys = new Set();
@@ -333,10 +333,10 @@ export function StakeholderConfirmSection({
     if (!item || !Array.isArray(item.stakeholders) || item.stakeholders.length === 0) {
       return null;
     }
-    // Exclude registry exemption notices — they are not people. If nothing real
+    // Exclude registry exemption notices - they are not people. If nothing real
     // remains, render nothing here so the field falls through to the normal
     // confirm row showing the raw registry value.
-    // Render the person as the customer has them NOW — research values with any
+    // Render the person as the customer has them NOW - research values with any
     // inline correction applied on top. Without this the card kept showing the
     // original after a correction was saved.
     const realStakeholders = item.stakeholders
@@ -412,7 +412,7 @@ export function StakeholderConfirmSection({
                 .filter((f) => !isPersonAttributeCorrected(item, s, f))
                 .map((f) => f.label);
           // What actually needs the customer HERE: a value research returned
-          // that they haven't settled. A pure gap is NOT "needs you" — there
+          // that they haven't settled. A pure gap is NOT "needs you" - there
           // is no control on this card to supply it, the row already says
           // "collected on next page", and Fill Gaps is where that happens.
           // Counting it here was telling the customer to act with no way to.
@@ -425,7 +425,7 @@ export function StakeholderConfirmSection({
                 .map((f) => f.label);
           // A person with outstanding attributes must not LOOK settled. The
           // header tick means "this person belongs", not "everything about them
-          // is confirmed" — but rendered solid green next to a green avatar it
+          // is confirmed" - but rendered solid green next to a green avatar it
           // read as done, identically to a fully verified person. Same rule the
           // pre-filled rows use: their ✓ is only green when the row is checked
           // AND needs no attention.
@@ -676,7 +676,7 @@ export function StakeholderConfirmSection({
                   ) : !needsEDD ? (
                     // Listed-company person: the AI-returned values render
                     // read-only but each is individually unticked-able to
-                    // CORRECT a value the AI got wrong — same mechanism as the
+                    // CORRECT a value the AI got wrong - same mechanism as the
                     // private card (isStkFieldConfirmed / toggleStkFieldConfirm
                     // + "edit on next page"). This is correction of surfaced
                     // data only: fields the AI did NOT return stay hidden, so we
@@ -701,7 +701,7 @@ export function StakeholderConfirmSection({
                         {stkConfirmFields(s, ubo).map((f) => {
                           // A gap is not a warning. Nothing is wrong with a value
                           // research simply didn't return, and there is no control
-                          // here to act on it — it is collected on the next page.
+                          // here to act on it - it is collected on the next page.
                           // Same calm green as the tick and the shareholding pill.
                           const deferredTag = {
                             fontSize: 10, fontWeight: 700, color: "#1a6b56",

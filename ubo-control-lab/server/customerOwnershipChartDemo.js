@@ -819,7 +819,7 @@ function buildChartAnalysis({ candidateFacts, operationEvidenceReferences, issue
     contractVersion: "ubo-demo-chart-analysis-v1",
     calculationSemanticsVersion: CHART_CALCULATION_SEMANTICS_VERSION,
     sourceMode: "CUSTOMER_UPLOADED_DOCUMENT",
-    heading: "Based on your uploaded chart — not independently verified",
+    heading: "Based on your uploaded chart - not independently verified",
     provisionalDecisions: {
       decisionOrigin: "UBO_DEMO_AUTOMATIC_REVIEW",
       humanApproval: false,

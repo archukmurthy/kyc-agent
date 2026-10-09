@@ -142,7 +142,7 @@ describe("submitBlockers", () => {
       corrections: { corrected_addressLine1: "1 New St" }, // (a) satisfied
       docs: [DOC],
     };
-    // Correcting resolves the row but NOT the document — the compliance rule.
+    // Correcting resolves the row but NOT the document - the compliance rule.
     const blocked = submitBlockers({ ...base, uploads: {} });
     expect(blocked).toHaveLength(1);
     expect(blocked[0]).toMatchObject({ kind: BLOCKER_KIND.MISSING_DOCUMENT, label: DOC.docType });
@@ -282,7 +282,7 @@ describe("scope-aware document dedup (6a) - identity evidence is per person", ()
 /**
  * THE REGRESSION TEST for the company-wide-document defect. Scope used to be
  * read off the fieldId alone, so a document triggered by a person BECAME
- * per-person — removing two UBOs opened two Ownership Chart requests for the
+ * per-person - removing two UBOs opened two Ownership Chart requests for the
  * one chart that exists, and uploading it once could not close the other.
  * Scope is a property of the DOCUMENT; the trigger only says who asked.
  */
@@ -329,7 +329,7 @@ describe("company-wide documents are ONE request however many people trigger the
     expect(submitBlockers({ found: [], docs, uploads })).toEqual([]);
   });
 
-  /** The fix must NOT loosen identity evidence — that was the earlier P1. */
+  /** The fix must NOT loosen identity evidence - that was the earlier P1. */
   it("does not make identity evidence company-wide by accident", () => {
     const docs = canonicalDocs([johnRemoval, janeRemoval, janePoi]);
     expect(docs).toHaveLength(2); // one chart + Jane's POI
@@ -353,7 +353,7 @@ describe("company-wide documents are ONE request however many people trigger the
  * Two rule paths, one real filing. A company-level director edit emits
  * 'Updated Director Registry'; a person-level removal emits 'List of
  * Directors'. Doing both asked the customer for the same document twice.
- * Merged in the presentation layer only — the policy table and the audit
+ * Merged in the presentation layer only - the policy table and the audit
  * trail keep the precise rule-level name.
  */
 describe("aliased document types collapse to one request", () => {
@@ -403,7 +403,7 @@ describe("aliased document types collapse to one request", () => {
 /**
  * 'Supporting Registration Document' is one placeholder name (policy table open
  * question O3) standing in for BRN / VAT / licence documents. Different filings
- * wearing one name must NOT collapse into a single upload — decided with
+ * wearing one name must NOT collapse into a single upload - decided with
  * Archana 2026-07-30: over-collect rather than under-collect.
  */
 describe("per-field placeholder documents do not collapse", () => {
@@ -515,7 +515,7 @@ describe("an ADDED person's documents are per-person too (commit 7 × 6a)", () =
 /**
  * Person attributes join the tiles, so the page stops telling the customer two
  * different things: eight amber "needs you" badges on person cards next to a
- * tile reading 4. Reproduces the real dummy-data shape — five found attributes
+ * tile reading 4. Reproduces the real dummy-data shape - five found attributes
  * per person plus a missing PEP status.
  */
 describe("person attributes count toward the tiles", () => {
@@ -709,7 +709,7 @@ describe("prefillBreakdown", () => {
 describe("rows form - original indices survive a filtered subset", () => {
   // The vital-row table renders a SUBSET of research.found (stakeholder fields
   // render as person cards). `checks` stays keyed by the original index, so the
-  // gate must be fed {item, idx} pairs — re-indexing would read the wrong row.
+  // gate must be fed {item, idx} pairs - re-indexing would read the wrong row.
   const found = [probable, { field: "directors", label: "Directors", verificationStatus: "probable" }, indicative];
   const vitalRows = [{ item: found[0], idx: 0 }, { item: found[2], idx: 2 }];
 

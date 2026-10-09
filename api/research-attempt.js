@@ -4,14 +4,14 @@
 //
 //   POST /api/research-attempt  { applicationId }  → { allowed, attemptsUsed, remaining }
 //
-// Unauthenticated by necessity (a fresh customer has no credential — PLAT-7).
+// Unauthenticated by necessity (a fresh customer has no credential - PLAT-7).
 // The id must be a UUID so the key space can't be stuffed with arbitrary
 // strings. Fails CLOSED on a storage error. Spend is further bounded by the
 // /api/research rate limit.
 //
 // An allowed attempt also returns a research grant (lib/researchGrant.js). It
 // is issued for symmetry only: /api/research cannot require it from a fresh
-// customer, who has no credential to bind it to (RERES-2 scope limit) — so a
+// customer, who has no credential to bind it to (RERES-2 scope limit) - so a
 // missing RESEARCH_GRANT_SECRET never blocks a search here, only omits the
 // unused grant (unlike /api/search-attempt, where research does enforce it).
 //
@@ -48,14 +48,14 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ allowed: false, attemptsUsed: used, remaining: 0 });
     }
     // The grant isn't enforced for fresh customers (see header comment), so a
-    // missing secret must not refuse the search — it just means no grant ships.
+    // missing secret must not refuse the search - it just means no grant ships.
     let grant;
     try {
       grant = _deps.grant.mint({ subject: `application:${applicationId.toLowerCase()}`, tenantId: "" });
     } catch (_) {
-      console.warn("[research-attempt] research grant unavailable (no secret) — allowing without one");
+      console.warn("[research-attempt] research grant unavailable (no secret) - allowing without one");
     }
-    // ponytail: read-modify-write, not atomic — any number of concurrent requests
+    // ponytail: read-modify-write, not atomic - any number of concurrent requests
     // that read the count before the first write lands all pass, and a caller can
     // mint a fresh UUID at will. The real bound is the per-caller /api/research
     // rate limit, not this counter (BACKLOG RERES-2); swap for an atomic INCR plus

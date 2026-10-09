@@ -1,4 +1,4 @@
-# Part 3 — Customer Correction → Re-research Implementation Plan
+# Part 3 - Customer Correction → Re-research Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -17,7 +17,7 @@
 - **No new runtime dependency.**
 - **Tenant resolution stays 3-strict**: no `"nium"` fallback anywhere, client or server.
 - **Inline styles only** in React; match the surrounding file's conventions.
-- **Refs, not state, for gap/stakeholder form values** (`gapRef`, `stakeholdersRef`) — do not lift to `useState`. Hooks in `src/App.js` are never conditional; new `useState` calls are added unconditionally next to related state.
+- **Refs, not state, for gap/stakeholder form values** (`gapRef`, `stakeholdersRef`) - do not lift to `useState`. Hooks in `src/App.js` are never conditional; new `useState` calls are added unconditionally next to related state.
 - **Never call a real paid API in tests.**
 - **Decision rule (spec §6.1):** entity type only → re-derive (no search, no retry). Anything else (company name, country, registration number, ownership type, or a mix) → full re-search, one retry consumed.
 - **Customer gets 2 re-searches**; the analyst's original search does not count.
@@ -30,10 +30,10 @@
 ### Refinements over the spec (controller decisions, binding)
 
 1. **Migration 027**, not 026. `owned_by` and `last_customer_action_at` already exist (Part 1, migration 026). 027 adds `customer_searches`, `entity_dossier_versions` and `onboarding_sessions.dossier_id`.
-2. **The server snapshots on every UPDATE** of an existing dossier, whoever writes it — no client `snapshot` flag. `created_by` is the verified actor kind; `reason` comes from a whitelisted body `saveReason` (`customer_correction` | `analyst_update` | `customer_update`), defaulting by actor kind. A snapshot is skipped when the ownership re-check would refuse the write.
+2. **The server snapshots on every UPDATE** of an existing dossier, whoever writes it - no client `snapshot` flag. `created_by` is the verified actor kind; `reason` comes from a whitelisted body `saveReason` (`customer_correction` | `analyst_update` | `customer_update`), defaulting by actor kind. A snapshot is skipped when the ownership re-check would refuse the write.
 3. **The snapshot happens at the post-research save**, not before research: nothing is overwritten until that save, so the analyst's original is still intact if research fails.
 4. **`POST /api/search-attempt` is customer-only** (an analyst never consumes the customer's retries → `403 forbidden`). The atomic increment refuses a third search and also flips `owned_by` to `'customer'` (consuming a search is a customer action). `GET` stays readable by both. Both **fail closed** on a DB error (`allowed: false`).
-5. **`POST /api/research-attempt`** (fresh customers) requires a UUID `applicationId`, is unauthenticated, and fails closed on a storage error. `/api/research` itself does not check the count (bounded by Part 2's rate limit) — backlog note in Task 9.
+5. **`POST /api/research-attempt`** (fresh customers) requires a UUID `applicationId`, is unauthenticated, and fails closed on a storage error. `/api/research` itself does not check the count (bounded by Part 2's rate limit) - backlog note in Task 9.
 6. **`/api/submit` only links a dossier for a verified customer credential** whose token names that dossier in that tenant; otherwise `dossierId` is dropped before the payload is queued. The ownership flip happens inside `finalizeSubmission`'s transaction.
 7. **The "genuinely changed" forks stay.** Their "You got it wrong" buttons (`ownership-misclassified`, `regnumber-misclassified`) now open an inline correction input instead of resetting. `facts-reset-confirm` and its panel are removed.
 8. **The `INSERT INTO tenants` upsert in `api/save-dossier.js` stays** (Part 1 decision: the registry and the Postgres `tenants` table are different stores).
@@ -245,18 +245,18 @@ test("unknown correction keys are ignored", () => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node --test src/reresearch/tests/correctionPlan.nodetest.js`
-Expected: FAIL — `Cannot find module '../correctionPlan'`.
+Expected: FAIL - `Cannot find module '../correctionPlan'`.
 
 - [ ] **Step 3: Implement `src/reresearch/correctionPlan.js`**
 
 ```js
 /**
- * correctionPlan.js — pure decision for a customer's correction of the five
+ * correctionPlan.js - pure decision for a customer's correction of the five
  * foundational facts on the Applicant page.
  *
  * Rule (spec §6.1): correcting the entity type ALONE re-derives the schema from
- * the existing research (no search, no retry spent). Any other change — company
- * name, country, registration number, ownership type, or a mix — re-runs the
+ * the existing research (no search, no retry spent). Any other change - company
+ * name, country, registration number, ownership type, or a mix - re-runs the
  * research with the corrected values and spends one of the customer's two
  * server-counted re-searches.
  *
@@ -305,7 +305,7 @@ Expected: PASS, 10 tests.
 - [ ] **Step 5: Wire `src/reresearch/tests` into `test:node`**
 
 Run first: `node --test src/reresearch/tests/*.nodetest.js`
-Expected: PASS. If any pre-existing file there fails, stop and report NEEDS_CONTEXT with the failing test names — do not edit those tests.
+Expected: PASS. If any pre-existing file there fails, stop and report NEEDS_CONTEXT with the failing test names - do not edit those tests.
 
 Then in `package.json`, change the `test:node` script to:
 
@@ -481,7 +481,7 @@ test("an analyst must name the dossier to read", async () => {
 });
 
 test("a DB failure refuses the search (fail closed) with a fixed code", async () => {
-  const throwingSql = () => { throw new Error("connection terminated — internal detail"); };
+  const throwingSql = () => { throw new Error("connection terminated - internal detail"); };
   handler.__setDeps({ neon: () => throwingSql, access: accessWith(CUSTOMER) });
   const res = fakeRes();
   await handler(post(), res);
@@ -587,7 +587,7 @@ test("only POST is accepted", async () => {
 - [ ] **Step 3: Run to verify both fail**
 
 Run: `node --test api/__tests__/search-attempt.nodetest.js api/__tests__/research-attempt.nodetest.js`
-Expected: FAIL — old response shape; `Cannot find module '../research-attempt'`.
+Expected: FAIL - old response shape; `Cannot find module '../research-attempt'`.
 
 - [ ] **Step 4: Rewrite `api/search-attempt.js`**
 
@@ -604,7 +604,7 @@ Expected: FAIL — old response shape; `Cannot find module '../research-attempt'
 // dossier id comes only from its signed token; an analyst names one with
 // ?dossierId= to read. POST is customer-only. The increment is a single
 // conditional UPDATE, so two concurrent clicks cannot both get the second
-// search, and it flips owned_by to 'customer' — spending a search is a
+// search, and it flips owned_by to 'customer' - spending a search is a
 // customer action, after which the analyst is read-only.
 //
 // Fails CLOSED: on a DB error the search is refused (the customer falls back
@@ -705,7 +705,7 @@ module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };
 //
 //   POST /api/research-attempt  { applicationId }  → { allowed, attemptsUsed, remaining }
 //
-// Unauthenticated by necessity (a fresh customer has no credential — PLAT-7).
+// Unauthenticated by necessity (a fresh customer has no credential - PLAT-7).
 // The id must be a UUID so the key space can't be stuffed with arbitrary
 // strings. Fails CLOSED on a storage error. Spend is further bounded by the
 // /api/research rate limit.
@@ -735,7 +735,7 @@ module.exports = async function handler(req, res) {
     if (used >= SEARCH_CAP) {
       return res.status(200).json({ allowed: false, attemptsUsed: used, remaining: 0 });
     }
-    // ponytail: read-modify-write, not atomic — two concurrent clicks could both
+    // ponytail: read-modify-write, not atomic - two concurrent clicks could both
     // pass at used=1. Bounded (at most one extra search) and rate-limited; swap
     // for an atomic INCR if it ever matters.
     const attemptsUsed = used + 1;
@@ -821,7 +821,7 @@ git commit -m "feat(reresearch): server-counted customer re-searches (cap 2) for
 
 In `api/__tests__/save-dossier.nodetest.js`:
 
-1. In `fakeSql`, add this branch as the FIRST check inside `sql` (before the `INSERT INTO tenants` check — the snapshot statement contains `SELECT ... FROM entity_dossiers`, which the lookup regex would otherwise swallow):
+1. In `fakeSql`, add this branch as the FIRST check inside `sql` (before the `INSERT INTO tenants` check - the snapshot statement contains `SELECT ... FROM entity_dossiers`, which the lookup regex would otherwise swallow):
 
 ```js
     if (/INSERT INTO entity_dossier_versions/i.test(text)) { log.push({ kind: "snapshot", text, values }); return Promise.resolve([]); }
@@ -917,7 +917,7 @@ test("the dossier read includes the customer's re-search count", async () => {
 - [ ] **Step 3: Run to verify they fail**
 
 Run: `node --test api/__tests__/save-dossier.nodetest.js api/__tests__/get-dossier.nodetest.js`
-Expected: FAIL — no snapshot statement; `search_attempts` still written; `customer_searches` not selected.
+Expected: FAIL - no snapshot statement; `search_attempts` still written; `customer_searches` not selected.
 
 - [ ] **Step 4: Implement in `api/save-dossier.js`**
 
@@ -935,7 +935,7 @@ Expected: FAIL — no snapshot statement; `search_attempts` still written; `cust
 3. Directly after the `const isCustomer = actor.kind === "customer";` line, add:
 
 ```js
-    // Why this version is being replaced — whitelisted, never free text.
+    // Why this version is being replaced - whitelisted, never free text.
     const SAVE_REASONS = ["customer_correction", "analyst_update", "customer_update"];
     const reason = SAVE_REASONS.includes(saveReason) ? saveReason : isCustomer ? "customer_update" : "analyst_update";
 ```
@@ -979,7 +979,7 @@ Expected: PASS, 0 failures.
 
 - [ ] **Step 7: Verify the snapshot SQL against the dev database**
 
-Run (zero-row statement against a nil UUID — writes nothing, proves the SQL parses and type-checks):
+Run (zero-row statement against a nil UUID - writes nothing, proves the SQL parses and type-checks):
 
 ```bash
 node -e '
@@ -1131,7 +1131,7 @@ test("a submission without a dossier writes a null link and flips nothing", asyn
 - [ ] **Step 2: Run to verify they fail**
 
 Run: `node --test api/__tests__/submit-handler.nodetest.js api/__tests__/finalizeSubmission.nodetest.js`
-Expected: FAIL — `dossierId` passes through untouched; no `dossier_id` column; no ownership flip.
+Expected: FAIL - `dossierId` passes through untouched; no `dossier_id` column; no ownership flip.
 
 - [ ] **Step 3: Implement in `api/submit.js`**
 
@@ -1159,7 +1159,7 @@ and change the destructuring line to `const { submissionId, tenantId, company } 
 
 ```js
   // A submission may name the analyst dossier it came from, but only the
-  // customer holding that dossier's signed link may claim it — otherwise anyone
+  // customer holding that dossier's signed link may claim it - otherwise anyone
   // could attach a submission to (and lock the analyst out of) any dossier.
   let verifiedDossierId = null;
   if (rawBody.dossierId) {
@@ -1227,7 +1227,7 @@ git commit -m "feat(submit): verified customer submissions record their source d
 - Produces (component props, in addition to the existing ones except `onReset`, which is removed):
   - each `facts[]` item gains `editValue` (the raw id/code/text to pre-fill).
   - `countryOptions: [{ value, label }]`, `entityTypeOptions: [{ value, label }]` (existing `ownershipTypeOptions` reused).
-  - `onApplyCorrections(corrections)` — `corrections` has only the CHANGED keys among `companyName`, `registrationNumber`, `countryCode`, `entityType`, `ownershipType` (fact key `country` maps to `countryCode`), values trimmed.
+  - `onApplyCorrections(corrections)` - `corrections` has only the CHANGED keys among `companyName`, `registrationNumber`, `countryCode`, `entityType`, `ownershipType` (fact key `country` maps to `countryCode`), values trimmed.
   - `correctionBusy: boolean`, `correctionError: string`.
 - Test ids: inputs `correct-companyName`, `correct-country`, `correct-entityType`, `correct-ownershipType`, `correct-registrationNumber`; panel `facts-corrections-panel`; buttons `facts-apply-corrections`, `facts-corrections-cancel`; error `facts-corrections-error`. Unchanged: `foundational-facts-gate`, `fact-<key>`, `ownership-fork-panel`, `ownership-misclassified`, `ownership-genuinely-changed`, `ownership-changed-panel`, `ownership-new-type`, `ownership-changed-confirm`, `regnumber-*` equivalents.
 
@@ -1391,7 +1391,7 @@ test("busy state disables the button and relabels it; the error is shown", () =>
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/components/companyConfirm/__tests__/FoundationalFactsGate.test.jsx`
-Expected: FAIL — no correction inputs.
+Expected: FAIL - no correction inputs.
 
 - [ ] **Step 3: Rewrite `src/components/companyConfirm/FoundationalFactsGate.jsx`**
 
@@ -1399,7 +1399,7 @@ Replace the whole file with:
 
 ```jsx
 /**
- * FoundationalFactsGate.jsx — the five foundational facts used to research the
+ * FoundationalFactsGate.jsx - the five foundational facts used to research the
  * company, shown at the TOP of the Applicant page (NOT a new step), each with a
  * confirm checkbox (checked by default). The applicant section below is
  * revealed by the parent only once all five are confirmed.
@@ -1816,7 +1816,7 @@ git commit -m "feat(applicant): correct a foundational fact inline instead of re
 - Consumes: Task 2 `planCorrection`; Task 3 `POST /api/search-attempt` → `{ allowed, attemptsUsed, remaining }`, `POST /api/research-attempt` `{ applicationId }` → same; Task 4 `saveReason`, `customer_searches`; Task 6 gate props; `postReresearchFailureFlag({ submissionId, dossierId, jurisdiction, stage, reason, headers })`; `CONTACT_ADMIN_MSG`, `evaluateSearchCap`.
 - Produces (inside `KYCAgent`):
   - `doResearch(journeyOverride, { overrides, correction } = {})` → resolves `{ research, coverage }` on success, `null` on failure. `overrides` = `{ companyName, registrationNumber, countryCode, entityType, ownershipType }`.
-  - `buildDossierPayload(overrides = {})`, `saveDossier({ overrides, reason } = {})` — `overrides` may set `companyName`, `countryCode`, `entityType`, `ownershipType`, `regNumber`, `regNumberSource`, `research`, `coverage`.
+  - `buildDossierPayload(overrides = {})`, `saveDossier({ overrides, reason } = {})` - `overrides` may set `companyName`, `countryCode`, `entityType`, `ownershipType`, `regNumber`, `regNumberSource`, `research`, `coverage`.
   - `applyCorrections(corrections)`; state `correctionBusy`, `correctionError`; `seededBy` becomes settable.
   - `ApplicantPage` props: `onApplyCorrections`, `correctionBusy`, `correctionError`, `countryOptions`, `entityTypeOptions`.
 
@@ -1971,12 +1971,12 @@ describe("correcting a foundational fact", () => {
 });
 ```
 
-The `gapField("email")` helper already exists in the file; if the email placeholder differs, read the applicant section and use the existing applicant email field's placeholder — do not weaken the assertion. If `driveToApplicant` leaves `onboardingSubmissionId` unset (Dummy Research path), make `doDummyResearch` set it the same way `doResearch` does (`setOnboardingSubmissionId(genUUID())` when null) and mention it in your report.
+The `gapField("email")` helper already exists in the file; if the email placeholder differs, read the applicant section and use the existing applicant email field's placeholder - do not weaken the assertion. If `driveToApplicant` leaves `onboardingSubmissionId` unset (Dummy Research path), make `doDummyResearch` set it the same way `doResearch` does (`setOnboardingSubmissionId(genUUID())` when null) and mention it in your report.
 
 - [ ] **Step 2: Run to verify they fail**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/components/applicant/__tests__/ApplicantPage.render.test.jsx`
-Expected: FAIL — no correction inputs wired; no `applyCorrections`.
+Expected: FAIL - no correction inputs wired; no `applyCorrections`.
 
 - [ ] **Step 3: State and imports in `src/App.js`**
 
@@ -2011,7 +2011,7 @@ In `doResearch`:
 2. Immediately after the demo confirm guard block, add:
 
 ```js
-    // A correction passes the corrected facts EXPLICITLY — state setters from the
+    // A correction passes the corrected facts EXPLICITLY - state setters from the
     // same click have not re-rendered yet, so the closure values are stale.
     const facts = overrides
       ? {
@@ -2192,7 +2192,7 @@ Directly after `cancelFactDispute` (in the foundational-facts handler section), 
       return;
     }
 
-    // ponytail: demo mode never spends a paid search — the corrected facts are
+    // ponytail: demo mode never spends a paid search - the corrected facts are
     // kept and the existing (dummy) research stands. Real runs go below.
     if (demoMode) { cancelFactDispute(); return; }
 
@@ -2240,7 +2240,7 @@ Directly after `cancelFactDispute` (in the foundational-facts handler section), 
   };
 ```
 
-(Check `COUNTRIES` is in scope in `App.js` — it is used for `countryObj`.)
+(Check `COUNTRIES` is in scope in `App.js` - it is used for `countryObj`.)
 
 2. Change `const buildDossierPayload = () => {` to `const buildDossierPayload = (overrides = {}) => {` and add as its first lines:
 
@@ -2280,7 +2280,7 @@ and change `companyName: dossierCompany().name,` in the `trackEvent` call to `co
 
 6. In the auto-save `useEffect` condition, change `((agentType === "preboarding" && preboardingUnlocked) || seededBy === "customer") &&` to `agentType === "preboarding" && preboardingUnlocked &&` (a correction saves explicitly; a fresh customer has no dossier to save), and update the comment above it to say so.
 
-7. Every existing call site of `saveDossier()` with no arguments keeps working (defaults). `DossierView.jsx` calls `dossierCompany()` with no argument — still valid.
+7. Every existing call site of `saveDossier()` with no arguments keeps working (defaults). `DossierView.jsx` calls `dossierCompany()` with no argument - still valid.
 
 - [ ] **Step 7: `proceedFromJourney` uses the server counter**
 
@@ -2302,7 +2302,7 @@ and change `const proceedFromJourney = () => {` to `const proceedFromJourney = a
 
 - [ ] **Step 8: Remove the dead re-derive path**
 
-Use the Grep tool for `applyReDerive`, `pendingReseedMode`, `setPendingReseedMode` across `src/`. `pendingReseedMode` is never set to a non-null value anywhere, so the re-derive UI it gated is unreachable. Delete `applyReDerive`, the `pendingReseedMode` state, and the props that pass them (and their uses in the receiving component) — ONLY if the grep confirms nothing sets `pendingReseedMode` to a non-null value; otherwise leave them and say why in your report.
+Use the Grep tool for `applyReDerive`, `pendingReseedMode`, `setPendingReseedMode` across `src/`. `pendingReseedMode` is never set to a non-null value anywhere, so the re-derive UI it gated is unreachable. Delete `applyReDerive`, the `pendingReseedMode` state, and the props that pass them (and their uses in the receiving component) - ONLY if the grep confirms nothing sets `pendingReseedMode` to a non-null value; otherwise leave them and say why in your report.
 
 - [ ] **Step 9: Landing restores the count and registration number**
 
@@ -2449,21 +2449,21 @@ test("Start Over from the Applicant page returns to an empty lookup and clears t
 });
 ```
 
-If `jest.spyOn` cannot spy on the ES module export under CRA's Babel config, replace the spy with an assertion that the draft storage key used by `src/utils/submissionDraft.js` is absent from `localStorage` after Start Over (read that file for the key) — do not drop the draft assertion.
+If `jest.spyOn` cannot spy on the ES module export under CRA's Babel config, replace the spy with an assertion that the draft storage key used by `src/utils/submissionDraft.js` is absent from `localStorage` after Start Over (read that file for the key) - do not drop the draft assertion.
 
 Add a second test to the same file for the submit link only if the existing submit render harness (Grep for a test that reaches `/api/submit`, e.g. in `src/__tests__/`) can be reused in under ~40 lines; otherwise cover the submit body with the Step 3 code review and say so in your report.
 
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/__tests__/startOverAndSubmitLink.test.jsx`
-Expected: FAIL — the lookup still holds the old company / draft not cleared.
+Expected: FAIL - the lookup still holds the old company / draft not cleared.
 
 - [ ] **Step 3: Implement**
 
 1. In `resetAll`, directly after `setStep(STEPS.input); setResearch(null); setActiveSchema(null);`, add:
 
 ```js
-    // A brand-new application starts from an empty lookup and no saved draft —
+    // A brand-new application starts from an empty lookup and no saved draft -
     // this is the shared root for Start Over and Start New Application.
     setCompanyName(""); setCountryCode(""); setEntityType(""); setOwnershipType("");
     clearDraft();
@@ -2491,7 +2491,7 @@ Expected: FAIL — the lookup still holds the old company / draft not cleared.
           dossierId: dossierId || null,
 ```
 
-5. The "Start New Application" button's inline `setCompanyName("") ...` calls are now redundant with `resetAll`; leave them (harmless) — do not refactor that button.
+5. The "Start New Application" button's inline `setCompanyName("") ...` calls are now redundant with `resetAll`; leave them (harmless) - do not refactor that button.
 
 - [ ] **Step 4: Run to verify it passes**
 
@@ -2535,17 +2535,17 @@ Expected: `Compiled successfully.`
 
 - [ ] **Step 4: Invariant checks (Grep tool, not `npx rg`)**
 
-- `search_attempts` in `api/` and `src/` (excluding tests and migrations) — expected: no writes remain (`api/save-dossier.js` must not mention it).
-- `facts-reset-confirm|This restarts your application` in `src/` — expected: no matches.
-- `onReset` in `src/components` — expected: no matches.
-- `seededBy === "customer"` in `src/App.js` — expected: only in `doResearch`'s catch and `proceedFromJourney`.
+- `search_attempts` in `api/` and `src/` (excluding tests and migrations) - expected: no writes remain (`api/save-dossier.js` must not mention it).
+- `facts-reset-confirm|This restarts your application` in `src/` - expected: no matches.
+- `onReset` in `src/components` - expected: no matches.
+- `seededBy === "customer"` in `src/App.js` - expected: only in `doResearch`'s catch and `proceedFromJourney`.
 
 - [ ] **Step 5: Update the backlog**
 
 In `docs/BACKLOG.md`, add under **Open dependencies** (after DEP-4):
 
 ```markdown
-### DEP-5 — Part 3 deploy gate: migration 027
+### DEP-5 - Part 3 deploy gate: migration 027
 - **Category:** Deploy · **Priority:** P1 · **Status:** OPEN (manual step for the owner)
 - **What:** Apply `db/migrations/027_customer_corrections.sql` to each database (`node db/apply.js db/migrations/027_customer_corrections.sql`) BEFORE deploying Part 3.
 - **Why:** Without it, dossier updates fail (the snapshot insert targets `entity_dossier_versions`), the customer re-search counter reads a missing `customer_searches` column, and submissions fail on `onboarding_sessions.dossier_id`.
@@ -2554,7 +2554,7 @@ In `docs/BACKLOG.md`, add under **Open dependencies** (after DEP-4):
 Add a new entry:
 
 ```markdown
-### RERES-2 — `/api/research` does not itself enforce the customer's 2-search cap
+### RERES-2 - `/api/research` does not itself enforce the customer's 2-search cap
 - **Category:** Cost · **Priority:** P3 · **Status:** OPEN (found in Part 3 plan 2026-09-17)
 - **What:** The cap lives in `/api/search-attempt` and `/api/research-attempt`, which the client calls before re-researching. A client that skips that call can still run research, bounded only by Part 2's per-caller rate limit. Real fix: have `/api/research` require a one-time attempt grant (e.g. a short-lived signed nonce issued by the attempt endpoints).
 - **Also:** fresh-customer counts are keyed by a client-held application id, so a new id gets a new allowance (PLAT-7 territory).
@@ -2573,10 +2573,10 @@ git commit -m "docs: Part 3 deploy gate (migration 027) and research cap follow-
 ## Manual QA checklist (owner)
 
 1. Analyst: research a company at `/preboarding?tenant=nium`, save, send an invite, open the link in a private window.
-2. Customer: untick **Company legal name**, type a corrected name, **Update my details** — the page stays put, shows "Updating your details…", then the gate re-appears confirmed with the new name; applicant details you typed are still there.
-3. Customer: untick **Entity type** only, pick another type, **Update my details** — no search runs (network tab shows no `/api/research`).
-4. Customer: correct the name twice more — the third time shows "You've used your available searches…" and manual entry.
-5. Analyst: open the dossier — "Review only" banner; Save/Invite disabled.
-6. Refresh mid-flow as the customer — the link still loads; the search count is remembered.
-7. Customer: submit — the application reaches Done; in Neon, `onboarding_sessions.dossier_id` is the dossier id and `entity_dossier_versions` holds the analyst's original.
-8. "Start Over" on a fresh (no-link) journey — the lookup page is empty.
+2. Customer: untick **Company legal name**, type a corrected name, **Update my details** - the page stays put, shows "Updating your details…", then the gate re-appears confirmed with the new name; applicant details you typed are still there.
+3. Customer: untick **Entity type** only, pick another type, **Update my details** - no search runs (network tab shows no `/api/research`).
+4. Customer: correct the name twice more - the third time shows "You've used your available searches…" and manual entry.
+5. Analyst: open the dossier - "Review only" banner; Save/Invite disabled.
+6. Refresh mid-flow as the customer - the link still loads; the search count is remembered.
+7. Customer: submit - the application reaches Done; in Neon, `onboarding_sessions.dossier_id` is the dossier id and `entity_dossier_versions` holds the analyst's original.
+8. "Start Over" on a fresh (no-link) journey - the lookup page is empty.

@@ -6,7 +6,7 @@
 // the pure module; this route is a thin wrapper (load → derive → respond).
 //
 // A submissionId that matches a DOSSIER (entity_dossiers row) requires a
-// read-capable credential (lib/dossierAccess.js) — an analyst scoped to that
+// read-capable credential (lib/dossierAccess.js) - an analyst scoped to that
 // tenant, or the dossier's own customer token. A submissionId that matches no
 // dossier is a fresh application and is read exactly as before, with no
 // credential required (backlog PLAT-7).
@@ -25,7 +25,7 @@ const { deriveAmendmentDocuments } = require("../src/changeIntelligence/amendmen
 const dossierAccess = require("../lib/dossierAccess");
 const { enforceRateLimit } = require("../lib/rateLimit");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { neon, getEventsBySubmission, deriveAmendmentDocuments, access: dossierAccess };
 
 module.exports = async function handler(req, res) {
@@ -41,7 +41,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (!process.env.DATABASE_URL) {
-    console.warn("[amendment-documents] No DATABASE_URL — returning empty list");
+    console.warn("[amendment-documents] No DATABASE_URL - returning empty list");
     return res.status(200).json({ documents: [] });
   }
 
@@ -72,7 +72,7 @@ module.exports = async function handler(req, res) {
     const actor = await _deps.access.resolveDossierActor(req);
     const permitted = _deps.access.canReadDossier(actor, dossier);
     if (!permitted.ok) return res.status(permitted.status).json({ error: permitted.error });
-    // Credential check passed — but a soft-deleted dossier's documents are no
+    // Credential check passed - but a soft-deleted dossier's documents are no
     // longer readable. Checked only after the permission gate so an
     // anonymous/invalid caller still gets 401, never a 404 that would reveal
     // deleted-ness to someone without a credential.
@@ -80,14 +80,14 @@ module.exports = async function handler(req, res) {
       return res.status(404).json({ error: "dossier_not_found" });
     }
   }
-  // A fresh application (no dossier) is unchanged — backlog PLAT-7.
+  // A fresh application (no dossier) is unchanged - backlog PLAT-7.
 
   try {
     const events = await _deps.getEventsBySubmission(sql, submissionId);
     const documents = _deps.deriveAmendmentDocuments(events);
     return res.status(200).json({ documents });
   } catch (err) {
-    // A read failure must not break the Fill Gaps page — return an empty list
+    // A read failure must not break the Fill Gaps page - return an empty list
     // and log. The customer still sees the standard Required Documents step.
     console.error("[amendment-documents] ❌", err.message);
     return res.status(200).json({ documents: [], warning: "amendment_documents_failed" });

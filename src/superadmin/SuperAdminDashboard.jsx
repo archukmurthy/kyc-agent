@@ -7,7 +7,7 @@ import ResetPasswordModal from "./components/ResetPasswordModal";
 
 // /super-admin dashboard. Lists tenants from /api/tenants, opens modals for
 // creation and password reset, toggles tenant status. Everything tenant-
-// management lives here — the client /admin has been stripped of it.
+// management lives here - the client /admin has been stripped of it.
 export default function SuperAdminDashboard({ token, onSignOut }) {
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(false);

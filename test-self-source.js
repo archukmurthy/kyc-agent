@@ -53,7 +53,7 @@ function printResult(label, value) {
 
 // ─── Scenario 1: UK Privately Owned Corporate ─────────────────────────────────
 async function testUkCorporate() {
-  printSection("SCENARIO 1 — UK / Privately owned / Corporate");
+  printSection("SCENARIO 1 - UK / Privately owned / Corporate");
 
   const companyName            = "Revolut Ltd";
   const incorporationCountry   = "United Kingdom";
@@ -105,11 +105,11 @@ async function testUkCorporate() {
 
 // ─── Scenario 2: Brazil Corporate (second-pass test) ──────────────────────────
 async function testBrazilCorporate() {
-  printSection("SCENARIO 2 — Brazil / Privately owned / Corporate (second-pass test)");
+  printSection("SCENARIO 2 - Brazil / Privately owned / Corporate (second-pass test)");
 
   const companyName              = "Nubank S.A.";
   const incorporationCountry     = "Brazil";
-  // CNPJ — without this, first pass will fail and second pass is skipped
+  // CNPJ - without this, first pass will fail and second pass is skipped
   const companyRegistrationNumber = "18.236.120/0001-58";
 
   const checklist = getRequirements({
@@ -142,7 +142,7 @@ async function testBrazilCorporate() {
     console.log(`    status:       ${r.status}`);
     console.log(`    pass1 url:    ${r.searchUrl}`);
     console.log(`    pass2 url:    ${r.secondPassUrl || "not attempted"}`);
-    console.log(`    confidence:   ${r.extracted?.matchConfidence ?? "—"}`);
+    console.log(`    confidence:   ${r.extracted?.matchConfidence ?? "-"}`);
     console.log(`    manualFlag:   ${r.manualReviewFlag ?? false}`);
   });
 
@@ -153,9 +153,9 @@ async function testBrazilCorporate() {
   return result;
 }
 
-// ─── Scenario 3: Full orchestrator (UK FI — both agents) ──────────────────────
+// ─── Scenario 3: Full orchestrator (UK FI - both agents) ──────────────────────
 async function testFullOrchestrator() {
-  printSection("SCENARIO 3 — Full orchestrator: UK FI (Wolfsberg + Annual Report + Registry)");
+  printSection("SCENARIO 3 - Full orchestrator: UK FI (Wolfsberg + Annual Report + Registry)");
 
   const companyName            = "Barclays PLC";
   const incorporationCountry   = "United Kingdom";
@@ -210,7 +210,7 @@ async function testFullOrchestrator() {
 async function main() {
   console.log("\n🧪 selfSourceAgent integration tests");
   console.log(`📁 Output directory: ${OUT_DIR}`);
-  console.log(`🔑 API key: ${process.env.ANTHROPIC_API_KEY ? "present" : "MISSING — set ANTHROPIC_API_KEY"}\n`);
+  console.log(`🔑 API key: ${process.env.ANTHROPIC_API_KEY ? "present" : "MISSING - set ANTHROPIC_API_KEY"}\n`);
 
   if (!process.env.ANTHROPIC_API_KEY) {
     console.error("ERROR: ANTHROPIC_API_KEY not set. Exiting.");

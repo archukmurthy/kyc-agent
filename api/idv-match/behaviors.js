@@ -3,7 +3,7 @@
 // Band A / B / C behaviours (Phase 8). Record-only: writes the append-only
 // decision row and any needed human tasks, and returns the side effects +
 // verbatim applicant view. It never mutates the officer / UBO / any other
-// person-specific record — Band C identity data stays on the attempt only.
+// person-specific record - Band C identity data stays on the attempt only.
 const { getPolicy } = require("./policy");
 const COPY = require("./copy");
 const matchDecisionStore = require("./matchDecisionStore");
@@ -47,7 +47,7 @@ async function recordBandOutcome({ attemptId, applicationId = null, decision }, 
 
   // Publish a references-only Evidence envelope to the append-only outbox for
   // this finalized decision (idempotent per decision). No plaintext, no
-  // biometrics — references + provenance only. NOTHING consumes the outbox and no
+  // biometrics - references + provenance only. NOTHING consumes the outbox and no
   // Evidence rows are created until the Evidence Control Room approves (EVID-1).
   // Best-effort: a publish failure never blocks the decision.
   const outbox = deps.evidenceOutboxStore || evidenceOutboxStore;
@@ -72,7 +72,7 @@ async function recordBandOutcome({ attemptId, applicationId = null, decision }, 
   } catch (err) { console.warn("[idv-match] outbox publish skipped:", err && err.message); }
 
   // Band C: escalation task + existing LOA path. Identity data is scoped to the
-  // attempt only — never written to the officer/UBO/any person-specific record.
+  // attempt only - never written to the officer/UBO/any person-specific record.
   if (decision.band === "C" || decision.outcomeType === "demoted_to_loa_path") {
     result.tasks.push(await tasks.createTask({ attemptId, applicationId, taskType: "escalation", outcomeType: decision.outcomeType, reason: reason || "band_c" }));
     result.escalated = true;
@@ -94,8 +94,8 @@ async function recordBandOutcome({ attemptId, applicationId = null, decision }, 
   }
 
   // The references-only envelope is published to the outbox above. TODO(evidence-
-  // ledger): the outbox stays UNCONSUMED — no Evidence rows, no Evidence Platform
-  // call — until the Evidence Control Room approves the contract (BACKLOG EVID-1).
+  // ledger): the outbox stays UNCONSUMED - no Evidence rows, no Evidence Platform
+  // call - until the Evidence Control Room approves the contract (BACKLOG EVID-1).
   // A later governed adapter (Evidence V1.1) consumes this outbox.
 
   return result;

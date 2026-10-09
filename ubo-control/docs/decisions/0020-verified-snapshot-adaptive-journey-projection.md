@@ -1,4 +1,4 @@
-# Decision 0020 — Verified-snapshot adaptive journey projection
+# Decision 0020 - Verified-snapshot adaptive journey projection
 
 **Status:** Proposed for G5.2A acceptance.
 
@@ -10,7 +10,7 @@ The operation verifies the supplied DecisionSnapshot and projects only its alrea
 
 ## Consequences
 
-The projection cannot rerun Discovery or Extraction, rebuild the graph, recalculate ownership, evaluate policy, resolve requirements, select a ResolutionOption or rank candidate resolution routes. ResolutionOptions are exposed as unranked alternatives. JH-006 therefore remains `HYPOTHESIS — NOT APPROVED EXECUTION LOGIC` for G5.2B or later.
+The projection cannot rerun Discovery or Extraction, rebuild the graph, recalculate ownership, evaluate policy, resolve requirements, select a ResolutionOption or rank candidate resolution routes. ResolutionOptions are exposed as unranked alternatives. JH-006 therefore remains `HYPOTHESIS - NOT APPROVED EXECUTION LOGIC` for G5.2B or later.
 
 Host applications receive semantic data rather than a prescribed journey implementation. The contract has no screens, routes, form identifiers, provider payloads or framework dependencies. Policy wording is never synthesized: supplied template references are identified as available and unresolved source references remain explicitly unresolved.
 

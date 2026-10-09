@@ -55,7 +55,7 @@ async function claimPending(
 }
 
 // Claim a single row inline (used by api/submit.js right before its own inline
-// finalize attempt) so a concurrent worker tick can't also finalize it — closes the
+// finalize attempt) so a concurrent worker tick can't also finalize it - closes the
 // double-finalize window without a transaction. If this row's process crashes before
 // markDone/markFailed, claimPending's stale-processing reclaim picks it back up.
 async function markProcessing(id, deps = {}) {
@@ -77,7 +77,7 @@ async function markDone(id, sessionId, deps = {}) {
 
 // `incrementAttempt` counts this attempt when the caller's earlier claim/markProcessing
 // step didn't already count it (see api/submit.js's markProcessing-throw fallback path).
-// The worker (finalize-submissions.js) never passes it — claimPending already counted.
+// The worker (finalize-submissions.js) never passes it - claimPending already counted.
 async function markFailed(id, errorMessage, { incrementAttempt = false, sql: sqlDep } = {}) {
   const sql = sqlDep || defaultSql();
   const rows = incrementAttempt
@@ -99,13 +99,13 @@ async function markFailed(id, errorMessage, { incrementAttempt = false, sql: sql
   const currentAttempts = rows[0] && rows[0].attempts;
   if (currentAttempts >= MAX_ATTEMPTS) {
     console.error(
-      `[submission_inbox] DEAD-LETTER: submission ${id} failed ${currentAttempts} times — finalize abandoned, manual triage required`
+      `[submission_inbox] DEAD-LETTER: submission ${id} failed ${currentAttempts} times - finalize abandoned, manual triage required`
     );
   }
 }
 
 // Count rows that have exhausted their retry budget and are no longer claimed by
-// claimPending — i.e. silently abandoned unless someone looks. Includes rows stuck in
+// claimPending - i.e. silently abandoned unless someone looks. Includes rows stuck in
 // 'processing' at the cap (a hard crash on every attempt never reaches markFailed, so
 // 'failed' alone would miss them).
 async function countDeadLettered(deps = {}) {

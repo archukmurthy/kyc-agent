@@ -64,7 +64,7 @@ async function hasScreeningHit(attemptId, deps = {}) {
 // A ComplyCube screening result normally arrives via webhook; locally (and as a
 // production fallback with no webhook configured) there's no other way to learn
 // the outcome. Re-pull any still-pending check for the attempt and store its
-// result, mirroring what webhook.js does per delivery — so a poll of /resolve
+// result, mirroring what webhook.js does per delivery - so a poll of /resolve
 // can advance a pending row toward terminal without waiting on a webhook.
 async function reconcileScreening(attemptId, deps = {}) {
   const s = deps.store || store;

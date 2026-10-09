@@ -7,8 +7,8 @@
 // rules) against real Neon. No business logic lives here.
 //
 // A record keyed to a DOSSIER (submissionId matches an entity_dossiers row)
-// requires a write-capable credential (lib/dossierAccess.js) — an analyst
-// scoped to that tenant, or the dossier's own customer token — and a customer
+// requires a write-capable credential (lib/dossierAccess.js) - an analyst
+// scoped to that tenant, or the dossier's own customer token - and a customer
 // record flips the dossier's `owned_by` to 'customer' (analyst becomes
 // read-only from then on). A submissionId that matches no dossier is a fresh
 // application and is written exactly as before, with no credential required
@@ -28,7 +28,7 @@ const { writeEvent } = require("../src/changeIntelligence/events/writeEvent");
 const dossierAccess = require("../lib/dossierAccess");
 const { enforceRateLimit } = require("../lib/rateLimit");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { neon, writeEvent, access: dossierAccess };
 
 module.exports = async function handler(req, res) {
@@ -41,7 +41,7 @@ module.exports = async function handler(req, res) {
   const event = req.body || {};
 
   if (!process.env.DATABASE_URL) {
-    console.warn("[change-events] No DATABASE_URL — event not persisted");
+    console.warn("[change-events] No DATABASE_URL - event not persisted");
     return res.status(200).json({ success: false, warning: "Database not configured" });
   }
 
@@ -77,7 +77,7 @@ module.exports = async function handler(req, res) {
     actor = await _deps.access.resolveDossierActor(req);
     const permitted = _deps.access.canWriteDossier(actor, dossier);
     if (!permitted.ok) return res.status(permitted.status).json({ error: permitted.error });
-    // Credential check passed — but a soft-deleted dossier accepts no further
+    // Credential check passed - but a soft-deleted dossier accepts no further
     // writes (no event, no owned_by flip). Checked only after the permission
     // gate so an anonymous/invalid caller still gets 401, never a 404 that
     // would reveal deleted-ness to someone without a credential.
@@ -85,7 +85,7 @@ module.exports = async function handler(req, res) {
       return res.status(404).json({ error: "dossier_not_found" });
     }
   }
-  // A fresh application (no dossier) is unchanged — backlog PLAT-7.
+  // A fresh application (no dossier) is unchanged - backlog PLAT-7.
 
   try {
     if (dossier && actor && actor.kind === "customer") {
@@ -100,10 +100,10 @@ module.exports = async function handler(req, res) {
     } else if (dossier && actor && actor.kind === "analyst") {
       // Re-check ownership right before the write: the permission check above
       // ran against a SELECT taken moments earlier, and a customer takeover
-      // can land in between (TOCTOU) — an analyst write would then silently
+      // can land in between (TOCTOU) - an analyst write would then silently
       // land on a dossier the customer has just taken over.
       // ponytail: SELECT-then-INSERT is still two statements, not one atomic
-      // query — a customer takeover racing the gap between them can still
+      // query - a customer takeover racing the gap between them can still
       // slip through. A fully atomic guard would need this INSERT folded into
       // the same conditional CTE the UPDATE-based routes use; narrowing the
       // window to one query is the practical fix here.

@@ -29,17 +29,17 @@ test("the server boundary reports the current authorized build stage", () => {
 
 test("the Evidence Lab exposes generic R1 private Artifact ingestion", () => {
   const root=path.join(__dirname,"..","..","public"),lab=fs.readFileSync(path.join(root,"evidence-lab.html"),"utf8"),js=fs.readFileSync(path.join(root,"evidence-lab.js"),"utf8");
-  assert.match(lab,/R1 — PRIVATE ARTIFACT INGESTION/); assert.match(lab,/ARTIFACT PRESERVED/); assert.match(lab,/INTERPRETATION NOT PERFORMED/); assert.match(js,/\/api\/evidence\/r1-contexts/); assert.match(js,/\/api\/evidence\/r1-ingest/); assert.match(js,/\/api\/evidence\/r1-reopen/);
+  assert.match(lab,/R1 - PRIVATE ARTIFACT INGESTION/); assert.match(lab,/ARTIFACT PRESERVED/); assert.match(lab,/INTERPRETATION NOT PERFORMED/); assert.match(js,/\/api\/evidence\/r1-contexts/); assert.match(js,/\/api\/evidence\/r1-ingest/); assert.match(js,/\/api\/evidence\/r1-reopen/);
   assert.match(js,/Stored artifact successfully retrieved.*bytes matched the preserved SHA-256/);
   assert.doesNotMatch(js,/Authorized reopen succeeded/);
 });
 
 test("the Evidence Lab extends the stable targeted-interpretation boundary through R4",()=>{
   const root=path.join(__dirname,"..","..","public"),lab=fs.readFileSync(path.join(root,"evidence-lab.html"),"utf8"),js=fs.readFileSync(path.join(root,"evidence-lab.js"),"utf8");
-  assert.match(lab,/R4 — TYPED RELATIONAL INTERPRETATION/);assert.match(lab,/one Evidence Asset/);assert.match(lab,/Run fresh targeted interpretation/);assert.match(lab,/Check media readiness/);
+  assert.match(lab,/R4 - TYPED RELATIONAL INTERPRETATION/);assert.match(lab,/one Evidence Asset/);assert.match(lab,/Run fresh targeted interpretation/);assert.match(lab,/Check media readiness/);
   assert.match(js,/\/api\/evidence\/r2-options/);assert.match(js,/\/api\/evidence\/r2-interpret/);assert.match(js,/\/api\/evidence\/r2-history/);assert.match(js,/Selection makes no AI call/);assert.match(js,/Provider call expected for a new operation/);assert.match(js,/A4a evaluation: <b>NO/);assert.match(lab,/Prepare deliberate new interpretation/);assert.match(js,/Existing operation returned\. Provider call: NO/);
   assert.match(js,/\$\("r2Run"\)\.disabled=!ready\|\|!supported/);assert.match(js,/\/api\/evidence\/r2-preflight/);assert.match(js,/Media readiness passed\. AI call: NO/);
-  assert.match(js,/SOURCE ASSERTION — TYPED R4/);assert.match(js,/subject → relationship → object/);assert.match(js,/UBO\/KYC CONCLUSION — NOT PERFORMED/);
+  assert.match(js,/SOURCE ASSERTION - TYPED R4/);assert.match(js,/subject → relationship → object/);assert.match(js,/UBO\/KYC CONCLUSION - NOT PERFORMED/);
 });
 
 test("GET /api/evidence/status returns the boundary status", () => {
@@ -73,8 +73,8 @@ test("the Evidence Lab exposes the isolated A2 live and fixture route", () => {
   assert.match(lab, /LIVE COMPANIES HOUSE COLLECTION/);
   assert.match(lab, /Structured evidence/);
   assert.match(lab, /Human-viewable evidence/);
-  assert.match(lab, /OFFICERS — HUMAN-VIEWABLE WEBPAGE/);
-  assert.match(lab, /PSC \/ OWNERSHIP — HUMAN-VIEWABLE WEBPAGE/);
+  assert.match(lab, /OFFICERS - HUMAN-VIEWABLE WEBPAGE/);
+  assert.match(lab, /PSC \/ OWNERSHIP - HUMAN-VIEWABLE WEBPAGE/);
   assert.match(labJs, /\/api\/evidence\/a2-existing/);
   assert.match(lab, /Freshness policy not evaluated by Evidence Lab/);
   assert.match(lab, /FETCH FRESH EVIDENCE/);
@@ -118,14 +118,14 @@ test("the Evidence Lab exposes explicit A4a evaluation and no-cost history", () 
   const root = path.join(__dirname, "..", "..", "public");
   const lab = fs.readFileSync(path.join(root, "evidence-lab.html"), "utf8");
   const labJs = fs.readFileSync(path.join(root, "evidence-lab.js"), "utf8");
-  assert.match(lab, /A4a — FACT → INFORMATION NEED/);
+  assert.match(lab, /A4a - FACT → INFORMATION NEED/);
   assert.match(lab, /does not select a winner, decide final KYC satisfaction/);
   assert.match(lab, /Loading history makes no provider call/);
   assert.match(labJs, /\/api\/evidence\/a4a-history/);
   assert.match(labJs, /\/api\/evidence\/a4a-evaluate/);
   assert.match(labJs, /\/api\/evidence\/a4a-fixture/);
   assert.match(labJs, /A3 support remains independent/);
-  assert.match(lab, /Automatic — recommended/);
+  assert.match(lab, /Automatic - recommended/);
   assert.match(lab, /Advanced\/testing controls/);
   assert.match(lab, /Current standalone Information Needs identify required schema concepts but do not persist an expected comparison value/);
   assert.doesNotMatch(lab, /placeholder="UUID/);
@@ -134,7 +134,7 @@ test("the Evidence Lab exposes explicit A4a evaluation and no-cost history", () 
   assert.match(labJs, /Selection makes no AI call/);
   assert.match(labJs, /A3 FACT SUPPORT/);
   assert.match(labJs, /A4a FACT → INFORMATION NEED EVALUATION/);
-  assert.match(labJs, /DOWNSTREAM KYC SATISFACTION — NOT PERFORMED/);
+  assert.match(labJs, /DOWNSTREAM KYC SATISFACTION - NOT PERFORMED/);
   assert.match(labJs, /Source and technical details/);
 });
 
@@ -142,27 +142,27 @@ test("the Evidence Lab exposes explicit A4b coverage assessment and immutable hi
   const root = path.join(__dirname, "..", "..", "public");
   const lab = fs.readFileSync(path.join(root, "evidence-lab.html"), "utf8");
   const labJs = fs.readFileSync(path.join(root, "evidence-lab.js"), "utf8");
-  assert.match(lab, /A4b — EVIDENCE COVERAGE ASSESSMENT/);
+  assert.match(lab, /A4b - EVIDENCE COVERAGE ASSESSMENT/);
   assert.match(lab, /Explicit A4a evaluation \/ Fact candidates/);
   for (const label of ["COVERAGE", "COMPLETENESS", "COMPARABLE DISAGREEMENT", "TEMPORAL APPLICABILITY", "EMPTY-SET STATE", "INPUT SUFFICIENCY"]) assert.match(labJs, new RegExp(label));
   assert.match(labJs, /\/api\/evidence\/a4b-options/);
   assert.match(labJs, /\/api\/evidence\/a4b-assess/);
   assert.match(labJs, /\/api\/evidence\/a4b-history/);
   assert.match(labJs, /A4a was not rerun/);
-  assert.match(labJs, /Candidate contributions — no winner/);
-  assert.match(labJs, /DOWNSTREAM KYC\/UBO DECISION — NOT PERFORMED/);
+  assert.match(labJs, /Candidate contributions - no winner/);
+  assert.match(labJs, /DOWNSTREAM KYC\/UBO DECISION - NOT PERFORMED/);
   assert.doesNotMatch(lab, /A4b[^]*placeholder="UUID/);
 });
 
 test("the Evidence Lab exposes read-only point-in-time Evidence reconstruction",()=>{
   const root=path.join(__dirname,"..","..","public"),lab=fs.readFileSync(path.join(root,"evidence-lab.html"),"utf8"),js=fs.readFileSync(path.join(root,"evidence-lab.js"),"utf8");
-  assert.match(lab,/A5a — EVIDENCE RECONSTRUCTION/);assert.match(lab,/As known by/);assert.match(lab,/External source call: NO · AI call: NO · Evidence write: NO/);
+  assert.match(lab,/A5a - EVIDENCE RECONSTRUCTION/);assert.match(lab,/As known by/);assert.match(lab,/External source call: NO · AI call: NO · Evidence write: NO/);
   assert.match(js,/\/api\/evidence\/a5a-options/);assert.match(js,/\/api\/evidence\/a5a-reconstruct/);assert.match(js,/EVIDENCE RECONSTRUCTION/);assert.match(js,/DOWNSTREAM KYC\/UBO DECISION/);assert.match(js,/NOT RECONSTRUCTED UNLESS SEPARATELY INTEGRATED/);
 });
 
 test("the Evidence Lab exposes explicit immutable A5b Package freeze and verification",()=>{
   const root=path.join(__dirname,"..","..","public"),lab=fs.readFileSync(path.join(root,"evidence-lab.html"),"utf8"),js=fs.readFileSync(path.join(root,"evidence-lab.js"),"utf8");
-  assert.match(lab,/A5b — IMMUTABLE EVIDENCE PACKAGE/);assert.match(lab,/Freeze source: complete server-generated A5a reconstruction/);assert.match(lab,/Package purpose/);
+  assert.match(lab,/A5b - IMMUTABLE EVIDENCE PACKAGE/);assert.match(lab,/Freeze source: complete server-generated A5a reconstruction/);assert.match(lab,/Package purpose/);
   assert.match(js,/\/api\/evidence\/a5b-freeze/);assert.match(js,/\/api\/evidence\/a5b-reopen/);assert.match(js,/\/api\/evidence\/a5b-verify/);assert.match(js,/PACKAGE MANIFEST VERIFIED/);assert.match(js,/Evidence truth and KYC\/UBO were not verified/);
 });
 

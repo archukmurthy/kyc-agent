@@ -28,7 +28,7 @@ async function checkEvents() {
     console.log(
       `[${new Date(e.occurred_at).toLocaleTimeString()}] ` +
         `${e.event_type.padEnd(35)} ` +
-        `tenant: ${e.tenant_id || "—"}`
+        `tenant: ${e.tenant_id || "-"}`
     );
     if (e.event_data && Object.keys(e.event_data).length) {
       const data = { ...e.event_data };

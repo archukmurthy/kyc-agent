@@ -4,7 +4,7 @@ const assert = require("node:assert");
 // The handler's DATABASE_URL gate runs before deps are consulted (matches
 // production: refuse to even try when no DB is configured). Set a fake value
 // for these tests so the mocked enqueue/finalizeSubmission path is exercised
-// — mirrors the save/restore pattern in get-dossier.nodetest.js.
+// - mirrors the save/restore pattern in get-dossier.nodetest.js.
 let prevUrl;
 before(() => { prevUrl = process.env.DATABASE_URL; process.env.DATABASE_URL = "postgres://test"; });
 after(() => { if (prevUrl === undefined) delete process.env.DATABASE_URL; else process.env.DATABASE_URL = prevUrl; });
@@ -51,7 +51,7 @@ test("saved path calls markProcessing (claiming the row) before finalizeSubmissi
   assert.deepStrictEqual(order, [["markProcessing", "sub-1"], ["finalizeSubmission"]]);
 });
 
-test("a markProcessing throw does not block finalize — still returns saved", async () => {
+test("a markProcessing throw does not block finalize - still returns saved", async () => {
   const handler = require("../submit");
   let finalizeCalled = false;
   handler.__setDeps({

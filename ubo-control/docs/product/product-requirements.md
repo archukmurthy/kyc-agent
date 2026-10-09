@@ -1,8 +1,8 @@
 # UBO Control product requirements
 
-## PR-POL-001 — Policy Schema 1.3 & Runtime Readiness
+## PR-POL-001 - Policy Schema 1.3 & Runtime Readiness
 
-**Status:** IMPLEMENTED — FREEZE IMPLEMENTATION WAVE 1
+**Status:** IMPLEMENTED - FREEZE IMPLEMENTATION WAVE 1
 
 **Target:** UK MVP successor-policy readiness boundary
 
@@ -20,13 +20,13 @@ Acceptance principles:
 - The current 1.5-RC Lab shows a persistent review-policy watermark without changing decisions, graph, journey, planner, or customer action semantics.
 - Legacy repository threshold shorthand is non-authoritative for fresh successor UBO Control; the future Policy Pack owns its comparator while historical behavior remains untouched.
 
-## PR-POL-002 — UK Corporate v1.6-RC Review Policy Container
+## PR-POL-002 - UK Corporate v1.6-RC Review Policy Container
 
-**Status:** IMPLEMENTED — FREEZE IMPLEMENTATION WAVE 2; EXECUTION NOT STARTED
+**Status:** IMPLEMENTED - FREEZE IMPLEMENTATION WAVE 2; EXECUTION NOT STARTED
 
 **Target:** Immutable successor-policy data and governance artifacts
 
-UK Corporate `1.6-RC` is a schema-1.3, `CONTROL_ROOM_REVIEW`, LAB-only policy artifact with null effective date and approver. It records the frozen doctrine, A-01–A-18 states, feature defaults and unsupported successor runtime dependencies without selecting or executing the pack.
+UK Corporate `1.6-RC` is a schema-1.3, `CONTROL_ROOM_REVIEW`, LAB-only policy artifact with null effective date and approver. It records the frozen doctrine, A-01-A-18 states, feature defaults and unsupported successor runtime dependencies without selecting or executing the pack.
 
 Acceptance principles:
 
@@ -35,15 +35,15 @@ Acceptance principles:
 - Lab readiness is `REVIEW_ONLY`, production readiness is `BLOCKED`, and unsupported successor dependencies are visible.
 - Statutory economic and voting thresholds are separate immutable `>25` declarations; disabled firm thresholds cannot suppress or project statutory status.
 - Qualification routes, layer completeness, percentage evidence, control gating, residual statements, listed cases, exhaustion categories, acquisition strategies and phase order are policy data only.
-- R01–R14 identifiers remain stable and their successor intent is source-mapped without wiring successor resolvers.
+- R01-R14 identifiers remain stable and their successor intent is source-mapped without wiring successor resolvers.
 - Only the approved `DISCLOSE_SHARE_OWNERSHIP` structured contract is carried forward as Control Room-approved content; unresolved customer content remains blocked.
 - E01/E02/E08/E10 stay unresolved and production-disabled pending A-16.
 - Current Decision Application v1/v2, DecisionSnapshot v1, Lab/ASDA, graph, journey, planner and public API behavior remain unchanged and continue using `1.5-RC`.
 - `test-assertion-plan.json` classifies every File 07 assertion honestly; a policy declaration is never represented as executable behavior.
 
-## PR-POL-003 — QualificationBasis v2 and Effective-Interest Route Wrapper
+## PR-POL-003 - QualificationBasis v2 and Effective-Interest Route Wrapper
 
-**Status:** IMPLEMENTED INTERNALLY — FREEZE IMPLEMENTATION WAVE 3; NOT RUNTIME-WIRED
+**Status:** IMPLEMENTED INTERNALLY - FREEZE IMPLEMENTATION WAVE 3; NOT RUNTIME-WIRED
 
 **Target:** Route-specific successor qualification reasoning
 
@@ -61,9 +61,9 @@ Acceptance principles:
 - The modules are not exported or wired into Decision Application, v1 snapshots/projections/planner, UI, Lab, ASDA, legacy Discovery or host onboarding.
 - UK Corporate 1.6-RC remains `REVIEW_ONLY`/production-blocked and no Policy Pack bytes or hashes change.
 
-## PR-POL-004 — Company Schedule 1A / PSC-Condition Attribution v1
+## PR-POL-004 - Company Schedule 1A / PSC-Condition Attribution v1
 
-**Status:** IMPLEMENTED INTERNALLY — REVIEW ONLY
+**Status:** IMPLEMENTED INTERNALLY - REVIEW ONLY
 
 **Target:** Freeze Implementation Wave 4
 
@@ -78,9 +78,9 @@ Acceptance principles:
 - Results remain A-09-dependent, review-only and production-unauthorized; A-12/A-13/A-06 are retained where applicable.
 - No whole-person result, Decision Application/Snapshot/projection/Lab behavior or public export is introduced.
 
-## PR-VIS-001 — Ownership Graph Projection & Interactive Renderer
+## PR-VIS-001 - Ownership Graph Projection & Interactive Renderer
 
-**Status:** IMPLEMENTED — G5.1A AND G5.1B ACCEPTED
+**Status:** IMPLEMENTED - G5.1A AND G5.1B ACCEPTED
 
 **Target:** Gate 5.1
 
@@ -101,9 +101,9 @@ Acceptance principles:
 
 G5.1A implements the accepted public, provider-neutral projection contract. G5.1B implements the accepted reusable interactive renderer and deterministic standalone demo outside the headless product root. Host-screen integration and historical comparison remain outstanding.
 
-## PR-JRN-001 — Adaptive UBO Journey Projection
+## PR-JRN-001 - Adaptive UBO Journey Projection
 
-**Status:** IMPLEMENTED — G5.2A ACCEPTED
+**Status:** IMPLEMENTED - G5.2A ACCEPTED
 
 **Target:** Gate 5.2A
 
@@ -121,9 +121,9 @@ Acceptance principles:
 - Qualifying-person handoff stops at canonical identity, roles, basis and R07 completeness; downstream IDV, screening, POI and POA remain outside UBO Control.
 - Re-projecting a later verified DecisionSnapshot naturally removes satisfied work.
 
-## PR-PLN-001 — Low-Friction UBO Resolution Planning
+## PR-PLN-001 - Low-Friction UBO Resolution Planning
 
-**Status:** IN_IMPLEMENTATION — G5.2B IN REVIEW
+**Status:** IN_IMPLEMENTATION - G5.2B IN REVIEW
 
 **Target:** Gate 5.2B
 
@@ -142,9 +142,9 @@ Acceptance principles:
 - Internal/fallback review follows currently known customer work; specialist stops override ordinary flow.
 - Plans are advisory, immutable, deterministic and contain no execution, host UI, provider ranking or numeric friction score.
 
-## PR-LAB-001 — Standalone UBO Control Lab
+## PR-LAB-001 - Standalone UBO Control Lab
 
-**Status:** READY FOR CONTROL ROOM PRODUCT TESTING — G5.3D
+**Status:** READY FOR CONTROL ROOM PRODUCT TESTING - G5.3D
 
 **Target:** Gate 5.3D
 
@@ -152,11 +152,11 @@ UBO Control must provide a standalone, deployed compliance-testing Lab that exer
 
 Acceptance principles:
 
-- Fixture mode exposes LAB01–LAB18 and runs the real deterministic product pipeline.
+- Fixture mode exposes LAB01-LAB18 and runs the real deterministic product pipeline.
 - Live Discovery mode uses the accepted legacy Discovery composition while treating provider conclusions as non-authoritative candidate material.
 - Live Evidence is visibly unavailable until Gate 4 prerequisites are accepted; the Lab does not simulate extraction.
 - Customer and Compliance views share one sealed session state and current DecisionSnapshot.
 - LAB18 applies the approved structured current-share-ownership question through `ubo-customer-action-v1`, explicit claim adjudication and a fresh linked DecisionSnapshot.
-- Compliance users can inspect candidate provenance, decide identity and claim targets, review R01–R14, view history, compare snapshots, inspect the low-friction plan and export local feedback.
+- Compliance users can inspect candidate provenance, decide identity and claim targets, review R01-R14, view history, compare snapshots, inspect the low-friction plan and export local feedback.
 - Lab session state is ephemeral and never writes dossiers, onboarding state or a new database model.
 - The Lab remains separate from `src/App.js`; KYB onboarding integration is deferred until Control Room product validation.

@@ -100,7 +100,7 @@ test("an allowed search returns a grant for this application; a refused one retu
   assert.strictEqual("grant" in refused.body, false);
 });
 
-test("no grant secret still allows and counts the search — the grant is unenforced for fresh customers", async () => {
+test("no grant secret still allows and counts the search - the grant is unenforced for fresh customers", async () => {
   const saved = { r: process.env.RESEARCH_GRANT_SECRET, d: process.env.DOSSIER_TOKEN_SECRET };
   delete process.env.RESEARCH_GRANT_SECRET;
   delete process.env.DOSSIER_TOKEN_SECRET;

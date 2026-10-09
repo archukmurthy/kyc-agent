@@ -1,8 +1,8 @@
 /**
- * FoundFieldsTable.jsx — the "Pre-filled Fields" table on the Confirm page.
+ * FoundFieldsTable.jsx - the "Pre-filled Fields" table on the Confirm page.
  *
  * EXTRACTED FROM App.js, zero behaviour change. renderUnifiedFoundTable,
- * renderFoundRow and renderSourceBadge moved here VERBATIM — the bodies below
+ * renderFoundRow and renderSourceBadge moved here VERBATIM - the bodies below
  * are the same text that ran in App.js. What changed is only how they get
  * their data: they used to close over App's scope, and now receive it through
  * the prop interface declared on the component.
@@ -13,8 +13,8 @@
  * behaviour change" checkable rather than merely claimed.
  *
  * REFS STAY REFS. gapRef and dialogueStateRef are passed through as the refs
- * they are — never snapshotted into values or lifted into state. gapRef backs
- * the gap inputs (lifting it re-renders on every keystroke and loses focus —
+ * they are - never snapshotted into values or lifted into state. gapRef backs
+ * the gap inputs (lifting it re-renders on every keystroke and loses focus -
  * see CLAUDE.md), and dialogueStateRef holds the classification snapshots the
  * documents list, the tiles and the submit gate all read live.
  *
@@ -113,7 +113,7 @@ export function FoundFieldsTable({
         </span>
       );
     }
-    // tier3 (indicative) — third-party / unverified source.
+    // tier3 (indicative) - third-party / unverified source.
     if (item.sourceTier === "tier3") {
       return (
         <span
@@ -125,7 +125,7 @@ export function FoundFieldsTable({
         </span>
       );
     }
-    // tier2 (probable) — company-owned source.
+    // tier2 (probable) - company-owned source.
     return (
       <span
         onClick={() => setRevealedTs(p => ({ ...p, [idx]: !p[idx] }))}
@@ -167,7 +167,7 @@ export function FoundFieldsTable({
     // tone wins over amber while its ChangeDialogue is open.
     const rowChecked = !!checks[idx];
     const correction = gapRef.current["corrected_" + item.field];
-    // ONE predicate for the row's state, the tiles AND the submit gate — same
+    // ONE predicate for the row's state, the tiles AND the submit gate - same
     // rowState() call, fed by the same rowContext() builder submitBlockers
     // uses, so the amber styling, the "Needs You" count and blocker kind (a)
     // are the same set by construction. Never re-derive it here.
@@ -190,7 +190,7 @@ export function FoundFieldsTable({
       fontFamily: "inherit",
       display: "inline-flex", alignItems: "center", justifyContent: "center",
     };
-    // Right-rail status line — the prototype's second line under the source.
+    // Right-rail status line - the prototype's second line under the source.
     const statusLine = isCorrected
       ? { text: "Customer corrected", color: C.info }
       : isDisputed
@@ -210,7 +210,7 @@ export function FoundFieldsTable({
         background: tint,
         borderLeft: `3px solid ${stripe}`,
         borderBottom: "1px solid rgba(26,58,74,0.04)",
-        // Unchecking a field is NOT disabling it — keep the row fully legible.
+        // Unchecking a field is NOT disabling it - keep the row fully legible.
       }}>
         {/* Main block - label ABOVE value (prototype layout), not side-by-side. */}
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -312,7 +312,7 @@ export function FoundFieldsTable({
               // `label` is here for the commit-8 country-field check: the schema
               // marks no field as country-typed, so detection reads the id AND
               // the label (e.g. field "country" / label "Address Country"). The
-              // row's own label is used — the same string the customer sees.
+              // row's own label is used - the same string the customer sees.
               field={{ fieldId: item.field, label: item.label, value: item.value, source: item.source, sourceTier: item.sourceTier }}
               jurisdiction={countryCode || "GB"}
               submissionId={dossierId || onboardingSubmissionId}
@@ -336,7 +336,7 @@ export function FoundFieldsTable({
             if (!snap || !snap.emitted) return null;
             if (isCorrected && !inlineEditOpen[item.field]) return null;
             // Reference-value exception: don't prefill a literal cross-reference
-            // like "Same as registered office" — prompt for the real value.
+            // like "Same as registered office" - prompt for the real value.
             const isReferenceValue = typeof item.value === "string" && /\bsame as\b/i.test(item.value);
             const prefill = isReferenceValue || item.value == null || typeof item.value === "object"
               ? ""
@@ -366,7 +366,7 @@ export function FoundFieldsTable({
             if (!live) return null;
             // Company-scoped row: match a company entry (no stakeholderId), so
             // it can never pick up a person's same-named document. Compared on
-            // the merged name — confirmDocs carries the canonical docType. A
+            // the merged name - confirmDocs carries the canonical docType. A
             // per-field document shares its title with the other fields that
             // triggered it, so it must match THIS row's field, not just the type.
             const liveType = canonicalDocType(live);
@@ -376,9 +376,9 @@ export function FoundFieldsTable({
               (isPerFieldDocType(liveType) ? d.fieldId === item.field : true));
             if (!doc) return null;
             const k = docKey(doc);
-            // ONE CARD PER DOCUMENT. Several rows can require the same file —
+            // ONE CARD PER DOCUMENT. Several rows can require the same file -
             // three corrected lines of the registered address are one Notice of
-            // Change of Address — so it renders against the field that asked
+            // Change of Address - so it renders against the field that asked
             // first, not once per row.
             const anchorField = rowDocAnchor.get(k);
             if (anchorField && anchorField !== item.field) return null;

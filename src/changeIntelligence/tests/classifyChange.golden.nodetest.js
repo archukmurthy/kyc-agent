@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const { classifyChange } = require('../classifyChange');
 
 /**
- * Golden tests — one assertion per DECIDED policy row, hand-written from the
+ * Golden tests - one assertion per DECIDED policy row, hand-written from the
  * design discussion. These lock the contract. They must always pass.
  *
  * Defaults: verifiability structured_registry (so the guard does not fire),

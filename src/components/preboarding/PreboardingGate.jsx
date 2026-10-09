@@ -1,5 +1,5 @@
 /**
- * PreboardingGate.jsx — the analyst access gate, screen 1 of pre-boarding.
+ * PreboardingGate.jsx - the analyst access gate, screen 1 of pre-boarding.
  *
  * The password is checked by the SERVER (POST /api/preboarding-auth). It used
  * to be compared in the browser against a constant in the bundle, which gated

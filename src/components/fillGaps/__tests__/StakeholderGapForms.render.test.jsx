@@ -1,14 +1,14 @@
 /**
- * StakeholderGapForms.render.test.jsx — CHARACTERISATION of the Fill Gaps
+ * StakeholderGapForms.render.test.jsx - CHARACTERISATION of the Fill Gaps
  * stakeholder-forms cluster while it is still inline in App.js.
  *
  * WHY NOW: the Fill Gaps page has NO test coverage at all. Slice 1 of its
- * extraction lifts ~931 lines out of App.js (3666–4622, 4704–4718, 1175–1189)
+ * extraction lifts ~931 lines out of App.js (3666-4622, 4704-4718, 1175-1189)
  * into StakeholderGapForms.jsx. Both Confirm slices were only safe because a red
  * test meant a broken move. This builds the same oracle first.
  *
  * WHY IT ASSERTS FIELD CONTENT, NOT JUST PRESENCE. The shell does not CALL the
- * cluster — it renders four values precomputed in App's body (App.js:4708–4718):
+ * cluster - it renders four values precomputed in App's body (App.js:4708-4718):
  *
  *   stakeholderGapRows → stakeholderFormNodes / stakeholderSummaryNodes
  *                      → hasStakeholderForms / hasStakeholderSummary
@@ -16,18 +16,18 @@
  * and drops {stakeholderFormNodes} / {stakeholderSummaryNodes} at 8040/8055,
  * each behind a divider gated by the matching boolean. If the extraction breaks
  * how those arrays are built or handed over, the page still renders and the
- * dividers may still show — with nothing beneath them. A test that only checked
+ * dividers may still show - with nothing beneath them. A test that only checked
  * "Fill Gaps renders" would stay green through exactly that break. So every
  * assertion here reaches INTO the cards and names real rendered output.
  *
  * The page cannot be rendered in isolation (the cluster closes over App's state,
  * stakeholdersRef and the schema), so this drives the REAL app through the
- * wizard — the ConfirmPeople harness, deliberately mirrored rather than
+ * wizard - the ConfirmPeople harness, deliberately mirrored rather than
  * reinvented, extended ONE STEP further: Input → Applicant → Confirm → Fill Gaps.
  *
  * CHARACTERISATION, not specification: these assert what the cluster does TODAY.
  * A surprising assertion is a recorded fact. After the extraction this file must
- * stay green UNCHANGED — editing it to make the move pass defeats the point.
+ * stay green UNCHANGED - editing it to make the move pass defeats the point.
  */
 
 import React from "react";
@@ -40,7 +40,7 @@ jest.setTimeout(60000);
 beforeEach(() => {
   // /api/config, track-event and ipify fire on mount. Rejecting them makes the
   // app fall back to buildLocalDefaultConfig(), which ships the Corporate:GB
-  // schema — deterministic, no network.
+  // schema - deterministic, no network.
   global.fetch = jest.fn(() => Promise.reject(new Error("offline test")));
   jest.useFakeTimers();
 });
@@ -106,7 +106,7 @@ async function driveToConfirm() {
   });
   pickOption("🏛 Corporate");
 
-  // SearchableSelect opens on FOCUS, not click — fireEvent.click does not focus
+  // SearchableSelect opens on FOCUS, not click - fireEvent.click does not focus
   // in jsdom. Private Limited keeps effectivelyListed false, which is the branch
   // the whole forms section depends on.
   fireEvent.focus(screen.getByPlaceholderText(/Select ownership type/i));
@@ -120,7 +120,7 @@ async function driveToConfirm() {
   fireEvent.click(screen.getByRole("button", { name: /Dummy Research/i }));
   await settle(5000);
 
-  // Applicant page — fill via the test-data control, satisfy the signatory
+  // Applicant page - fill via the test-data control, satisfy the signatory
   // upload, continue.
   fireEvent.click(screen.getByRole("button", { name: /Fill with test data/i }));
   const fileInput = document.querySelector('input[type="file"]');
@@ -150,7 +150,7 @@ const DUMMY_PEOPLE = ["John Smith", "Jane Doe", "Trustees", "Mark Lee"];
  * The dummy set puts John Smith and Jane Doe in BOTH the UBO group and the
  * directors group, as separate stakeholder records with different sh_ ids, so
  * the name alone is ambiguous. The director cards are the ones carrying a
- * "Role / position" row — UBO cards have "Shareholding" instead — which is what
+ * "Role / position" row - UBO cards have "Shareholding" instead - which is what
  * `director` selects on. Both are observable output, so this survives the lift.
  */
 function personAttrControl(personName, ariaLabel, { director }) {
@@ -171,28 +171,28 @@ function personAttrControl(personName, ariaLabel, { director }) {
 }
 
 /**
- * The LISTED journey — the only way to reach three of the cluster's render
+ * The LISTED journey - the only way to reach three of the cluster's render
  * functions, all gated on `effectivelyListed` (App.js:453), which a private
  * company leaves false.
  *
  * It sets the flag through the real Confirm control rather than mocking state,
  * then puts three DIRECTORS into three different states. Directors are the
  * useful group here because `needsStakeholderDetails` returns false for a
- * listed company's non-UBO people (pipeline.js:1390) — every UBO in the dummy
+ * listed company's non-UBO people (pipeline.js:1390) - every UBO in the dummy
  * set holds >= 25%, so they still take the full-EDD path either way.
  *
- *   Mark Lee   — unticked  → customer_rejected → light replacement card
- *   Jane Doe   — one attribute corrected inline → the corrected value carries
+ *   Mark Lee   - unticked  → customer_rejected → light replacement card
+ *   Jane Doe   - one attribute corrected inline → the corrected value carries
  *                through to Fill Gaps
- *   John Smith — left alone → confirmedOnly → the read-only listed summary
+ *   John Smith - left alone → confirmedOnly → the read-only listed summary
  *
- * WHAT THIS JOURNEY DOES *NOT* REACH — renderFieldCorrectionCard (4356) and
+ * WHAT THIS JOURNEY DOES *NOT* REACH - renderFieldCorrectionCard (4356) and
  * renderCorrectionField (4297). They render for a listed person who is KEPT but
  * has `stkHasCorrections`, i.e. an attribute that is found and NOT ticked
  * (App.js:3557). That state cannot exist at Fill Gaps any more:
  *
- *   - while an attribute is unticked it is not settled — isPersonAttributeSettled
- *     needs `corrected || ticked` (App.js:1074) — so the Confirm footer blocks
+ *   - while an attribute is unticked it is not settled - isPersonAttributeSettled
+ *     needs `corrected || ticked` (App.js:1074) - so the Confirm footer blocks
  *     ("1 item needs your input") and the journey can never leave the page; and
  *   - resolving it re-ticks the field on save, which resolvePersonCorrection does
  *     deliberately and says so in its own comment ("RE-TICK. Unticking is what
@@ -206,7 +206,7 @@ function personAttrControl(personName, ariaLabel, { director }) {
 async function driveToListedFillGaps() {
   await driveToConfirm();
 
-  // The SHOW_TEST_TOOLS override — same state, same downstream effectivelyListed
+  // The SHOW_TEST_TOOLS override - same state, same downstream effectivelyListed
   // as real auto-detection.
   fireEvent.click(screen.getByRole("checkbox", { name: /treat as publicly listed/i }));
   await settle(0);
@@ -226,7 +226,7 @@ async function driveToListedFillGaps() {
   fireEvent.click(screen.getByRole("button", { name: /No longer a director/i }));
   await settle(0);
 
-  // Jane Doe the DIRECTOR — the ✎ control calls togglePersonField when the field
+  // Jane Doe the DIRECTOR - the ✎ control calls togglePersonField when the field
   // is ticked (StakeholderConfirmSection.jsx:178), which is what clears
   // isStkFieldConfirmed and creates the correction. The inline editor then opens;
   // saving a value settles the row so the footer gate can reopen.
@@ -234,7 +234,7 @@ async function driveToListedFillGaps() {
   // ROLE, deliberately: PERSON-ROLE-CHANGE is `accept_silent` with no document
   // (policyTable.js:284). Correcting nationality or DOB fires PERSON-NATIONALITY-*
   // / PERSON-DOB-*, which request a Proof of Identity and leave the footer
-  // blocked on "1 document needed" — real behaviour, but it would strand this
+  // blocked on "1 document needed" - real behaviour, but it would strand this
   // driver before Fill Gaps.
   const edit = personAttrControl("Jane Doe", "Edit Role / position", { director: true });
   expect(edit).toBeTruthy();
@@ -249,7 +249,7 @@ async function driveToListedFillGaps() {
 
   // Removing a director owes a List of Directors (PERSON-REMOVAL-DIRECTOR,
   // policyTable.js:331) and the footer blocks on "1 document needed" until it is
-  // uploaded — so satisfy it the way a customer does. uploadAmendmentDoc treats
+  // uploaded - so satisfy it the way a customer does. uploadAmendmentDoc treats
   // a rejected fetch as uploadFailed, which correctly does NOT satisfy the gate,
   // so this one route has to resolve; everything else stays offline.
   global.fetch = jest.fn((url) =>
@@ -296,7 +296,7 @@ function cardFor(name) {
 }
 
 /**
- * The smallest container that holds `anchor` AND matches `alsoContains` — the
+ * The smallest container that holds `anchor` AND matches `alsoContains` - the
  * generic form of cardFor, for cards that carry no PEP block (the light
  * replacement card and the listed summary).
  */
@@ -319,7 +319,7 @@ describe("reaching Fill Gaps with the stakeholder forms rendered", () => {
   it("lands on the Fill Gaps page under its four-condition guard", async () => {
     await driveToFillGaps();
     expect(screen.getByText(/Additional Information Required/)).toBeInTheDocument();
-    // The shell's own count line — pinned as a shape, not a number, because the
+    // The shell's own count line - pinned as a shape, not a number, because the
     // exact total belongs to the gap machinery, not to this cluster.
     expect(screen.getByText(/\d+ fields need your input/)).toBeInTheDocument();
   });
@@ -370,7 +370,7 @@ describe("the person cards", () => {
   it("locks an AI-found name the customer confirmed, showing it as Verified", async () => {
     await driveToFillGaps();
     const card = cardFor("Trustees");
-    // nameLocked = isAIFound && isStkFieldConfirmed(id, "full_name") — true here
+    // nameLocked = isAIFound && isStkFieldConfirmed(id, "full_name") - true here
     // because the driver ticked everything on Confirm. The name renders as text
     // with a Verified marker, NOT as an editable input.
     expect(within(card).getAllByText("✓ Verified").length).toBeGreaterThan(0);
@@ -391,7 +391,7 @@ describe("the person cards", () => {
 
   it("renders an editable role input for a person whose role is unknown", async () => {
     await driveToFillGaps();
-    // UBO role placeholder — StableInput sets no DOM id and its label is not
+    // UBO role placeholder - StableInput sets no DOM id and its label is not
     // associated with the input, so placeholder is the durable query.
     expect(screen.getAllByPlaceholderText("e.g. Shareholder, UBO").length).toBeGreaterThan(0);
   });
@@ -538,12 +538,12 @@ describe("the page around the cluster", () => {
   });
 });
 
-// ─── TEMPORARY EXPLORATION — removed before commit ───
+// ─── TEMPORARY EXPLORATION - removed before commit ───
 /**
- * THE LISTED JOURNEY — the listed-only branches of the same cluster.
+ * THE LISTED JOURNEY - the listed-only branches of the same cluster.
  *
  * Everything below is unreachable on the private journey above, and all of it
- * lives inside the 3666–4622 span slice 1 lifts, so it needs an oracle too.
+ * lives inside the 3666-4622 span slice 1 lifts, so it needs an oracle too.
  */
 describe("listed company - the light replacement card", () => {
   it("asks for a replacement for the director the customer removed", async () => {

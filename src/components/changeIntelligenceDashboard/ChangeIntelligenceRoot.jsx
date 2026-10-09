@@ -1,5 +1,5 @@
 /**
- * ChangeIntelligenceRoot.jsx — internal-only gate for the dashboard. Reuses the
+ * ChangeIntelligenceRoot.jsx - internal-only gate for the dashboard. Reuses the
  * EXISTING admin access pattern (POST /api/admin-auth + sessionStorage
  * "admin_token"), so anyone already signed into /admin in this session reaches
  * the dashboard with no second prompt, and no new auth is introduced (D2).

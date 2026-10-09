@@ -4,7 +4,7 @@
  * Drives the real app the same way ApplicantPage.render.test.jsx does.
  *
  * Also covers the Task 8 review addition: a brand-new application (Start Over,
- * then a fresh company lookup) must not be treated as a customer re-search —
+ * then a fresh company lookup) must not be treated as a customer re-search -
  * resetAll must drop seededBy back to "analyst" and searchAttempts back to 0
  * for a non-link journey, or the fresh application inherits the previous
  * company's search cap and never reaches /api/research.

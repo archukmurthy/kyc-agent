@@ -7,7 +7,7 @@ import SchemaImportButton from "../components/SchemaImportButton";
 import { adminColors, adminStyles } from "../adminDesign";
 import { flagFor } from "../countries";
 
-// Step 4 — Field Schema Builder.
+// Step 4 - Field Schema Builder.
 //
 // Drives the per-(entity × licence) schema matrix. Click a cell to focus it,
 // pick a starting strategy (copy / template / scratch) when empty, then edit
@@ -15,7 +15,7 @@ import { flagFor } from "../countries";
 // add/edit.
 //
 // Templates for the option-card flow come from whatever the seed put in
-// config.schemas for the FI / Corporate / Platform / Direct buckets — so the
+// config.schemas for the FI / Corporate / Platform / Direct buckets - so the
 // real, current canonical schemas double as starting points.
 
 const TEMPLATE_SEEDS = ["FI", "Corporate", "Platform", "Direct"];
@@ -31,11 +31,11 @@ export default function StepSchemas({
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingField, setEditingField] = useState(null);
   const [savedFlash, setSavedFlash] = useState(false);
-  // Copy-to-other-schemas modal — opened immediately after a successful field
+  // Copy-to-other-schemas modal - opened immediately after a successful field
   // save when more than one schema is configured.
   const [showCopyModal, setShowCopyModal] = useState(false);
   const [lastSavedField, setLastSavedField] = useState(null);
-  // Cells that just received a copy — surfaced as a pulsing blue ring + label
+  // Cells that just received a copy - surfaced as a pulsing blue ring + label
   // on the matrix so the admin can see what got touched. Cleared after 5s.
   const [recentlyUpdated, setRecentlyUpdated] = useState(() => new Set());
   const [copyToast, setCopyToast] = useState(null);
@@ -86,7 +86,7 @@ export default function StepSchemas({
 
   function applyTemplate(entityKey) {
     // Use the first non-empty schema that matches the entity type bucket as
-    // the template — defaults to a UK-based seed if present.
+    // the template - defaults to a UK-based seed if present.
     const candidates = Object.keys(schemas).filter((k) => k.startsWith(entityKey + ":"));
     const firstNonEmpty = candidates.find((k) => {
       const s = schemas[k];
@@ -127,7 +127,7 @@ export default function StepSchemas({
 
     // After the field is saved into the current schema, offer to copy the same
     // change to other schemas. Skipped when only one schema exists, or when
-    // the field id is unusable (defensive — SchemaFieldPanel validates this
+    // the field id is unusable (defensive - SchemaFieldPanel validates this
     // upstream but we don't want to crash here either way).
     const totalSchemas = Object.keys(config?.schemas || {}).length;
     if (totalSchemas <= 1) return;
@@ -232,7 +232,7 @@ export default function StepSchemas({
   function addSection() {
     const name = window.prompt("New section name:");
     if (!name) return;
-    // Sections are inferred from field.section — to "add" one, we just remember
+    // Sections are inferred from field.section - to "add" one, we just remember
     // it client-side and require the next field to use it. We surface it by
     // dropping a stub no-op into the panel options. Simpler: open the panel
     // pre-populated with the section name on a blank field.
@@ -437,8 +437,8 @@ function CellMatrix({ entityTypes, licences, schemas, selected, onSelect, recent
 
                 // Cells that aren't in the entity's associatedLicenceIds AND
                 // have no configured schema are truly "not applicable" and
-                // render as "—". Cells with a schema but no association are
-                // orphan schemas — still surface them as ✅ with a hint so the
+                // render as "-". Cells with a schema but no association are
+                // orphan schemas - still surface them as ✅ with a hint so the
                 // admin can find and clean up the inconsistency.
                 if (!associated && !has) {
                   return (

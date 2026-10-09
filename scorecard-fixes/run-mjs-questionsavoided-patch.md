@@ -9,7 +9,7 @@ Three edits. Drop `question-weight.mjs` into the `benchmark/` folder next to
 import { questionsAvoided as qaWeight } from './question-weight.mjs';
 ```
 
-## 2. In `metricsFor()` — replace the single questionsAvoided line
+## 2. In `metricsFor()` - replace the single questionsAvoided line
 
 FIND (line ~195):
 ```js
@@ -18,7 +18,7 @@ FIND (line ~195):
 
 REPLACE WITH:
 ```js
-    // #2 — data-point level. verified+probable = avoided; indicative = predrafted.
+    // #2 - data-point level. verified+probable = avoided; indicative = predrafted.
     // schemaByField is optional (mode b); pass null to compute purely from
     // `found` (mode a, works retroactively over stored output).
     ...(() => {
@@ -35,7 +35,7 @@ REPLACE WITH:
 The old `questionsAvoided: populated` is preserved as `questionsAvoidedFields`
 so nothing downstream breaks and you can compare field-level vs data-point.
 
-## 3. Optional schema weights (mode b) — near the top, after BASELINE etc.
+## 3. Optional schema weights (mode b) - near the top, after BASELINE etc.
 
 If you want per-field overrides for new runs, define them; otherwise leave as
 null and it runs in pure mode (a):
@@ -50,7 +50,7 @@ const SCHEMA_WEIGHTS = null;
 // };
 ```
 
-## 4. In `aggregate()` — add the new keys
+## 4. In `aggregate()` - add the new keys
 
 FIND (line ~225):
 ```js
@@ -74,4 +74,4 @@ console.log(`     + predrafted (indicative)        ${f1(overall.questionsPredraf
 ```
 
 The HTML card at ~370 can show `overall.questionsAvoided.mean` with a second
-small figure for predrafted, or stack them — your call on layout.
+small figure for predrafted, or stack them - your call on layout.

@@ -471,7 +471,7 @@ test("a 404 unknown tenant does not consume the grant", async () => {
   assert.deepStrictEqual(usedGrants, {});
 });
 
-test("a successful call consumes the grant before the cache lookup — a cache hit still consumes", async () => {
+test("a successful call consumes the grant before the cache lookup - a cache hit still consumes", async () => {
   research.__setDeps({
     resolveDossierActor: async () => CUSTOMER,
     cache: {

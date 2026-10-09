@@ -3,15 +3,15 @@ import React, { useState } from "react";
 // Band B one-round dialogue (Step 5c). Presentational only: it renders the
 // server-provided verbatim copy and reports the chosen explanation up via
 // callbacks. It never decides anything and never shows two data versions as a
-// pick-one — it shows the two names for context and asks a single question.
+// pick-one - it shows the two names for context and asks a single question.
 //
 // Props:
-//   dialogue    — the server `result.dialogue` object: { prompt, options, submitLabel }
-//   uploadPrompt — when the server asked for a name-change document, its verbatim
+//   dialogue    - the server `result.dialogue` object: { prompt, options, submitLabel }
+//   uploadPrompt - when the server asked for a name-change document, its verbatim
 //                  prompt string; renders the upload affordance.
-//   onSubmit(categoryId)          — applicant chose an explanation
-//   onUpload(categoryId, file)    — applicant supplied the name-change document
-//   Btn         — optional button component (falls back to a plain <button>)
+//   onSubmit(categoryId)          - applicant chose an explanation
+//   onUpload(categoryId, file)    - applicant supplied the name-change document
+//   Btn         - optional button component (falls back to a plain <button>)
 export default function BandDialogue({ dialogue, uploadPrompt, onSubmit, onUpload, Btn }) {
   const [choice, setChoice] = useState(null);
   const [file, setFile] = useState(null);

@@ -64,7 +64,7 @@ describe("deriveScalarProvenance - affirmation", () => {
       affirmed: true,
     });
     expect(customerAction).toBe("affirmed");
-    // Affirming does not touch the value — it is still the agent's.
+    // Affirming does not touch the value - it is still the agent's.
     expect(agentValue).toBe("529900T8BM49AURSDO55");
   });
 

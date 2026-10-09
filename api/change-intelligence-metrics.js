@@ -4,10 +4,10 @@
 //
 // Loads every change_event via the DAL and runs the pure computeDashboardMetrics
 // aggregator server-side, returning one JSON payload with all headline + detail
-// data. PURE READ — no writes, no journey data, nothing outside change_events.
+// data. PURE READ - no writes, no journey data, nothing outside change_events.
 //
 // CommonJS (module.exports), mirroring api/amendment-documents.js. Internal/admin
-// only (same access pattern as the admin view — the page gates with the admin
+// only (same access pattern as the admin view - the page gates with the admin
 // token before fetching this). NOTE: src/setupProxy.js gets an additive route
 // registration so this also works under local npm start.
 //
@@ -41,7 +41,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (!process.env.DATABASE_URL) {
-    console.warn("[change-intelligence-metrics] No DATABASE_URL — empty metrics");
+    console.warn("[change-intelligence-metrics] No DATABASE_URL - empty metrics");
     return res.status(200).json(computeDashboardMetrics([]));
   }
 

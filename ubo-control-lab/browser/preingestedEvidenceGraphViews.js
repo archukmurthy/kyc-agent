@@ -12,7 +12,7 @@
   }
   function measurementText(measurement) {
     if (measurement?.type === "EXACT") return `${measurement.value}%`;
-    if (measurement?.type === "RANGE") return `${measurement.lowerBound}%–${measurement.upperBound}%`;
+    if (measurement?.type === "RANGE") return `${measurement.lowerBound}%-${measurement.upperBound}%`;
     return "an unresolved amount of";
   }
   function enrich(projection, entityDirectory) {

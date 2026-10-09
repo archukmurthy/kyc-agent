@@ -2,7 +2,7 @@
 /*
  * DEMO: Band A/B/C outcomes, driven by the REAL band logic (no DB, no network).
  * Shows exactly what the platform decides for controlled officer-vs-document
- * inputs — useful to demo the band variations that a live Didit sandbox can't
+ * inputs - useful to demo the band variations that a live Didit sandbox can't
  * reliably force. Run:  node scripts/demo/band-outcomes.js
  */
 const { runHygiene } = require("../../api/idv-match/matching/hygiene");
@@ -20,7 +20,7 @@ function demo(title, officer, identity, opts = {}) {
   const band = assignBand({ hygiene, screeningHit: !!opts.screeningHit, escalationFlag: false });
 
   if (band.needsRetry) {
-    console.log("  RESULT: RETRY (missing/unreadable data is never a match) — applicant asked to verify again");
+    console.log("  RESULT: RETRY (missing/unreadable data is never a match) - applicant asked to verify again");
     return;
   }
   console.log("  RESULT: Band " + band.band + "  |  outcome: " + (band.outcomeType || "(decided in resolution)") + "  |  reasons: " + JSON.stringify(band.reasons));
@@ -45,10 +45,10 @@ function demo(title, officer, identity, opts = {}) {
 }
 
 console.log("################ BAND OUTCOME DEMO (real logic, no DB/network) ################");
-demo("Band A — exact match", { name: "SMITH, John", birthMonthYear: "1985-05" }, { first_name: "John", last_name: "Smith", date_of_birth: "1985-05-24" });
-demo("Band A — MRZ fixes a visual typo (extraction error)", { name: "LOVELACE, Ada", birthMonthYear: "1815-12" }, { first_name: "Ade", last_name: "Lovelace", date_of_birth: "1815-12-10", mrz: { surname: "LOVELACE", given_names: "ADA" } });
-demo("Band B — transliteration variation (Murthy/Moorthy)", { name: "MURTHY, Ada", birthMonthYear: "1990-05" }, { first_name: "Ada", last_name: "Moorthy", date_of_birth: "1990-05-10" });
-demo("Band C — different person (DOB conflict)", { name: "SMITH, John", birthMonthYear: "1985-05" }, { first_name: "Bob", last_name: "Jones", date_of_birth: "1970-01-01" });
-demo("RETRY — missing DOB", { name: "SMITH, John", birthMonthYear: "1985-05" }, { first_name: "John", last_name: "Smith" });
-demo("PEP/sanctions HIT — clean match blocked, routed to review", { name: "SMITH, John", birthMonthYear: "1985-05" }, { first_name: "John", last_name: "Smith", date_of_birth: "1985-05-24" }, { screeningHit: true });
+demo("Band A - exact match", { name: "SMITH, John", birthMonthYear: "1985-05" }, { first_name: "John", last_name: "Smith", date_of_birth: "1985-05-24" });
+demo("Band A - MRZ fixes a visual typo (extraction error)", { name: "LOVELACE, Ada", birthMonthYear: "1815-12" }, { first_name: "Ade", last_name: "Lovelace", date_of_birth: "1815-12-10", mrz: { surname: "LOVELACE", given_names: "ADA" } });
+demo("Band B - transliteration variation (Murthy/Moorthy)", { name: "MURTHY, Ada", birthMonthYear: "1990-05" }, { first_name: "Ada", last_name: "Moorthy", date_of_birth: "1990-05-10" });
+demo("Band C - different person (DOB conflict)", { name: "SMITH, John", birthMonthYear: "1985-05" }, { first_name: "Bob", last_name: "Jones", date_of_birth: "1970-01-01" });
+demo("RETRY - missing DOB", { name: "SMITH, John", birthMonthYear: "1985-05" }, { first_name: "John", last_name: "Smith" });
+demo("PEP/sanctions HIT - clean match blocked, routed to review", { name: "SMITH, John", birthMonthYear: "1985-05" }, { first_name: "John", last_name: "Smith", date_of_birth: "1985-05-24" }, { screeningHit: true });
 console.log("\n(These are the exact decisions the live app makes; the app UI shows the applicant-facing copy for each.)");

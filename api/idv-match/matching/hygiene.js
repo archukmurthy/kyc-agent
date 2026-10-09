@@ -26,9 +26,9 @@ function runHygiene({ officerSnapshot = {}, identity = {} } = {}) {
   const dob = compareDob(officerSnapshot.birthMonthYear, identity.date_of_birth);
 
   // "Not matchable" means the APPLICANT'S OWN DOCUMENT is unreadable (their name
-  // or DOB couldn't be read) — that's the retry case. A missing OFFICER DOB is a
+  // or DOB couldn't be read) - that's the retry case. A missing OFFICER DOB is a
   // Companies House data gap (CH doesn't always expose it), NOT an unreadable
-  // document, so it must NOT force a retry — the comparison proceeds on the name.
+  // document, so it must NOT force a retry - the comparison proceeds on the name.
   const documentNameReadable = !!(mrzName || (identity.first_name && identity.last_name));
   const documentDobReadable = !!(identity.date_of_birth && String(identity.date_of_birth).trim());
 

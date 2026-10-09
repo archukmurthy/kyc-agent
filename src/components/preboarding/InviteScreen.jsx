@@ -1,15 +1,15 @@
 /**
- * InviteScreen.jsx — the analyst's "invite the customer" screen, the last
+ * InviteScreen.jsx - the analyst's "invite the customer" screen, the last
  * pre-boarding surface.
  *
  * Originally extracted from App.js as a pure move; since then the invite-send
- * path was fixed to email a working (dossier-backed) link — see below. Reached
+ * path was fixed to email a working (dossier-backed) link - see below. Reached
  * from the ?preboarding=1 early-return block (which stays in App.js) when
  * showInviteScreen is set; it takes priority over the dossier view, and that
  * ordering lives in the routing block, not here.
  *
  * ONE LINK, SERVER-ISSUED: the server signs a customer token for this dossier
- * (POST /api/invite) and returns `?dossierToken=<token>&journey=customer` — the
+ * (POST /api/invite) and returns `?dossierToken=<token>&journey=customer` - the
  * client never builds the link itself and no raw dossier id ever leaves. It
  * works cross-device because the customer's mount fetches the dossier
  * server-side (api/get-dossier) using that token. A saved dossier (dossierId)
@@ -98,7 +98,7 @@ Please complete your onboarding by clicking the link below:
 
 ${inviteLink || '[Onboarding link will appear here]'}
 
-This link is unique to your application. Once you click it, you will be guided through a short onboarding form. The process typically takes 10–15 minutes.
+This link is unique to your application. Once you click it, you will be guided through a short onboarding form. The process typically takes 10-15 minutes.
 
 If you have any questions, please do not hesitate to reach out to your ${brand} contact.
 

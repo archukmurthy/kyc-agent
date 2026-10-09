@@ -1,6 +1,6 @@
 "use strict";
 
-// ComplyCube screening adapter — the one place ComplyCube specifics live. Wraps
+// ComplyCube screening adapter - the one place ComplyCube specifics live. Wraps
 // the existing thin SDK client + pure interpreter and returns the canonical shape.
 const { ScreeningProvider } = require("../contracts/screeningProvider");
 const defaultClient = require("../complyCubeClient");

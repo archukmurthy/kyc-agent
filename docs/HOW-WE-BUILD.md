@@ -1,7 +1,7 @@
 # How We Build
 
 The working agreement for this project. Read this at the start of any session
-before planning work. It is short on purpose — a long one rots.
+before planning work. It is short on purpose - a long one rots.
 
 Decided 18 September 2026. Change it by editing this file, not by remembering
 something different.
@@ -10,7 +10,7 @@ something different.
 
 ## 1. Two lanes, decided by file path (never by opinion)
 
-**Guarded** — a change is Guarded if it touches ANY of:
+**Guarded** - a change is Guarded if it touches ANY of:
 
 - anything in `api/`
 - `lib/auth.js`, `lib/dossierAccess.js`, `lib/tenantRegistry.js`,
@@ -28,23 +28,23 @@ One Guarded file makes the whole change Guarded. No splitting hairs.
 
 ## 2. The five stages
 
-1. **Plan** — exact files, exact interfaces, and the tests that will prove it.
+1. **Plan** - exact files, exact interfaces, and the tests that will prove it.
    Guarded also states in one line what goes wrong if this is built badly
    (who gets in, what leaks, what breaks). Skip only for copy/doc edits.
-2. **Build** — test first for anything with logic. Lint and covering tests run
+2. **Build** - test first for anything with logic. Lint and covering tests run
    after each edit. Agents get file:line pointers, never "go find it".
-   Parallel agents only on file lists that do not overlap — write the list first.
-3. **Prove** — full suite and a clean build before every pull request, always.
+   Parallel agents only on file lists that do not overlap - write the list first.
+3. **Prove** - full suite and a clean build before every pull request, always.
    Guarded also gets an adversarial reviewer told exactly what to attack, and
    database changes get a tested way to undo them.
-4. **Gate** — automatic checks run on every pull request (`.github/workflows/ci.yml`).
+4. **Gate** - automatic checks run on every pull request (`.github/workflows/ci.yml`).
    GitHub cannot enforce the block on a private personal repo, so **nothing red
    gets merged is an agreement, not a wall** (PROC-4). Two backstops: the checks
    are visible on every pull request, and `.githooks/pre-push` runs the suites
    before a push. Enable it once per clone:
    `git config core.hooksPath .githooks`. Skipping it with `--no-verify` is for
    emergencies, and the next push runs it anyway.
-5. **Learn** — every bug adds the test that would have caught it, in the same
+5. **Learn** - every bug adds the test that would have caught it, in the same
    pull request. One line recorded on where it was caught.
 
 **Before any task is called done, ask: what did this turn up that now exists
@@ -88,13 +88,13 @@ Three things happen in the SAME pull request as the work, never afterwards:
   the `CLAUDE.md` map is still true; note where each defect was caught.
 - **Per phase:** documentation sweep; remove dead code and retired rules.
 - **On a timer, not by memory:** dependency scan (runs in the automatic checks);
-  AI model identifiers — read them from the API response rather than keeping a
+  AI model identifiers - read them from the API response rather than keeping a
   list, because hand-kept lists rot silently (one already did).
 
 ### What should NOT become a document
 
-- Which database changes have been applied — the migration runner records it.
-- What the code does — the code says it. Documents hold decisions and
+- Which database changes have been applied - the migration runner records it.
+- What the code does - the code says it. Documents hold decisions and
   boundaries: what there is exactly one of, what must never happen, which way
   dependencies run. Those change rarely, so they stay true.
 
@@ -104,7 +104,7 @@ Three things happen in the SAME pull request as the work, never afterwards:
 - A backlog item that is done or overtaken: mark it, do not delete the history.
 - A document nobody has read in a phase: delete it rather than maintain it.
 - Any `CLAUDE.md` line that is no longer true: fix it the moment it is spotted.
-  A stale map is worse than no map — it misleads every agent that reads it.
+  A stale map is worse than no map - it misleads every agent that reads it.
 
 ---
 
@@ -120,7 +120,7 @@ Three things happen in the SAME pull request as the work, never afterwards:
 
 ---
 
-## 5. Enforcement tooling — build status
+## 5. Enforcement tooling - build status
 
 These are what make the agreement real rather than remembered. Tracked as
 PROC-1 to PROC-4 in `docs/BACKLOG.md`.
@@ -128,11 +128,11 @@ PROC-1 to PROC-4 in `docs/BACKLOG.md`.
 | # | Tool | Status |
 | --- | --- | --- |
 | 1 | `CLAUDE.md` rewritten as a true map of the system | Built (`23b875e`) |
-| 2 | Lint + covering tests run automatically after each edit | Built — `scripts/after-edit.js`, wired in `.claude/settings.json`. Lints the edited file and runs the one test file that covers it (sibling `__tests__`/`tests`, same base name); reports failures back and stops there. Full suites stay before the pull request. |
-| 3 | Rule-tests (route table first, then one per bug class) | Built — `api/__tests__/routeTable.nodetest.js`. Every file under `api/` declares who may call it; a new file fails the test. Also: no wildcard CORS, a credential-gated route really checks one, an open route is at least rate-limited, and the list of open routes cannot grow. |
+| 2 | Lint + covering tests run automatically after each edit | Built - `scripts/after-edit.js`, wired in `.claude/settings.json`. Lints the edited file and runs the one test file that covers it (sibling `__tests__`/`tests`, same base name); reports failures back and stops there. Full suites stay before the pull request. |
+| 3 | Rule-tests (route table first, then one per bug class) | Built - `api/__tests__/routeTable.nodetest.js`. Every file under `api/` declares who may call it; a new file fails the test. Also: no wildcard CORS, a credential-gated route really checks one, an open route is at least rate-limited, and the list of open routes cannot grow. |
 | 4 | Automatic checks on every pull request | Built (`.github/workflows/ci.yml`) |
-| 5 | Those checks *blocking* a merge | Blocked — GitHub does not enforce rulesets on a private personal repo; the ruleset is saved and activates if the repo moves to an organization on Team |
-| 6 | `.githooks/pre-push` backstop | Built — run `git config core.hooksPath .githooks` once per clone |
+| 5 | Those checks *blocking* a merge | Blocked - GitHub does not enforce rulesets on a private personal repo; the ruleset is saved and activates if the repo moves to an organization on Team |
+| 6 | `.githooks/pre-push` backstop | Built - run `git config core.hooksPath .githooks` once per clone |
 
 The merge block is the one piece the platform will not give us for free, so
 treat the full suite before a pull request as compulsory anyway. The owner chose
@@ -143,6 +143,6 @@ organization.
 
 ## 6. Why this exists
 
-Speed comes from deleting repetition — re-reading, re-deriving, re-checking by
+Speed comes from deleting repetition - re-reading, re-deriving, re-checking by
 eye what a test can check. It never comes from deleting checks. Anything that
 trades safety for speed was considered and rejected.

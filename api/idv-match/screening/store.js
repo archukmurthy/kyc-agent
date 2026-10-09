@@ -42,7 +42,7 @@ async function listByAttempt(attemptId) {
 }
 
 // Data minimization: we persist outcome + categories only. The full ComplyCube
-// payload (match PII + scores) is never stored — the raw `result` column was
+// payload (match PII + scores) is never stored - the raw `result` column was
 // dropped in migration 017.
 async function updateScreeningResult(id, { status = null, outcome = null, categories = null } = {}) {
   if (!id) throw new Error("updateScreeningResult: id is required");

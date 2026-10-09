@@ -1,4 +1,4 @@
-# ADR 0030 — Causal frontier InformationNeeds v2
+# ADR 0030 - Causal frontier InformationNeeds v2
 
 ## Status
 

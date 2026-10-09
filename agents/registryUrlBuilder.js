@@ -65,8 +65,8 @@ function companiesHouseUrl(pageType, companyName, registrationNumber) {
         : `https://find-and-update.company-information.service.gov.uk/search?q=${encoded}`;
 
     case "regulator":
-      // FCA register — separate site entirely.
-      // NB: no `predefined=ALL` — that param breaks the search page (returns
+      // FCA register - separate site entirely.
+      // NB: no `predefined=ALL` - that param breaks the search page (returns
       // an empty/error result); the register only needs `q`.
       return `https://register.fca.org.uk/s/search?q=${encoded}`;
 
@@ -79,7 +79,7 @@ function companiesHouseUrl(pageType, companyName, registrationNumber) {
 
 // ─── ACRA BizFile (Singapore) ─────────────────────────────────────────────────
 function acraUrl(pageType, companyName, registrationNumber) {
-  // ACRA's public search — direct company pages require login
+  // ACRA's public search - direct company pages require login
   // Best we can do without auth is the search page
   return `https://www.bizfile.gov.sg/ngbbizfileinternet/faces/oracle/webcenter/portalapp/pages/BizfileHomepage.jspx`;
 }
@@ -157,9 +157,9 @@ function germanyUrl(pageType, companyName, registrationNumber) {
   return `https://www.handelsregister.de/rp_web/mask.do?Typ=n&Schlagwoerter=${encoded}`;
 }
 
-// ─── FCA register (standalone — used for Regulatory status across UK) ─────────
+// ─── FCA register (standalone - used for Regulatory status across UK) ─────────
 function fcaUrl(companyName) {
-  // No `predefined=ALL` — that param breaks the FCA search page; only `q` is needed.
+  // No `predefined=ALL` - that param breaks the FCA search page; only `q` is needed.
   return `https://register.fca.org.uk/s/search?q=${encodeURIComponent(companyName)}`;
 }
 
@@ -239,11 +239,11 @@ function buildRegistryUrl(baseUrl, requirement, companyName, registrationNumber 
     return lithuaniaUrl(pageType, companyName, registrationNumber);
 
   // ── Registries that always need a registration number (second-pass only) ──
-  if (baseUrl.includes("touki.or.jp"))   return baseUrl; // Japan — needs Japanese input
+  if (baseUrl.includes("touki.or.jp"))   return baseUrl; // Japan - needs Japanese input
   if (baseUrl.includes("receita.fazenda") || baseUrl.includes("cnpjreva")) return baseUrl;
   if (baseUrl.includes("gsxt.gov.cn"))   return baseUrl;
 
-  // Default — return base URL
+  // Default - return base URL
   return baseUrl;
 }
 

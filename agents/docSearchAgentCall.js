@@ -1,7 +1,7 @@
 /**
  * docSearchAgentCall.js
  *
- * Integration snippet — how to call docSearchAgent
+ * Integration snippet - how to call docSearchAgent
  * from the main KYC agent using the KYC agent's
  * own terminology (entityType, ownershipType,
  * effectivelyListed from OWNERSHIP_TYPE_LIBRARY).
@@ -10,7 +10,7 @@
  * when wiring the doc search agent into the
  * main KYC flow.
  *
- * PRODUCTION READINESS NOTE — PR-001:
+ * PRODUCTION READINESS NOTE - PR-001:
  * The mapToDocAgentOwnershipType() function below
  * contains hardcoded entity type IDs and ownership
  * type IDs. If an admin adds a new entity type or
@@ -38,7 +38,7 @@ const { OWNERSHIP_TYPE_LIBRARY } = require(
 //   niumEntityType: "fi" | "corporate" | "platform" | "direct"
 //   ownershipType:  "public_fi" | "fi_only" | "public_only" | "corporate"
 
-// HARDCODED — see PRODUCTION_READINESS.md PR-001
+// HARDCODED - see PRODUCTION_READINESS.md PR-001
 // Replace with config-driven lookup before any live customer data.
 function mapToDocAgentOwnershipType(
   ownershipTypeId,
@@ -84,7 +84,7 @@ function generateCaseId(companyName, countryCode) {
   return `${slug}_${countryCode?.toLowerCase()}_${Date.now()}`;
 }
 
-// ─── Main call — use this in the KYC agent ───────────────────────────────────
+// ─── Main call - use this in the KYC agent ───────────────────────────────────
 
 /**
  * Call the doc search agent from the main KYC flow.
@@ -119,7 +119,7 @@ async function callDocSearchAgent({
   );
 
   console.log(
-    `[KYCAgent] Calling docSearchAgent — ` +
+    `[KYCAgent] Calling docSearchAgent - ` +
     `ownershipType: ${docAgentOwnershipType}`
   );
 

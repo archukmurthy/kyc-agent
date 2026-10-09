@@ -3,7 +3,7 @@
 // CommonJS (module.exports), not `export default`, so src/setupProxy.js can
 // require() it for local `npm start` (mirrors api/save-dossier.js, api/submit.js).
 //
-// Email delivery uses the Resend REST API (https://resend.com) via fetch — no
+// Email delivery uses the Resend REST API (https://resend.com) via fetch - no
 // new npm dependency, same pattern as api/research.js calling Anthropic. When
 // RESEND_API_KEY is absent (e.g. local dev with nothing provisioned) the
 // endpoint still succeeds but reports { sent: false, simulated: true } so the
@@ -13,17 +13,17 @@
 // credential (lib/dossierAccess.js) may invite. The dossier must already
 // exist in that analyst's tenant. The server mints a signed, expiring,
 // revocable customer token (lib/dossierToken.js#mint) and builds the ONLY
-// link ever emailed — a body-supplied tenantId or link is never trusted or
+// link ever emailed - a body-supplied tenantId or link is never trusted or
 // used. The link carries `?dossierToken=<token>`, never a raw dossierId, so a
 // forwarded or leaked link cannot be used to enumerate dossiers, and the
 // tenant can revoke every outstanding copy via api/revoke-dossier-token.js.
 //
 // Env vars:
-//   RESEND_API_KEY       — Resend API key. Without it, email is simulated.
-//   INVITE_FROM_EMAIL    — From header, e.g. "Acme Onboarding <onboarding@acme.com>".
+//   RESEND_API_KEY       - Resend API key. Without it, email is simulated.
+//   INVITE_FROM_EMAIL    - From header, e.g. "Acme Onboarding <onboarding@acme.com>".
 //                          Defaults to Resend's shared test sender, brand-named
 //                          from the tenant's own config (see brandName below).
-//   DOSSIER_TOKEN_SECRET — required to mint a customer link (lib/dossierToken.js).
+//   DOSSIER_TOKEN_SECRET - required to mint a customer link (lib/dossierToken.js).
 
 const crypto = require("crypto");
 const { neon } = require("@neondatabase/serverless");
@@ -50,10 +50,10 @@ async function sendEmail({ apiKey, from, to, subject, text }) {
   return { ok: r.ok, data };
 }
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { store, sendEmail, readConfigForTenant, neon, access: dossierAccess, dossierToken };
 
-// Resolve the server's own origin from request headers — NOT from the request
+// Resolve the server's own origin from request headers - NOT from the request
 // body. body.origin is attacker-controlled (any value the caller's JS sets);
 // the Host header (and x-forwarded-*, which Vercel's edge sets from the real
 // incoming request) is what the server was actually reached on, so it's the
@@ -73,7 +73,7 @@ function resolveOrigin(req, bodyOrigin) {
     const proto = forwarded || (isLocal ? "http" : "https");
     return `${proto}://${host}`.replace(/\/+$/, "");
   }
-  // No Host header at all (shouldn't happen over real HTTP) — fall back to
+  // No Host header at all (shouldn't happen over real HTTP) - fall back to
   // whatever the client claims, else the known prod default.
   return (bodyOrigin || "").replace(/\/+$/, "") || "https://kyc-agent-deploy.vercel.app";
 }
@@ -99,7 +99,7 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: "Missing email or contactName" });
   }
   if (!dossierId) {
-    return res.status(400).json({ error: "Missing dossierId — save the dossier before inviting" });
+    return res.status(400).json({ error: "Missing dossierId - save the dossier before inviting" });
   }
 
   if (!process.env.DOSSIER_TOKEN_SECRET) {
@@ -108,7 +108,7 @@ module.exports = async function handler(req, res) {
   }
 
   // The dossier must exist in the ANALYST's tenant before we issue a link to
-  // it — this is a security check (it stops an analyst minting a working
+  // it - this is a security check (it stops an analyst minting a working
   // token for another tenant's dossier, or for an id that doesn't exist), so
   // unlike save-dossier/search-attempt it is never skipped when DATABASE_URL
   // is unset; an unreachable DB fails the request rather than silently
@@ -135,7 +135,7 @@ module.exports = async function handler(req, res) {
   // Postgres's uuid type matches an uppercase/braced/hyphenless spelling to
   // the same row as its canonical lowercase form. Minting with the caller's
   // spelling would embed an id in the token that api/get-dossier's
-  // canReadDossier — which compares against the canonical stored id — later
+  // canReadDossier - which compares against the canonical stored id - later
   // refuses. Use the row's own id from here on, not the caller-typed one.
   const canonicalDossierId = String(found[0].id);
 
@@ -144,7 +144,7 @@ module.exports = async function handler(req, res) {
   // The server builds the only link. A client-supplied link is never used.
   const link = `${baseOrigin}/?tenant=${encodeURIComponent(tenantId)}&dossierToken=${encodeURIComponent(token)}&journey=customer`;
 
-  // Persist WHO was invited to WHAT — never the link or the token, which are
+  // Persist WHO was invited to WHAT - never the link or the token, which are
   // bearer credentials and have no business sitting in a KV record.
   const inviteId = crypto.randomBytes(18).toString("base64url");
   const inviteRecord = {
@@ -172,7 +172,7 @@ module.exports = async function handler(req, res) {
     if (typeof configured === "string" && configured.trim()) brandName = configured.trim();
   } catch (_) { /* fall back to the tenant id */ }
 
-  const subject = `Your ${brandName} onboarding is ready${companyName ? ` — ${companyName}` : ""}`;
+  const subject = `Your ${brandName} onboarding is ready${companyName ? ` - ${companyName}` : ""}`;
   const text = `Dear ${contactName},
 
 Thank you for your interest in ${brandName}. We have begun reviewing your application${companyName ? ` for ${companyName}` : ""} and are ready to proceed with the next step.
@@ -181,7 +181,7 @@ Please complete your onboarding by clicking the link below:
 
 ${link}
 
-This link is unique to your application. Once you click it, you will be guided through a short onboarding form. The process typically takes 10–15 minutes.
+This link is unique to your application. Once you click it, you will be guided through a short onboarding form. The process typically takes 10-15 minutes.
 
 If you have any questions, please do not hesitate to reach out to your ${brandName} contact.
 
@@ -209,7 +209,7 @@ ${brandName} Onboarding Team`;
   try {
     const { ok, data } = await _deps.sendEmail({ apiKey, from, to: email, subject, text });
     if (!ok) {
-      // The raw provider response can carry account/config details — log it
+      // The raw provider response can carry account/config details - log it
       // server-side only, never in the client response.
       console.error("[invite] email provider error:", data);
       return res.status(502).json({

@@ -1,8 +1,8 @@
-# Part 1 — Credentials and Endpoint Locks Implementation Plan
+# Part 1 - Credentials and Endpoint Locks Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Every dossier endpoint answers only to a verified caller — an analyst holding the server-checked pre-boarding password for a tenant with pre-boarding enabled, or a customer holding a signed, expiring, revocable link token for exactly that dossier — and an analyst can no longer change a dossier once the customer has.
+**Goal:** Every dossier endpoint answers only to a verified caller - an analyst holding the server-checked pre-boarding password for a tenant with pre-boarding enabled, or a customer holding a signed, expiring, revocable link token for exactly that dossier - and an analyst can no longer change a dossier once the customer has.
 
 **Architecture:** `lib/dossierToken.js` mints and verifies an HMAC-signed link token and holds a per-dossier revocation cutoff in `lib/storage.js`. `lib/dossierAccess.js` turns any request into an *actor* (`analyst` / `customer` / `none`) and answers "may this actor read / write this dossier row?". Every dossier endpoint (`get-dossier`, `save-dossier`, `search-attempt`, `invite`, the new `revoke-dossier-token`, and the dossier-keyed paths of `change-events` / `amendment-documents`) calls those two modules instead of hand-rolling checks. A migration adds `entity_dossiers.owned_by`, which flips to `customer` on the customer's first write. On the client, `src/utils/dossierCredential.js` holds whichever credential the browser has and every dossier call attaches it.
 
@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - **CommonJS in `api/` and `lib/`**; `src/` is ESM, except `src/pipeline.js` and `src/reresearch/*.js`, which are CommonJS and must keep that shape.
-- **Every handler is mountable by `src/setupProxy.js`** by requiring the real handler — never a copied body. POST routes parse the JSON body themselves before delegating; GET routes use `adapt(...)`.
+- **Every handler is mountable by `src/setupProxy.js`** by requiring the real handler - never a copied body. POST routes parse the JSON body themselves before delegating; GET routes use `adapt(...)`.
 - **Backend tests** are `*.nodetest.js` under `lib/__tests__/` or `api/__tests__/` (run by `npm run test:node`), with fakes injected through `__setDeps` seams. **Frontend tests** are CRA Jest + Testing Library asserting real rendered DOM.
 - **Tenant resolution stays 3-strict** (`lib/tenant.js#getTenantIdFromRequest`: `?tenant=`, then `x-tenant-id`, else `""`). No literal tenant id in any runtime policy check.
 - **Constant-time comparison** for every secret or signature comparison.
@@ -19,7 +19,7 @@
 - **Secrets stay server-side**; new env vars documented in `.env.example` with placeholder values only.
 - **Migrations are additive and idempotent** (`IF NOT EXISTS`), numbered from `026`, applied with `node db/apply.js db/migrations/<file>.sql`.
 - **`src/App.js` is ~5,500 lines:** surgical edits only; hook call order is load-bearing; gap/stakeholder values stay in refs.
-- **Never commit `CLAUDE.md` or `context.md`** — both carry unrelated uncommitted edits. Stage explicit paths; never `git add -A` / `git commit -a`.
+- **Never commit `CLAUDE.md` or `context.md`** - both carry unrelated uncommitted edits. Stage explicit paths; never `git add -A` / `git commit -a`.
 
 ## Decisions locked for this plan (from the approved spec, plus three refinements found while planning)
 
@@ -28,9 +28,9 @@
 3. **Analyst credential:** the pre-boarding password sent as `Authorization: Bearer <password>`, valid only for a tenant that is active and has pre-boarding enabled.
 4. **Customer credential:** `Authorization: Bearer dossier:<token>`, or `?dossierToken=<token>` on the landing GET.
 5. **Ownership lock:** `entity_dossiers.owned_by` flips to `customer` on the customer's first write (a dossier save or a change record). After that the analyst may still READ, never WRITE.
-6. **Refinement — revocation is per dossier, not per token.** Revoking records "tokens for this dossier issued at or before now are dead". It kills every outstanding copy of the link (including forwarded ones) and needs no per-token id list. A fresh invite afterwards mints a working token.
-7. **Refinement — keep `save-dossier`'s `INSERT INTO tenants` upsert.** The spec proposed removing it, but Part 5 guarantees a tenant exists in the KV *registry*, not in the Postgres `tenants` table the dossier row references. The actual hole was that the tenant came from the request body. The fix keeps the upsert and feeds it only the server-verified tenant.
-8. **Refinement — this migration is `026` and covers ownership only.** Part 3's snapshot/search-count/submission-link columns will use `027`.
+6. **Refinement - revocation is per dossier, not per token.** Revoking records "tokens for this dossier issued at or before now are dead". It kills every outstanding copy of the link (including forwarded ones) and needs no per-token id list. A fresh invite afterwards mints a working token.
+7. **Refinement - keep `save-dossier`'s `INSERT INTO tenants` upsert.** The spec proposed removing it, but Part 5 guarantees a tenant exists in the KV *registry*, not in the Postgres `tenants` table the dossier row references. The actual hole was that the tenant came from the request body. The fix keeps the upsert and feeds it only the server-verified tenant.
+8. **Refinement - this migration is `026` and covers ownership only.** Part 3's snapshot/search-count/submission-link columns will use `027`.
 
 ---
 
@@ -82,8 +82,8 @@
 
 **Interfaces:**
 - Produces:
-  - `mint({ dossierId, tenantId, ttlMs? }): string` — throws `Error("DOSSIER_TOKEN_SECRET not configured")` when the secret is absent; throws when `dossierId` or `tenantId` is missing.
-  - `verify(token): Promise<{ valid: boolean, reason: null | "no_secret" | "malformed" | "bad_signature" | "expired" | "revoked" | "revocation_unavailable", payload? }>` — `payload = { dossierId, tenantId, iat, exp }`, both times in epoch milliseconds.
+  - `mint({ dossierId, tenantId, ttlMs? }): string` - throws `Error("DOSSIER_TOKEN_SECRET not configured")` when the secret is absent; throws when `dossierId` or `tenantId` is missing.
+  - `verify(token): Promise<{ valid: boolean, reason: null | "no_secret" | "malformed" | "bad_signature" | "expired" | "revoked" | "revocation_unavailable", payload? }>` - `payload = { dossierId, tenantId, iat, exp }`, both times in epoch milliseconds.
   - `revokeAllForDossier(dossierId): Promise<{ revokedBefore: number }>`
   - `DEFAULT_TTL_MS = 2592000000` (30 days)
   - `__setDeps({ storage, now })`
@@ -232,7 +232,7 @@ test("if the revocation list cannot be read, verification fails closed", async (
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node --test lib/__tests__/dossierToken.nodetest.js`
-Expected: FAIL — `Cannot find module '../dossierToken'`.
+Expected: FAIL - `Cannot find module '../dossierToken'`.
 
 - [ ] **Step 3: Implement `lib/dossierToken.js`**
 
@@ -240,7 +240,7 @@ Expected: FAIL — `Cannot find module '../dossierToken'`.
 // Signed, expiring, revocable customer link token for a dossier.
 //
 // Format: base64url(JSON payload) + "." + base64url(HMAC-SHA256(payloadPart)).
-// Payload: { dossierId, tenantId, iat, exp } — times in epoch milliseconds.
+// Payload: { dossierId, tenantId, iat, exp } - times in epoch milliseconds.
 // Secret: DOSSIER_TOKEN_SECRET. Absent secret → mint throws, verify fails closed.
 //
 // Revocation is PER DOSSIER, not per token: revoking records "every token for
@@ -255,7 +255,7 @@ const storage = require("./storage");
 
 const DEFAULT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { storage, now: () => Date.now() };
 
 function secret() {
@@ -364,7 +364,7 @@ git commit -m "feat(security): signed, expiring, per-dossier-revocable customer 
 
 ---
 
-## Task 2: Dossier access — actor resolution and permissions
+## Task 2: Dossier access - actor resolution and permissions
 
 **Files:**
 - Create: `lib/dossierAccess.js`, `lib/__tests__/dossierAccess.nodetest.js`
@@ -373,9 +373,9 @@ git commit -m "feat(security): signed, expiring, per-dossier-revocable customer 
 - Consumes: `lib/dossierToken.js#verify` (Task 1); `lib/auth.js#verifyEnvBearer`; `lib/tenantRegistry.js#isTenantActive`, `#isPreboardingEnabled`; `lib/tenant.js#getTenantIdFromRequest`.
 - Produces:
   - `resolveDossierActor(req): Promise<Actor>` where `Actor = { kind: "analyst" | "customer" | "none", tenantId: string | null, dossierId: string | null, reason: string | null }`.
-  - `canReadDossier(actor, row): { ok: true } | { ok: false, status: number, error: string }` — `row = { id, tenant_id, owned_by }` or `null`.
-  - `canWriteDossier(actor, row)` — same shape; additionally refuses an analyst on a customer-owned row with `403 dossier_locked`.
-  - `denyFor(actor): { status, error }` — `expired → 410 link_expired`, `revoked → 410 link_revoked`, everything else `401 unauthorized`.
+  - `canReadDossier(actor, row): { ok: true } | { ok: false, status: number, error: string }` - `row = { id, tenant_id, owned_by }` or `null`.
+  - `canWriteDossier(actor, row)` - same shape; additionally refuses an analyst on a customer-owned row with `403 dossier_locked`.
+  - `denyFor(actor): { status, error }` - `expired → 410 link_expired`, `revoked → 410 link_revoked`, everything else `401 unauthorized`.
   - `__setDeps({ verifyEnvBearer, dossierToken, registry })`
 
 - [ ] **Step 1: Write the failing test**
@@ -474,7 +474,7 @@ test("an analyst reads and writes dossiers in its own tenant", () => {
   assert.deepStrictEqual(access.canWriteDossier(ANALYST, ROW), { ok: true });
 });
 
-test("an analyst cannot see another tenant's dossier — reported as not found, not forbidden", () => {
+test("an analyst cannot see another tenant's dossier - reported as not found, not forbidden", () => {
   const r = access.canReadDossier(ANALYST, { ...ROW, tenant_id: "other" });
   assert.deepStrictEqual(r, { ok: false, status: 404, error: "dossier_not_found" });
 });
@@ -507,7 +507,7 @@ test("a none actor is never allowed", () => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node --test lib/__tests__/dossierAccess.nodetest.js`
-Expected: FAIL — `Cannot find module '../dossierAccess'`.
+Expected: FAIL - `Cannot find module '../dossierAccess'`.
 
 - [ ] **Step 3: Implement `lib/dossierAccess.js`**
 
@@ -515,10 +515,10 @@ Expected: FAIL — `Cannot find module '../dossierAccess'`.
 // Who is calling a dossier endpoint, and what may they do?
 //
 // Two credentials exist:
-//   analyst  — `Authorization: Bearer <PREBOARDING_PASSWORD>`, valid only for
+//   analyst  - `Authorization: Bearer <PREBOARDING_PASSWORD>`, valid only for
 //              the tenant the request names, and only while that tenant is
 //              active with pre-boarding enabled.
-//   customer — a signed link token (lib/dossierToken.js), sent as
+//   customer - a signed link token (lib/dossierToken.js), sent as
 //              `Authorization: Bearer dossier:<token>` or `?dossierToken=`.
 //              It names exactly one dossier and one tenant.
 //
@@ -533,7 +533,7 @@ const dossierToken = require("./dossierToken");
 const tenantRegistry = require("./tenantRegistry");
 const { getTenantIdFromRequest } = require("./tenant");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { verifyEnvBearer, dossierToken, registry: tenantRegistry };
 
 const CUSTOMER_PREFIX = "dossier:";
@@ -645,7 +645,7 @@ Create `db/migrations/026_dossier_ownership.sql`:
 ```sql
 -- 026_dossier_ownership.sql
 -- Who controls a dossier. 'analyst' until the customer first changes anything
--- (a dossier save or a change record), then 'customer' — after which the
+-- (a dossier save or a change record), then 'customer' - after which the
 -- analyst may still read the dossier but can no longer write to it.
 -- Additive and idempotent: existing rows default to 'analyst'.
 ALTER TABLE entity_dossiers
@@ -669,7 +669,7 @@ Run:
 node -e "require('dotenv').config({path:'.env.local'});const{neon}=require('@neondatabase/serverless');neon(process.env.DATABASE_URL)\`SELECT column_name, data_type, column_default FROM information_schema.columns WHERE table_name='entity_dossiers' AND column_name IN ('owned_by','last_customer_action_at') ORDER BY 1\`.then(r=>console.log(JSON.stringify(r,null,2)))"
 ```
 
-Expected: two rows — `last_customer_action_at` (`timestamp with time zone`) and `owned_by` (`text`, default `'analyst'::text`).
+Expected: two rows - `last_customer_action_at` (`timestamp with time zone`) and `owned_by` (`text`, default `'analyst'::text`).
 
 - [ ] **Step 4: Commit**
 
@@ -802,7 +802,7 @@ test("a dossier that does not exist in the actor's tenant is a 404", async () =>
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node --test api/__tests__/get-dossier.nodetest.js`
-Expected: FAIL — `handler.__setDeps is not a function`.
+Expected: FAIL - `handler.__setDeps is not a function`.
 
 - [ ] **Step 3: Implement**
 
@@ -812,7 +812,7 @@ Replace the body of `api/get-dossier.js` from the first `require` to the end wit
 const { neon } = require("@neondatabase/serverless");
 const dossierAccess = require("../lib/dossierAccess");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { neon, access: dossierAccess };
 
 module.exports = async function handler(req, res) {
@@ -1096,7 +1096,7 @@ test("no DATABASE_URL → 200 with warning, database never touched", async () =>
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node --test api/__tests__/save-dossier.nodetest.js`
-Expected: FAIL — the handler ignores the actor, so the 401 / 403 / tenant-from-credential cases fail.
+Expected: FAIL - the handler ignores the actor, so the 401 / 403 / tenant-from-credential cases fail.
 
 - [ ] **Step 3: Implement**
 
@@ -1107,14 +1107,14 @@ Add after the `neon` require and change the deps:
 ```js
 const dossierAccess = require("../lib/dossierAccess");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { neon, access: dossierAccess };
 ```
 
 Immediately after the `405` guard, resolve the actor:
 
 ```js
-  // Credential first. The tenant comes from the credential ONLY — a request
+  // Credential first. The tenant comes from the credential ONLY - a request
   // body can no longer name (or create) a tenant.
   const actor = await _deps.access.resolveDossierActor(req);
   if (actor.kind === "none") {
@@ -1168,7 +1168,7 @@ Delete the old `const sql = _deps.neon(process.env.DATABASE_URL);` line that fol
 
 ```js
     // Ensure the Postgres tenants row exists (slug is NOT NULL). The tenant id
-    // here is the VERIFIED one from the credential — the historical hole was
+    // here is the VERIFIED one from the credential - the historical hole was
     // that it came from the request body, letting any caller create tenants.
 ```
 
@@ -1315,7 +1315,7 @@ test("a dossier in another tenant is a 404", async () => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node --test api/__tests__/search-attempt.nodetest.js`
-Expected: FAIL — `handler.__setDeps is not a function`.
+Expected: FAIL - `handler.__setDeps is not a function`.
 
 - [ ] **Step 3: Implement**
 
@@ -1325,7 +1325,7 @@ Replace everything in `api/search-attempt.js` from the `neon` require to the end
 const { neon } = require("@neondatabase/serverless");
 const dossierAccess = require("../lib/dossierAccess");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { neon, access: dossierAccess };
 
 module.exports = async function handler(req, res) {
@@ -1371,7 +1371,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ attempts: row.search_attempts });
     }
 
-    // Atomic increment — the database is the single source of truth, so two
+    // Atomic increment - the database is the single source of truth, so two
     // concurrent re-search clicks can't both read the same pre-increment value.
     const rows = await sql`
       UPDATE entity_dossiers
@@ -1418,8 +1418,8 @@ git commit -m "feat(security): search-attempt is credential-gated and tenant-sco
 **Interfaces:**
 - Consumes: `lib/dossierAccess.js`, `lib/dossierToken.js#mint`, `#revokeAllForDossier`.
 - Produces:
-  - `POST /api/invite` — analyst only (`401` / `403 forbidden` otherwise); `dossierId` must exist in the analyst's tenant (`404`); `500 not_configured` when `DOSSIER_TOKEN_SECRET` is unset; response `link` is `${origin}/?tenant=<t>&dossierToken=<token>&journey=customer`; the body's `tenantId` and `link` are ignored; the persisted invite record contains no link and no token.
-  - `POST /api/revoke-dossier-token` body `{ dossierId }` — analyst only; `404` if the dossier is not in the analyst's tenant; `200 { success: true, revokedBefore }`.
+  - `POST /api/invite` - analyst only (`401` / `403 forbidden` otherwise); `dossierId` must exist in the analyst's tenant (`404`); `500 not_configured` when `DOSSIER_TOKEN_SECRET` is unset; response `link` is `${origin}/?tenant=<t>&dossierToken=<token>&journey=customer`; the body's `tenantId` and `link` are ignored; the persisted invite record contains no link and no token.
+  - `POST /api/revoke-dossier-token` body `{ dossierId }` - analyst only; `404` if the dossier is not in the analyst's tenant; `200 { success: true, revokedBefore }`.
   - Both expose `__setDeps({ neon, access, dossierToken, ... })`.
 
 - [ ] **Step 1: Replace the invite tests**
@@ -1600,7 +1600,7 @@ test("a real send passes the token link to the provider", async (t) => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `node --test api/__tests__/invite.nodetest.js`
-Expected: FAIL — the handler has no actor check and still emails a `dossierId=` link.
+Expected: FAIL - the handler has no actor check and still emails a `dossierId=` link.
 
 - [ ] **Step 3: Implement the invite changes**
 
@@ -1622,7 +1622,7 @@ const INVITE_RECORD_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 and
 
 ```js
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { store, sendEmail, readConfigForTenant, neon, access: dossierAccess, dossierToken };
 ```
 
@@ -1646,7 +1646,7 @@ Replace the handler body from `const { email, contactName, companyName, origin, 
     return res.status(400).json({ error: "Missing email or contactName" });
   }
   if (!dossierId) {
-    return res.status(400).json({ error: "Missing dossierId — save the dossier before inviting" });
+    return res.status(400).json({ error: "Missing dossierId - save the dossier before inviting" });
   }
 
   if (!process.env.DOSSIER_TOKEN_SECRET) {
@@ -1670,7 +1670,7 @@ Replace the handler body from `const { email, contactName, companyName, origin, 
   // The server builds the only link. A client-supplied link is never used.
   const link = `${baseOrigin}/?tenant=${encodeURIComponent(tenantId)}&dossierToken=${encodeURIComponent(token)}&journey=customer`;
 
-  // Persist WHO was invited to WHAT — never the link or the token, which are
+  // Persist WHO was invited to WHAT - never the link or the token, which are
   // bearer credentials and have no business sitting in a KV record.
   const inviteId = crypto.randomBytes(18).toString("base64url");
   const inviteRecord = {
@@ -1777,7 +1777,7 @@ test("400 without a dossierId", async () => {
 ```js
 // Revoke every outstanding customer link for a dossier.
 //
-// POST { dossierId } — analyst only. Tokens for this dossier issued at or before
+// POST { dossierId } - analyst only. Tokens for this dossier issued at or before
 // the call stop working immediately (lib/dossierToken.js); a fresh invite
 // afterwards issues a working one. There is no UI for this yet (backlog PREB-2).
 //
@@ -1787,7 +1787,7 @@ const { neon } = require("@neondatabase/serverless");
 const dossierAccess = require("../lib/dossierAccess");
 const dossierToken = require("../lib/dossierToken");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { neon, access: dossierAccess, dossierToken };
 
 module.exports = async function handler(req, res) {
@@ -1878,7 +1878,7 @@ git commit -m "feat(security): analyst-only invites carry a signed token link; p
 - Produces:
   - A request whose `submissionId` matches an `entity_dossiers.id` is **dossier-keyed** and requires an actor: `POST /api/change-events` → write permission; `GET /api/amendment-documents` → read permission.
   - A dossier-keyed change record written by a **customer** sets `owned_by = 'customer'` and `last_customer_action_at = NOW()` on that dossier.
-  - A request whose `submissionId` matches no dossier (a fresh application) behaves exactly as today — backlog PLAT-7.
+  - A request whose `submissionId` matches no dossier (a fresh application) behaves exactly as today - backlog PLAT-7.
   - Refusals use the standard `401 / 410 / 403 / 404` shapes.
   - `change-events.__setDeps({ neon, writeEvent, access })`; `amendment-documents.__setDeps({ neon, getEventsBySubmission, deriveAmendmentDocuments, access })`.
 
@@ -2051,7 +2051,7 @@ test("a customer reads only its own dossier's documents", async () => {
 - [ ] **Step 3: Run to verify both fail**
 
 Run: `node --test api/__tests__/change-events.nodetest.js api/__tests__/amendment-documents.nodetest.js`
-Expected: FAIL — `handler.__setDeps is not a function`.
+Expected: FAIL - `handler.__setDeps is not a function`.
 
 - [ ] **Step 4: Implement `api/change-events.js`**
 
@@ -2062,7 +2062,7 @@ const { neon } = require("@neondatabase/serverless");
 const { writeEvent } = require("../src/changeIntelligence/events/writeEvent");
 const dossierAccess = require("../lib/dossierAccess");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { neon, writeEvent, access: dossierAccess };
 
 module.exports = async function handler(req, res) {
@@ -2073,7 +2073,7 @@ module.exports = async function handler(req, res) {
   const event = req.body || {};
 
   if (!process.env.DATABASE_URL) {
-    console.warn("[change-events] No DATABASE_URL — event not persisted");
+    console.warn("[change-events] No DATABASE_URL - event not persisted");
     return res.status(200).json({ success: false, warning: "Database not configured" });
   }
 
@@ -2099,7 +2099,7 @@ module.exports = async function handler(req, res) {
       const permitted = _deps.access.canWriteDossier(actor, dossier);
       if (!permitted.ok) return res.status(permitted.status).json({ error: permitted.error });
     }
-    // A fresh application (no dossier) is unchanged — backlog PLAT-7.
+    // A fresh application (no dossier) is unchanged - backlog PLAT-7.
 
     const row = await _deps.writeEvent(sql, event);
 
@@ -2138,7 +2138,7 @@ const { getEventsBySubmission } = require("../src/changeIntelligence/events/read
 const { deriveAmendmentDocuments } = require("../src/changeIntelligence/amendmentDocuments");
 const dossierAccess = require("../lib/dossierAccess");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { neon, getEventsBySubmission, deriveAmendmentDocuments, access: dossierAccess };
 
 module.exports = async function handler(req, res) {
@@ -2152,7 +2152,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (!process.env.DATABASE_URL) {
-    console.warn("[amendment-documents] No DATABASE_URL — returning empty list");
+    console.warn("[amendment-documents] No DATABASE_URL - returning empty list");
     return res.status(200).json({ documents: [] });
   }
 
@@ -2171,13 +2171,13 @@ module.exports = async function handler(req, res) {
       const permitted = _deps.access.canReadDossier(actor, dossier);
       if (!permitted.ok) return res.status(permitted.status).json({ error: permitted.error });
     }
-    // A fresh application (no dossier) is unchanged — backlog PLAT-7.
+    // A fresh application (no dossier) is unchanged - backlog PLAT-7.
 
     const events = await _deps.getEventsBySubmission(sql, submissionId);
     const documents = _deps.deriveAmendmentDocuments(events);
     return res.status(200).json({ documents });
   } catch (err) {
-    // A read failure must not break the Fill Gaps page — return an empty list
+    // A read failure must not break the Fill Gaps page - return an empty list
     // and log. The customer still sees the standard Required Documents step.
     console.error("[amendment-documents] ❌", err.message);
     return res.status(200).json({ documents: [], warning: err.message });
@@ -2202,7 +2202,7 @@ const amendmentDocumentsGetHandler = require(path.join(__dirname, "..", "api", "
 If `changeEventsHandler` / `amendmentDocumentsHandler` are already required under those names, reuse them instead of adding duplicates. Register (only if no route for these paths exists yet):
 
 ```js
-  // Change Intelligence write path — dossier-keyed records are credential-gated.
+  // Change Intelligence write path - dossier-keyed records are credential-gated.
   app.post("/api/change-events", (req, res) => {
     let raw = "";
     req.setEncoding("utf8");
@@ -2246,7 +2246,7 @@ git commit -m "feat(security): dossier-keyed change records and amendment docume
 - Consumes: the endpoint contracts from Tasks 4-7.
 - Produces:
   - `setAnalystCredential(token: string)`, `setCustomerDossierToken(token: string)`, `clearDossierCredentials()`.
-  - `getDossierAuthHeaders(tenantId?: string): Record<string, string>` — returns `{ Authorization: "Bearer dossier:<t>", "X-Tenant-Id": <tenant> }` when a customer token is held, else `{ Authorization: "Bearer <password>", "X-Tenant-Id": <tenant> }` when an analyst credential is held, else `{ "X-Tenant-Id": <tenant> }` (or `{}` with no tenant). `tenantId` defaults to `getTenantId()`.
+  - `getDossierAuthHeaders(tenantId?: string): Record<string, string>` - returns `{ Authorization: "Bearer dossier:<t>", "X-Tenant-Id": <tenant> }` when a customer token is held, else `{ Authorization: "Bearer <password>", "X-Tenant-Id": <tenant> }` when an analyst credential is held, else `{ "X-Tenant-Id": <tenant> }` (or `{}` with no tenant). `tenantId` defaults to `getTenantId()`.
   - Storage keys (sessionStorage): `preboarding_token`, `dossier_token`.
 
 - [ ] **Step 1: Write the failing test**
@@ -2309,7 +2309,7 @@ test("clearing removes both credentials", () => {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/utils/__tests__/dossierCredential.test.js`
-Expected: FAIL — `Cannot find module '../dossierCredential'`.
+Expected: FAIL - `Cannot find module '../dossierCredential'`.
 
 - [ ] **Step 3: Implement `src/utils/dossierCredential.js`**
 
@@ -2322,7 +2322,7 @@ Expected: FAIL — `Cannot find module '../dossierCredential'`.
 // holds via getDossierAuthHeaders(), so call sites never hand-build headers.
 //
 // sessionStorage (per tab, cleared when the tab closes) mirrors how the admin
-// panel holds its token. Storage can be unavailable — every access is guarded.
+// panel holds its token. Storage can be unavailable - every access is guarded.
 
 import { getTenantId } from "./tenant";
 
@@ -2335,7 +2335,7 @@ function write(key, value) {
   try {
     if (value) sessionStorage.setItem(key, value);
     else sessionStorage.removeItem(key);
-  } catch (_) { /* storage unavailable — memory still holds it for this page */ }
+  } catch (_) { /* storage unavailable - memory still holds it for this page */ }
 }
 
 function read(key) {
@@ -2509,7 +2509,7 @@ Add one test proving the analyst credential is sent:
   });
 ```
 
-(`"ARCH"` here is only the value the suite's own mocked `/api/preboarding-auth` stub returns as the token — a fixture, not a live credential.)
+(`"ARCH"` here is only the value the suite's own mocked `/api/preboarding-auth` stub returns as the token - a fixture, not a live credential.)
 
 - [ ] **Step 8: Run the affected suites**
 
@@ -2525,7 +2525,7 @@ git commit -m "feat(security): analyst requests carry the verified credential; i
 
 ---
 
-## Task 10: The customer side — token landing, credentialed calls, locked views
+## Task 10: The customer side - token landing, credentialed calls, locked views
 
 **Files:**
 - Create: `src/components/preboarding/LinkUnavailable.jsx`
@@ -2627,13 +2627,13 @@ test("a legacy dossierId link is treated as no longer valid and never fetched", 
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/components/preboarding/__tests__/CustomerLinkLanding.test.jsx`
-Expected: FAIL — the landing effect still reads `dossierId` and never reads `dossierToken`.
+Expected: FAIL - the landing effect still reads `dossierId` and never reads `dossierToken`.
 
 - [ ] **Step 3: Create `LinkUnavailable.jsx`**
 
 ```jsx
 /**
- * LinkUnavailable.jsx — shown to a customer whose onboarding link cannot be
+ * LinkUnavailable.jsx - shown to a customer whose onboarding link cannot be
  * used. The server decides why; this only chooses the words. It deliberately
  * reveals nothing about the dossier or the tenant's other applications.
  */
@@ -2844,7 +2844,7 @@ Render this banner at the top of the main onboarding return, immediately inside 
           background: "#fff7ed", border: "1px solid #fdba74", color: "#9a3412",
           padding: "10px 16px", fontSize: 13, fontWeight: 600, textAlign: "center",
         }}>
-          Review only — the customer has taken over this application, so nothing here can be changed.
+          Review only - the customer has taken over this application, so nothing here can be changed.
         </div>
       )}
 ```
@@ -2930,7 +2930,7 @@ Expected: no matches.
 In `docs/BACKLOG.md`, add under **Open dependencies**:
 
 ```markdown
-### DEP-3 — Part 1 deploy gates: DOSSIER_TOKEN_SECRET + migration 026
+### DEP-3 - Part 1 deploy gates: DOSSIER_TOKEN_SECRET + migration 026
 - **Category:** Security / Deploy · **Priority:** P1 · **Status:** OPEN (manual step for the owner)
 - **What:** (1) Set `DOSSIER_TOKEN_SECRET` to a long random value in every environment that sends invites or serves customer links. (2) Apply `db/migrations/026_dossier_ownership.sql` to each database (`node db/apply.js db/migrations/026_dossier_ownership.sql`).
 - **Why:** Without the secret, invites return 500 and every customer link is refused. Without the migration, dossier reads and writes fail on the missing `owned_by` column.
@@ -2940,7 +2940,7 @@ In `docs/BACKLOG.md`, add under **Open dependencies**:
 Append to the existing **PREB-2** entry:
 
 ```markdown
-- **Status note (Part 1):** the server side shipped — `POST /api/revoke-dossier-token { dossierId }` (analyst only) revokes every outstanding link for that dossier. Only the button is still missing.
+- **Status note (Part 1):** the server side shipped - `POST /api/revoke-dossier-token { dossierId }` (analyst only) revokes every outstanding link for that dossier. Only the button is still missing.
 ```
 
 - [ ] **Step 7: Commit**
@@ -2954,10 +2954,10 @@ git commit -m "docs: Part 1 deploy gates and revocation status"
 
 ## Manual QA checklist (owner)
 
-1. As an analyst at `/preboarding?tenant=nium`, research a company, save the dossier, send an invite — the link shown contains `dossierToken=` and no `dossierId=`.
-2. Open that link in a private window — the customer lands pre-filled.
-3. Change the token by one character — "This link isn't valid".
-4. Open an old `?dossierId=` link — "This link is no longer valid".
-5. As the customer, correct any field — then as the analyst, open the dossier: the "Review only" banner shows and Save / Invite are disabled.
-6. `POST /api/revoke-dossier-token { dossierId }` as the analyst — the customer's link now says "no longer active"; a fresh invite works.
+1. As an analyst at `/preboarding?tenant=nium`, research a company, save the dossier, send an invite - the link shown contains `dossierToken=` and no `dossierId=`.
+2. Open that link in a private window - the customer lands pre-filled.
+3. Change the token by one character - "This link isn't valid".
+4. Open an old `?dossierId=` link - "This link is no longer valid".
+5. As the customer, correct any field - then as the analyst, open the dossier: the "Review only" banner shows and Save / Invite are disabled.
+6. `POST /api/revoke-dossier-token { dossierId }` as the analyst - the customer's link now says "no longer active"; a fresh invite works.
 7. With `DOSSIER_TOKEN_SECRET` unset locally, sending an invite fails rather than issuing an unsigned link.

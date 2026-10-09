@@ -1,7 +1,7 @@
 "use strict";
 /*
  * DIAGNOSTIC: print the latest IDV attempt's Didit session status, live.
- * Answers "why does the app say 'Not complete yet'?" — it prints the raw Didit
+ * Answers "why does the app say 'Not complete yet'?" - it prints the raw Didit
  * decision status and whether our app treats it as terminal (so it will proceed).
  *
  * Run (in E:\kyc-agent-dev, PowerShell):
@@ -18,7 +18,7 @@ const norm = (s) => String(s == null ? "" : s).trim().toUpperCase().replace(/[\s
 
 (async () => {
   const conn = process.env.IDV_DATABASE_URL || process.env.DATABASE_URL;
-  if (!conn) throw new Error("IDV_DATABASE_URL not set — run with: -r dotenv/config ... dotenv_config_path=.env.local");
+  if (!conn) throw new Error("IDV_DATABASE_URL not set - run with: -r dotenv/config ... dotenv_config_path=.env.local");
   const sql = neon(conn);
 
   const argSession = process.argv.slice(2).find((a) => !a.startsWith("dotenv_config_path"));
@@ -28,7 +28,7 @@ const norm = (s) => String(s == null ? "" : s).trim().toUpperCase().replace(/[\s
     const rows = await sql`SELECT id, application_id, didit_session_id, status, created_at
                            FROM idv_verification_attempts ORDER BY created_at DESC LIMIT 1`;
     const a = rows[0];
-    if (!a) throw new Error("No idv_verification_attempts rows — start a verification in the app first.");
+    if (!a) throw new Error("No idv_verification_attempts rows - start a verification in the app first.");
     console.log(`Latest attempt : ${a.id}  (app=${a.application_id}, db_status=${a.status})`);
     sessionId = a.didit_session_id;
   }
@@ -40,7 +40,7 @@ const norm = (s) => String(s == null ? "" : s).trim().toUpperCase().replace(/[\s
   const terminal = TERMINAL_RAW.includes(norm(raw));
 
   console.log(`Didit status   : ${raw}`);
-  console.log(`App proceeds?  : ${terminal ? "YES — this is terminal, the flow will continue" : "NO — app shows 'Not complete yet' until Didit reaches Approved/Declined/Abandoned/Expired"}`);
+  console.log(`App proceeds?  : ${terminal ? "YES - this is terminal, the flow will continue" : "NO - app shows 'Not complete yet' until Didit reaches Approved/Declined/Abandoned/Expired"}`);
 
   // The flow needs a usable NAME (first+last, or an MRZ) to match an officer and to
   // screen. If Didit extracted no name, resolve returns "missing_required_data".
@@ -52,7 +52,7 @@ const norm = (s) => String(s == null ? "" : s).trim().toUpperCase().replace(/[\s
   };
   const nameUsable = !!((v.first_name && v.last_name) || v.mrz);
   console.log(`\nExtracted name : ${JSON.stringify(nameFields)}`);
-  console.log(`Name usable?   : ${nameUsable ? "YES" : "NO — no first+last and no MRZ -> resolve returns 'missing_required_data' (this is the stuck cause)"}`);
+  console.log(`Name usable?   : ${nameUsable ? "YES" : "NO - no first+last and no MRZ -> resolve returns 'missing_required_data' (this is the stuck cause)"}`);
 
   console.log(`\nDecision keys  : ${Object.keys(decision || {}).join(", ")}`);
   console.log("\n--- full decision (synthetic sandbox data) ---");

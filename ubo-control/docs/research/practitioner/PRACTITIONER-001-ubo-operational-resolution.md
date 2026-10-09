@@ -1,4 +1,4 @@
-# PRACTITIONER-001 — UBO operational resolution
+# PRACTITIONER-001 - UBO operational resolution
 
 | Metadata | Value |
 |---|---|
@@ -8,7 +8,7 @@
 | Architecture change | `NONE` |
 | Policy change | `NONE` |
 | Contract change | `NONE` |
-| Primary future gate | Gate 5 — Journey Design |
+| Primary future gate | Gate 5 - Journey Design |
 | Status | `RECORDED` |
 
 ## Authority and use

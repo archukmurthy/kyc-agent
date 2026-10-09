@@ -12,7 +12,7 @@
 //   externalReferences   -> non-PII (external-custody pointers to provider media)
 //   timestamps           -> distinct occurred/received times
 //
-// This module is pure mapping — it does NOT persist. The caller (sub-step 3)
+// This module is pure mapping - it does NOT persist. The caller (sub-step 3)
 // routes identityAttributes into the Vault and the non-PII canonical into our
 // tables. It must never store this function's identityAttributes in an ordinary
 // table.
@@ -43,7 +43,7 @@ function mapDiditDecision(payload, { receivedAt = new Date() } = {}) {
   // MRZ: the module's field map omits it, but the passport MRZ is the
   // checksummed name source Phase 4 compares first. It is document-extracted PII
   // (name / DOB / document number), so it goes to the Vault as its own identity
-  // attribute — never to an ordinary table — and stays hidden from the UI.
+  // attribute - never to an ordinary table - and stays hidden from the UI.
   const document = firstDocument(payload.decision || payload) || {};
   const appendAttr = (concept, value) => {
     if (value == null || value === "") return;
@@ -70,7 +70,7 @@ function mapDiditDecision(payload, { receivedAt = new Date() } = {}) {
     providerDecision: normalized.provider_decision,
     externalReferences: normalized.external_evidence_references,
     timestamps: normalized.timestamps,
-    // Provider outcome only — this is NOT a KYC approval. The band/decisioning
+    // Provider outcome only - this is NOT a KYC approval. The band/decisioning
     // layer decides KYC using this plus screening and the officer comparison.
     providerVerified: normalized.provider_decision.canonical_status === "VERIFIED",
   };

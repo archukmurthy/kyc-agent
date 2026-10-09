@@ -380,7 +380,7 @@
                   "known": [
                     {
                       "field": "ownership_structure",
-                      "value": "Alice Morgan — 40% ownership"
+                      "value": "Alice Morgan - 40% ownership"
                     }
                   ],
                   "missing": []
@@ -557,7 +557,7 @@
                   "knownFacts": [
                     {
                       "field": "ownership_structure",
-                      "value": "Alice Morgan — 40% ownership"
+                      "value": "Alice Morgan - 40% ownership"
                     }
                   ],
                   "missingFacts": [],

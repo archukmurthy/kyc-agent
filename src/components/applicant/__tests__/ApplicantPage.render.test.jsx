@@ -1,8 +1,8 @@
 /**
- * ApplicantPage.render.test.jsx — CHARACTERISATION of the Applicant page while
+ * ApplicantPage.render.test.jsx - CHARACTERISATION of the Applicant page while
  * it is still inline in App.js (renderApplicantPage and its helpers).
  *
- * WHY NOW: the Applicant page has no test coverage at all — the 33 existing
+ * WHY NOW: the Applicant page has no test coverage at all - the 33 existing
  * render tests cover Confirm only. It is next in line to be extracted, and both
  * Confirm slices were only safe because a red test meant a broken move. This
  * builds the same oracle first.
@@ -10,13 +10,13 @@
  * The page cannot be rendered in isolation: renderApplicantPage closes over
  * App's state, refs (gapRef) and the fact-dispute machine, and its call site is
  * guarded by `step === STEPS.applicant && agentType !== "preboarding"`. So this
- * drives the REAL app through the wizard to that step — the same harness
+ * drives the REAL app through the wizard to that step - the same harness
  * ConfirmPeople.render.test.jsx uses, deliberately mirrored rather than
  * reinvented.
  *
  * CHARACTERISATION, not specification: these assert what the page does TODAY.
  * A surprising assertion here is a recorded fact. After the extraction this
- * file must stay green UNCHANGED — editing it to make the extraction pass would
+ * file must stay green UNCHANGED - editing it to make the extraction pass would
  * defeat the point.
  */
 
@@ -31,7 +31,7 @@ jest.setTimeout(60000);
 beforeEach(() => {
   // /api/config, track-event and ipify fire on mount. Rejecting them makes the
   // app fall back to buildLocalDefaultConfig(), which ships the Corporate:GB
-  // schema — deterministic, no network.
+  // schema - deterministic, no network.
   global.fetch = jest.fn(() => Promise.reject(new Error("offline test")));
   jest.useFakeTimers();
 });
@@ -76,7 +76,7 @@ async function driveToApplicant() {
   });
   pickOption("🏛 Corporate");
 
-  // SearchableSelect opens on FOCUS, not click — fireEvent.click does not focus
+  // SearchableSelect opens on FOCUS, not click - fireEvent.click does not focus
   // in jsdom.
   fireEvent.focus(screen.getByPlaceholderText(/Select ownership type/i));
   pickOption("Private Limited Company");
@@ -92,13 +92,13 @@ async function driveToApplicant() {
 
 const pdf = (name = "doc.pdf") => new File(["%PDF"], name, { type: "application/pdf" });
 
-/** The page renders two file inputs — signatory ID first, authority-to-act second. */
+/** The page renders two file inputs - signatory ID first, authority-to-act second. */
 const fileInputs = () => Array.from(document.querySelectorAll('input[type="file"]'));
 
 /**
  * The person selector, addressed by its own placeholder option.
  * There are several <select>s on this page (gap fields render as selects too),
- * so "the combobox" is ambiguous — this names the one we mean.
+ * so "the combobox" is ambiguous - this names the one we mean.
  */
 const personSelect = () =>
   screen.getByRole("option", { name: /Select your name/i }).closest("select");
@@ -134,7 +134,7 @@ describe("reaching the Applicant step", () => {
      "Entity type", "Ownership type"].forEach((label) => {
       expect(within(gate).getByText(label)).toBeInTheDocument();
     });
-    // Every disputable fact arrives ticked — the applicant section below is
+    // Every disputable fact arrives ticked - the applicant section below is
     // revealed only while all five are confirmed.
     within(gate)
       .getAllByRole("checkbox")

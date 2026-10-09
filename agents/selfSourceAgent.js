@@ -25,7 +25,7 @@ const { buildRegistryUrl, buildSecondPassUrl: _unused, ...urlHelpers } = (() => 
   catch { return require("../agents/registryUrlBuilder"); }
 })();
 
-// Second-pass builders (PR-025) — kept inline since they need reg number input
+// Second-pass builders (PR-025) - kept inline since they need reg number input
 const SECOND_PASS_BUILDERS = {
   "receita.fazenda":  (r) => `https://solucoes.receita.fazenda.gov.br/Servicos/cnpjreva/Cnpjreva_Solicitacao.asp?cnpj=${encodeURIComponent(r)}`,
   "cnpjreva":         (r) => `https://solucoes.receita.fazenda.gov.br/Servicos/cnpjreva/Cnpjreva_Solicitacao.asp?cnpj=${encodeURIComponent(r)}`,
@@ -50,7 +50,7 @@ function isPortalLoginOnly(url) {
 // Captcha / anti-bot wall detection. When a page is gated by reCAPTCHA, hCaptcha
 // or Cloudflare Turnstile the document isn't reachable by automation, so we skip
 // the screenshot (it would only capture the challenge, not the document) and flag
-// the item for manual retrieval. Markers calibrated against saved snapshots —
+// the item for manual retrieval. Markers calibrated against saved snapshots -
 // Companies House / FCA pages contain none of these, so working flows are unaffected.
 const CAPTCHA_MARKERS = /(g-recaptcha|grecaptcha|recaptcha\/api|recaptcha-response|h-?captcha|hcaptcha|data-sitekey|cf-turnstile|challenges\.cloudflare\.com)/i;
 function isCaptchaPage(html) {
@@ -59,7 +59,7 @@ function isCaptchaPage(html) {
 
 let playwright = null;
 try { playwright = require("playwright"); }
-catch { console.warn("[SelfSourceAgent] Playwright not installed — screenshots disabled."); }
+catch { console.warn("[SelfSourceAgent] Playwright not installed - screenshots disabled."); }
 
 // Bound every AI extraction call: a 30s timeout with a single retry stops a
 // hung/slow Anthropic request from stalling a checklist item indefinitely.
@@ -68,7 +68,7 @@ const AGENT_VERSION = "1.2.0";
 
 // claude-sonnet-4-20250514 reached end-of-life (the API returns errors / empty
 // usage, so every extraction silently fell to low-confidence manual review).
-// claude-sonnet-4-6 is the drop-in replacement at the same $3/$15 pricing —
+// claude-sonnet-4-6 is the drop-in replacement at the same $3/$15 pricing -
 // matches agents/docSearchAgent.js.
 const PRICING = {
   model:            "claude-sonnet-4-6",
@@ -145,7 +145,7 @@ async function renderPage(url, screenshotPath, timeoutMs = 25000) {
     // reaches a fully idle network (many registries keep long-poll connections).
     await page.waitForLoadState("networkidle", { timeout: 6000 }).catch(() => {});
     const html = await page.content();
-    // A captcha wall is just the challenge, not the document — don't screenshot it.
+    // A captcha wall is just the challenge, not the document - don't screenshot it.
     const captcha = isCaptchaPage(html);
     let screenshot = { success: false, reason: captcha ? "captcha" : undefined };
     if (screenshotPath && !captcha) {
@@ -231,7 +231,7 @@ async function fetchAndExtract(url, slug, reqSlug, passLabel, item, companyName,
 
   // Prefer a rendered page (registries are JS-driven; a raw GET yields an empty
   // shell). Fall back to a plain HTTP fetch when Playwright is unavailable or the
-  // render fails — then grab the screenshot the old way.
+  // render fails - then grab the screenshot the old way.
   let html, statusCode, finalUrl, screenshot, captcha = false;
   const rendered = await renderPage(url, screenshotPath);
   if (rendered && rendered.success) {
@@ -285,9 +285,9 @@ async function retrieveChecklistItem(item, companyName, incorporationCountry, ou
     retrievedAt: timestamp, agentVersion: AGENT_VERSION,
   };
 
-  // Portal login — flag immediately
+  // Portal login - flag immediately
   if (isPortalLoginOnly(item.sourceUrl)) {
-    console.log(`[SelfSourceAgent]   ⚠ Portal login required — manual retrieval flagged`);
+    console.log(`[SelfSourceAgent]   ⚠ Portal login required - manual retrieval flagged`);
     const meta = { ...baseResult, status: "manual_retrieval_required", manualReviewFlag: true,
       manualReviewReason: "Registry requires authenticated portal login. Analyst must retrieve manually.",
       searchUrl: item.sourceUrl, files: [] };
@@ -318,7 +318,7 @@ async function retrieveChecklistItem(item, companyName, incorporationCountry, ou
   if (pass1.extracted.matchConfidence === "low") {
     secondPassUrl = buildSecondPassUrl(item.sourceUrl, knownRegNumber);
     if (secondPassUrl) {
-      console.log(`[SelfSourceAgent]   Low confidence — pass 2: ${secondPassUrl}`);
+      console.log(`[SelfSourceAgent]   Low confidence - pass 2: ${secondPassUrl}`);
       await new Promise(r => setTimeout(r, 800));
       const pass2 = await fetchAndExtract(secondPassUrl, slug, reqSlug, "pass2", item, companyName, outputDir, costTracker);
       secondPassRan = true;
@@ -327,13 +327,13 @@ async function retrieveChecklistItem(item, companyName, incorporationCountry, ou
         console.log(`[SelfSourceAgent]   ✓ Pass 2 confidence: ${pass2.extracted.matchConfidence}`);
       } else {
         finalPass = { ...pass1, files: [...pass1.files, ...(pass2.success ? pass2.files : [])] };
-        console.log(`[SelfSourceAgent]   ✗ Pass 2 still low — manual review flagged`);
+        console.log(`[SelfSourceAgent]   ✗ Pass 2 still low - manual review flagged`);
       }
     }
   }
 
   const captchaBlocked    = !!finalPass.captcha;
-  if (captchaBlocked) console.log(`[SelfSourceAgent]   🔒 Document behind captcha — screenshot skipped, manual retrieval required`);
+  if (captchaBlocked) console.log(`[SelfSourceAgent]   🔒 Document behind captcha - screenshot skipped, manual retrieval required`);
   const needsManualReview = captchaBlocked || finalPass.extracted.matchConfidence === "low";
   const isVerified        = finalPass.extracted.companyFound && !needsManualReview;
 
@@ -343,13 +343,13 @@ async function retrieveChecklistItem(item, companyName, incorporationCountry, ou
     manualReviewFlag: needsManualReview,
     captchaBlocked,
     manualReviewReason: captchaBlocked
-      ? "Document is behind a captcha — automated retrieval not possible; manual retrieval required."
+      ? "Document is behind a captcha - automated retrieval not possible; manual retrieval required."
       : (needsManualReview
           ? (secondPassRan
-              ? "Both passes returned low confidence — manual retrieval recommended."
+              ? "Both passes returned low confidence - manual retrieval recommended."
               : (knownRegNumber
-                  ? "Low confidence and no second-pass source available for this registry — manual retrieval recommended."
-                  : "Low confidence and no registration number available for a second pass — manual retrieval recommended."))
+                  ? "Low confidence and no second-pass source available for this registry - manual retrieval recommended."
+                  : "Low confidence and no registration number available for a second pass - manual retrieval recommended."))
           : null),
     searchUrl:     firstPassUrl,
     secondPassUrl: secondPassRan ? secondPassUrl : null,
@@ -405,7 +405,7 @@ async function selfSourceAgent(params) {
 
   console.log(`\n[SelfSourceAgent] ═══════════════════════════════════════`);
   console.log(`[SelfSourceAgent] Company: ${companyName} (${incorporationCountry})`);
-  console.log(`[SelfSourceAgent] RegNum:  ${companyRegistrationNumber || "not provided — will discover from first result"}`);
+  console.log(`[SelfSourceAgent] RegNum:  ${companyRegistrationNumber || "not provided - will discover from first result"}`);
   console.log(`[SelfSourceAgent] Items:   ${itemsToRetrieve.length} of ${drsChecklist.length} are self-sourceable`);
   console.log(`[SelfSourceAgent] ═══════════════════════════════════════\n`);
 
@@ -416,7 +416,7 @@ async function selfSourceAgent(params) {
   }
 
   const results = [];
-  // knownRegNum is updated after each item — Legal existence always runs first
+  // knownRegNum is updated after each item - Legal existence always runs first
   // so its discovered registration number flows into Constitution, Officers, etc.
   let knownRegNum = companyRegistrationNumber;
 
@@ -428,8 +428,8 @@ async function selfSourceAgent(params) {
         PER_ITEM_TIMEOUT_MS
       );
     } catch (e) {
-      // Underlying retrieval threw — treat like a failure, keep going.
-      console.warn(`[SelfSourceAgent]   ✗ ${item.requirement} — error: ${e.message}`);
+      // Underlying retrieval threw - treat like a failure, keep going.
+      console.warn(`[SelfSourceAgent]   ✗ ${item.requirement} - error: ${e.message}`);
       result = null;
     }
 
@@ -437,7 +437,7 @@ async function selfSourceAgent(params) {
     // flagged for manual retrieval and the loop moves on instead of hanging.
     if (!result || result.__timedOut) {
       if (result && result.__timedOut) {
-        console.warn(`[SelfSourceAgent]   ⏱ ${item.requirement} — exceeded ${Math.round(PER_ITEM_TIMEOUT_MS / 1000)}s, skipping`);
+        console.warn(`[SelfSourceAgent]   ⏱ ${item.requirement} - exceeded ${Math.round(PER_ITEM_TIMEOUT_MS / 1000)}s, skipping`);
       }
       result = {
         requirement: item.requirement, selfSourceTier: item.selfSource,
@@ -446,7 +446,7 @@ async function selfSourceAgent(params) {
         companyRegistrationNumber: knownRegNum || null,
         retrievedAt: new Date().toISOString(), agentVersion: AGENT_VERSION,
         status: "manual_retrieval_required", manualReviewFlag: true,
-        manualReviewReason: `Automated retrieval exceeded ${Math.round(PER_ITEM_TIMEOUT_MS / 1000)}s and was skipped — manual retrieval required.`,
+        manualReviewReason: `Automated retrieval exceeded ${Math.round(PER_ITEM_TIMEOUT_MS / 1000)}s and was skipped - manual retrieval required.`,
         extracted: { companyFound: false, matchConfidence: "low", notes: "retrieval timed out" },
         files: [], cost: null,
       };

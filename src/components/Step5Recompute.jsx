@@ -1,13 +1,13 @@
 /**
  * components/Step5Recompute.jsx
  *
- * Pre-declaration gap check — Step 5 of the KYC Onboarding Agent.
+ * Pre-declaration gap check - Step 5 of the KYC Onboarding Agent.
  *
  * By this point the session has:
  *   - step1Data:  { entityType, ownershipType, incorporationCountry }
- *   - sector:     collected in Steps 3–4 (confirm / fill gaps)
+ *   - sector:     collected in Steps 3-4 (confirm / fill gaps)
  *   - submitted:  string[] of requirement names already uploaded or self-sourced
- *   - extraFlags: { nestedFlows, fiRole, ... } collected in Steps 3–4
+ *   - extraFlags: { nestedFlows, fiRole, ... } collected in Steps 3-4
  *
  * This component calls recompute() with the full enriched params, diffs
  * required[] against submitted[], and shows only the true mandatory gaps.
@@ -30,7 +30,7 @@ export default function Step5Recompute({
   const { mandatoryGaps, checklist, loading, error, recompute } =
     useDocumentRequirements({ incorporationCountry, entityType, ownershipType });
 
-  // Trigger the enriched recompute on mount — sector + submitted now available
+  // Trigger the enriched recompute on mount - sector + submitted now available
   useEffect(() => {
     recompute({
       sector,

@@ -1,7 +1,7 @@
 /**
- * noTenantLanding.integration.test.jsx — 3-strict tenant resolution at the
+ * noTenantLanding.integration.test.jsx - 3-strict tenant resolution at the
  * App level. A bare URL (no ?tenant=) must render NoTenantLanding and must
- * NOT call /api/config for any tenant — there is no default tenant to fetch
+ * NOT call /api/config for any tenant - there is no default tenant to fetch
  * config for.
  *
  * setupTests.js gives every OTHER test a default "?tenant=nium" so the
@@ -43,7 +43,7 @@ test("?tenant=acme reaches the normal flow, not the landing", () => {
 
 // The server answers 404 { error: "tenant_not_found" } for an unknown tenant.
 // Funnelling that into the offline fallback would render a complete working
-// wizard for a typo'd tenant, branded with the typo'd id — the browser
+// wizard for a typo'd tenant, branded with the typo'd id - the browser
 // contradicting the server. A transport failure keeps the offline fallback.
 test("a 404 from /api/config renders the unknown-tenant screen, not the wizard", async () => {
   window.history.pushState({}, "", "/?tenant=typo");

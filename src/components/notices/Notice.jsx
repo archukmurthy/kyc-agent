@@ -1,12 +1,12 @@
 /**
- * Notice.jsx — the ONE three-tier notice system for the Confirm page, defined
+ * Notice.jsx - the ONE three-tier notice system for the Confirm page, defined
  * here once and reused wherever a customer-facing notice appears (the capture
  * dialogue's outcome notices and the Confirm-row source-confidence messages).
  *
  * The visual weight matches what is being asked of the customer:
- *   Tier 1 — calm, nothing required     (ops_review / silent outcomes)
- *   Tier 2 — verify/confirm, non-blocking (company / lower-confidence source)
- *   Tier 3 — must act, usually upload     (doc_required) — the most conspicuous
+ *   Tier 1 - calm, nothing required     (ops_review / silent outcomes)
+ *   Tier 2 - verify/confirm, non-blocking (company / lower-confidence source)
+ *   Tier 3 - must act, usually upload     (doc_required) - the most conspicuous
  *
  * ACCESSIBILITY (non-negotiable): the tiers are distinguishable by COLOUR + ICON
  * + LABEL together, never colour alone. A meaningful share of users don't
@@ -15,7 +15,7 @@
  * always renders the tier's icon and its worded label alongside the colour, so
  * this guarantee can't be forgotten at a call site.
  *
- * Presentation only — no logic, no state. Tier colours reuse the app's existing
+ * Presentation only - no logic, no state. Tier colours reuse the app's existing
  * token palette (App.js `C`): success (teal), warning (amber), plus a stronger
  * orange for the action-required tier so it reads as distinct from Tier 2.
  */
@@ -23,22 +23,22 @@
 import React from "react";
 
 export const NOTICE_TIERS = {
-  // Tier 1 — calm. The change is recorded; nothing is required from the customer.
+  // Tier 1 - calm. The change is recorded; nothing is required from the customer.
   tier1: {
     label: "No action needed",
     icon: "✓",
     box: { background: "#dff2ec", border: "1px solid #9fd8c8" },
     accent: "#1a6b56",
   },
-  // Tier 2 — verify/confirm. Noticeable, non-blocking. Distinct amber.
+  // Tier 2 - verify/confirm. Noticeable, non-blocking. Distinct amber.
   tier2: {
     label: "Please confirm",
     icon: "❓",
     box: { background: "#fff1d6", border: "1px solid #e8c98a" },
     accent: "#8c5500",
   },
-  // Tier 3 — action required (usually a document upload). The most conspicuous:
-  // stronger orange, a left accent band, bold — hard to skip.
+  // Tier 3 - action required (usually a document upload). The most conspicuous:
+  // stronger orange, a left accent band, bold - hard to skip.
   tier3: {
     label: "Action required",
     icon: "⚠",

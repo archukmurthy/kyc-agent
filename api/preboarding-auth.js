@@ -2,7 +2,7 @@
 //
 // Replaces the client-side constant that used to gate the pre-boarding screen
 // in the browser. The password is checked HERE, and the response carries the
-// tenant the server verified — the client uses that tenant for dossier saves
+// tenant the server verified - the client uses that tenant for dossier saves
 // and invite links instead of trusting whatever is in the URL.
 //
 //   GET  /api/preboarding-auth?tenant=<id>  → { available, reason, companyName }
@@ -26,7 +26,7 @@ const loginThrottle = require("../lib/loginThrottle");
 const { clientIp } = require("../lib/rateLimit");
 const session = require("../lib/session");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { storage, registry: tenantRegistry };
 
 function readBody(req) {

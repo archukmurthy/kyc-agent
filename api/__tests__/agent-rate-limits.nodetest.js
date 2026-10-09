@@ -66,7 +66,7 @@ test("the UBO lab's live run draws from the caller's ubo-discovery bucket", asyn
   assert.ok(seenKeys[0].startsWith("ratelimit:ubo-discovery:ip:8.8.8.8:"));
 });
 
-// I2 — an over-long or non-string prompt field is a 400 before storage (the
+// I2 - an over-long or non-string prompt field is a 400 before storage (the
 // rate limiter) is ever consulted, for every endpoint that puts request body
 // strings into an agent prompt.
 test("doc-search: an over-long companyName is refused before the rate limiter runs", async () => {

@@ -113,7 +113,7 @@ test("the seeded platform entry is marked protected", async (t) => {
 // and "unreadable". ensureRegistry must not read the second as the first:
 // lib/storage.js#get throws on KV/Redis failure, so seeding on a read blip
 // would overwrite every real tenant entry with a platform-only registry.
-test("an unreadable registry is never reseeded — no write, error surfaces", async (t) => {
+test("an unreadable registry is never reseeded - no write, error surfaces", async (t) => {
   withSuperAdmin(t);
   let writes = 0;
   const storage = {
@@ -134,7 +134,7 @@ test("an unreadable registry is never reseeded — no write, error surfaces", as
 
 // ── Pre-boarding back-fill (final-review CT-2) ─────────────────────────────
 // Production KV already holds a registry, so the seeding branch never runs.
-// Without a back-fill every existing tenant — the platform one included —
+// Without a back-fill every existing tenant - the platform one included -
 // resolves to preboardingEnabled: undefined and pre-boarding goes dark.
 // Every tenant defaults ON (owner decision 2026-09-17); an explicit false a
 // super-admin set is never overwritten.

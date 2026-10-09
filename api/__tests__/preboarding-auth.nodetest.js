@@ -54,7 +54,7 @@ test("no tenant is a 400 before any other work", async (t) => {
   assert.deepStrictEqual(res.body, { error: "tenant_required" });
 });
 
-test("an unknown tenant is a 404 — a typo must not reach the password check", async (t) => {
+test("an unknown tenant is a 404 - a typo must not reach the password check", async (t) => {
   withPassword(t);
   storeWith({ tenantId: "acme", isActive: true, preboardingEnabled: true });
   const { req, res } = fakeReqRes({ query: { tenant: "acmee" }, body: { password: PASSWORD } });

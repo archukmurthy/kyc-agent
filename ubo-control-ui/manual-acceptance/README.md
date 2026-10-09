@@ -1,6 +1,6 @@
 # G5.1B manual acceptance
 
-Captured from the standalone demo at `http://127.0.0.1:4175/` on 2026-08-31 using the committed UI01–UI12 projection fixtures.
+Captured from the standalone demo at `http://127.0.0.1:4175/` on 2026-08-31 using the committed UI01-UI12 projection fixtures.
 
 | Check | Evidence | Result |
 |---|---|---|
@@ -15,7 +15,7 @@ Keyboard selection, detail-panel focus, node/relationship ARIA names, text graph
 
 ## G5.3A adaptive customer journey acceptance
 
-Captured from the standalone demo on 2026-09-01 using the committed CUI01–CUI17 public-contract fixtures.
+Captured from the standalone demo on 2026-09-01 using the committed CUI01-CUI17 public-contract fixtures.
 
 | Check | Evidence | Result |
 |---|---|---|

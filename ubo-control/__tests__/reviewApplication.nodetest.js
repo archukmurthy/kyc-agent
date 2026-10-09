@@ -164,7 +164,7 @@ test("review application exposes exactly intake, explicit decisions and successo
     productionAuthorized: false,
     pipelineMaturity: "SUCCESSOR_PLANNER_COMPLETE_REVIEW_ONLY",
     blockingSignoffCount: result.policyReadiness.unresolvedSignoffs.length,
-    watermark: "REVIEW POLICY — NOT APPROVED FOR PRODUCTION",
+    watermark: "REVIEW POLICY - NOT APPROVED FOR PRODUCTION",
   });
   assert.equal(result.decisionHistory.snapshots.length, 1);
   assert.equal(Object.isFrozen(result), true);

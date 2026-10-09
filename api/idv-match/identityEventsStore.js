@@ -1,7 +1,7 @@
 "use strict";
 
 // Append-only immutable identity events (Phase E3). Records provider extraction,
-// applicant confirmation, correction, and gap-supplied info as distinct events —
+// applicant confirmation, correction, and gap-supplied info as distinct events -
 // references + non-PII metadata only, never a plaintext value.
 const { neon } = require("@neondatabase/serverless");
 

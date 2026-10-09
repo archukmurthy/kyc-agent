@@ -5,7 +5,7 @@
 // 2-letter codes. toAlpha2 converts a 3-letter code, passes a 2-letter code
 // through unchanged, and returns the original input for anything unknown (the
 // caller guards against unknown values before sending to ComplyCube).
-// Recovered from the deleted lib/didit/iso3to2.js (commit 7b786bf) — the new
+// Recovered from the deleted lib/didit/iso3to2.js (commit 7b786bf) - the new
 // bands screening flow needs the same conversion the old spike had.
 const ISO3_TO_2 = {
   AFG: "AF", ALA: "AX", ALB: "AL", DZA: "DZ", ASM: "AS", AND: "AD", AGO: "AO",

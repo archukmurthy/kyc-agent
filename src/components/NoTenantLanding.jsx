@@ -1,10 +1,10 @@
 import React from "react";
 
-// Rendered by App.js (KYCAgent) when getTenantId() resolves to "" — i.e. the
+// Rendered by App.js (KYCAgent) when getTenantId() resolves to "" - i.e. the
 // URL has no ?tenant= param. The app is "3-strict": there is no default
 // tenant, so a bare URL must show this neutral explainer instead of silently
 // falling back to any one customer's branding. Deliberately lists no tenant
-// names — this is a public, unauthenticated surface.
+// names - this is a public, unauthenticated surface.
 export default function NoTenantLanding({ surface = "onboarding" }) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const isPreboarding = surface === "preboarding";

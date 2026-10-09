@@ -1,10 +1,10 @@
 /**
- * esm-require.js — lets this CommonJS harness require() the app's ESM-syntax
+ * esm-require.js - lets this CommonJS harness require() the app's ESM-syntax
  * source modules.
  *
- * WHY THIS EXISTS. The builders the smoke test must exercise for real —
+ * WHY THIS EXISTS. The builders the smoke test must exercise for real -
  * buildChangeEvent, personType, dialogueContent (deriveSource), confirmState
- * (docDedupeKey) — are written with `import`/`export` in `.js` files, inside a
+ * (docDedupeKey) - are written with `import`/`export` in `.js` files, inside a
  * package with no `"type": "module"`. Node therefore parses them as CommonJS
  * and a bare require() dies with "Cannot use import statement outside a
  * module"; `import()` resolves them the same way, so it fails identically. Only
@@ -26,7 +26,7 @@
  * and transpiling them would be both slow and wrong.
  *
  * SCOPE: test tooling only. Nothing in api/ or src/ imports this, and it must
- * never become a production code path — the right long-term fix is for those
+ * never become a production code path - the right long-term fix is for those
  * four modules to be authored as CJS like the engine and the DAL already are
  * (see the "requireable by node --test" note in src/reresearch/searchPolicy.js).
  */

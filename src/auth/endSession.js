@@ -1,7 +1,7 @@
 /**
  * Ending a staff session properly.
  *
- * Clearing the browser's copy of the token is only half of signing out — until
+ * Clearing the browser's copy of the token is only half of signing out - until
  * the server is told, the token still works for anyone holding a copy of it.
  * That half could not exist before AUTH-2, when the token was the password and
  * "ending a session" meant changing it for everybody.

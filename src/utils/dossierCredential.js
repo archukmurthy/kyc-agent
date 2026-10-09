@@ -6,7 +6,7 @@
 // holds via getDossierAuthHeaders(), so call sites never hand-build headers.
 //
 // sessionStorage (per tab, cleared when the tab closes) mirrors how the admin
-// panel holds its token. Storage can be unavailable — every access is guarded.
+// panel holds its token. Storage can be unavailable - every access is guarded.
 
 import { getTenantId } from "./tenant";
 
@@ -19,7 +19,7 @@ function write(key, value) {
   try {
     if (value) sessionStorage.setItem(key, value);
     else sessionStorage.removeItem(key);
-  } catch (_) { /* storage unavailable — memory still holds it for this page */ }
+  } catch (_) { /* storage unavailable - memory still holds it for this page */ }
 }
 
 function read(key) {

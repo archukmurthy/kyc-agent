@@ -1,4 +1,4 @@
-# Evidence Platform — Standing Instructions for Codex
+# Evidence Platform - Standing Instructions for Codex
 
 ## Purpose
 
@@ -276,7 +276,7 @@ Any assumptions made.
 Any deviation from the supplied task or architecture. If none, explicitly say **None**.
 
 ### Architecture Changes
-Any architecture changes implemented. Normally this must say **None — no architecture changes were authorized.**
+Any architecture changes implemented. Normally this must say **None - no architecture changes were authorized.**
 
 ### Out-of-Scope Findings
 Useful discoveries that were deliberately not implemented.

@@ -1,21 +1,21 @@
 /**
- * PersonCorrection.jsx — the per-person correction flow on Confirm (CD-03).
+ * PersonCorrection.jsx - the per-person correction flow on Confirm (CD-03).
  *
  * CONTROLLED + PRESENTATIONAL: it asks the questions and collects the value,
  * then hands the caller a resolved correction. It classifies nothing, writes no
- * events and knows no document rules — App.js runs those through the engine.
+ * events and knows no document rules - App.js runs those through the engine.
  *
  * THE NAME THREE-WAY (CD-03's answer to name ambiguity): editing a name never
  * opens a text box directly. We first ask WHICH situation this is, because the
  * three cases have completely different compliance meanings:
- *   typo         — we misread it; same person, no document.
- *   legal_change — same person, new legal name; POI shows the CURRENT name
+ *   typo         - we misread it; same person, no document.
+ *   legal_change - same person, new legal name; POI shows the CURRENT name
  *                  (we never ask for a name-change certificate, and the former
  *                  name is not of interest) plus the list document.
- *   wrong_person — not this person at all; that is a REMOVAL, not an edit.
+ *   wrong_person - not this person at all; that is a REMOVAL, not an edit.
  *
  * The question deliberately offers ONLY these three "about this person"
- * branches. Adding a different person is a separate action (commit 7) — editing
+ * branches. Adding a different person is a separate action (commit 7) - editing
  * a person is always about that person.
  */
 
@@ -86,7 +86,7 @@ export function PersonCorrection({
             type="button"
             style={OPTION}
             onClick={() => {
-              // "Wrong person" is a removal, not an edit — resolve immediately.
+              // "Wrong person" is a removal, not an edit - resolve immediately.
               if (o.value === "wrong_person") {
                 onResolve({ attribute: PERSON_ATTRIBUTE.REMOVAL, nameCase: o.value, value: null, reason: "replaced_by_someone_else" });
                 return;
@@ -159,7 +159,7 @@ const REMOVAL_REASONS = [
 ];
 
 /**
- * Removal confirm-why. The list document that follows IS the analyst trigger —
+ * Removal confirm-why. The list document that follows IS the analyst trigger -
  * requesting it means an analyst reviews the removal, so there is no separate
  * analyst flag to raise here.
  */

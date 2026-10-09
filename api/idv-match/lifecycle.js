@@ -3,7 +3,7 @@
 // IDV lifecycle events (Phase 2.5 sub-step 6). Append-only domain history with
 // DISTINCT timestamps: occurredAt (provider/event time, may be missing and
 // stays missing), receivedAt (when we received it), recordedAt (when the row is
-// written — the DB default). Non-PII only.
+// written - the DB default). Non-PII only.
 //
 // appendLifecycleEvent is strict (throws). safeAppendLifecycleEvent is
 // best-effort: a lifecycle write must NEVER break the verification flow, so it
@@ -21,7 +21,7 @@ async function appendLifecycleEvent({ attemptId, type, occurredAt = null, receiv
   if (!attemptId) throw new Error("appendLifecycleEvent: attemptId is required");
   if (!type) throw new Error("appendLifecycleEvent: type is required");
   const sql = deps.sql || client();
-  // occurredAt stays NULL when the provider gave no time — never fabricated.
+  // occurredAt stays NULL when the provider gave no time - never fabricated.
   await sql`
     INSERT INTO idv_lifecycle_events (attempt_id, event_type, occurred_at, received_at, provider_reference, detail)
     VALUES (${attemptId}, ${type}, ${occurredAt}, ${receivedAt}, ${providerReference},
@@ -33,7 +33,7 @@ async function safeAppendLifecycleEvent(event, deps = {}) {
   try {
     await appendLifecycleEvent(event, deps);
   } catch (err) {
-    // Domain history is not a competing system of record — never fail the flow.
+    // Domain history is not a competing system of record - never fail the flow.
     console.warn("[idv-match lifecycle] append skipped:", err && err.message);
   }
 }

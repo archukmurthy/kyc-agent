@@ -10,7 +10,7 @@ The interactive ownership renderer lives in the separate `ubo-control-ui/` packa
 
 The renderer may validate the projection, compute presentation-only geometry, navigate durable references and format already-recorded values. It may not construct or adjudicate claims, calculate effective interests, evaluate policy, resolve requirements, choose conflicts or infer qualifications. Calculation explanations concatenate the projection's recorded direct measurements and recorded contribution; no UI arithmetic occurs.
 
-The React component supports `CUSTOMER` and `EXPLAIN` detail levels, interactive node/relationship/path/conflict/review selection, path emphasis, pan/zoom/fit, semantic node/relationship styling, keyboard operation, named SVG content and a screen-reader text description. A standalone deterministic demo presents UI01–UI12 without a provider, host application, onboarding flow or Evidence Platform.
+The React component supports `CUSTOMER` and `EXPLAIN` detail levels, interactive node/relationship/path/conflict/review selection, path emphasis, pan/zoom/fit, semantic node/relationship styling, keyboard operation, named SVG content and a screen-reader text description. A standalone deterministic demo presents UI01-UI12 without a provider, host application, onboarding flow or Evidence Platform.
 
 ## Consequences
 

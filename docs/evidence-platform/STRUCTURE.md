@@ -100,7 +100,7 @@ R3 never rewrites canonical Artifacts, changes their SHA-256, persists raw provi
 
 ## Consumer Readiness R4 additions
 
-- `evidence/r4/domain.js` owns the versioned provider-neutral subject–relationship–object grammar and deterministic party, vocabulary, value, temporal, direction, and lineage validation.
+- `evidence/r4/domain.js` owns the versioned provider-neutral subject-relationship-object grammar and deterministic party, vocabulary, value, temporal, direction, and lineage validation.
 - `evidence/r4/pscMapper.js` is an explicit bounded deterministic Companies House PSC nature-of-control adapter. It appends derived Facts and existing derivation lineage only for unambiguous mappings; it never rewrites A2/A3 source Facts or automatically backfills history.
 - `db/migrations/017_evidence_typed_relationships.sql` adds one optional typed relationship extension keyed one-to-one by an ordinary `evidence_facts` ID. Core grammar remains queryable while bounded source snapshots and metadata remain validated JSONB.
 - The existing A3/R2/R3 interpretation path may accept an optional provider candidate, validates it inside Evidence, persists only valid extensions, and retains a safe ordinary Fact plus an immutable limitation when typing fails.
@@ -130,7 +130,7 @@ A4b does not run A4a, call a semantic provider, pick latest Facts/evaluations, i
 - `api/evidence/a5a-*.js` exposes server-resolved, read-only context options, configuration and reconstruction routes. Reconstruction makes no source, browser, provider, reinterpretation, A4a, A4b or persistence call.
 - Evidence Lab provides a human-readable subject/context selector, explicit as-of time, chronological projection, grouped acquisitions, Artifacts, Facts, relationships, A4a/A4b output, and explicit reconstruction limitations.
 
-A5a is a transient read projection over migrations 010–018. It introduces no migration, duplicate event ledger, frozen package, KYC/UBO conclusion, source selection, freshness decision, or A5b behavior.
+A5a is a transient read projection over migrations 010-018. It introduces no migration, duplicate event ledger, frozen package, KYC/UBO conclusion, source selection, freshness decision, or A5b behavior.
 
 ## Stage A5b additions
 

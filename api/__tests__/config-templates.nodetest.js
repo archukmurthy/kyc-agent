@@ -20,7 +20,7 @@ function fakeStorage(initial) {
 
 // "acme" is flagged protected but is NOT a platform tenant, and the
 // ADMIN_PASSWORD env fallback is platform-only (a static list in
-// lib/tenantRegistry.js — it must not widen to every tenant when the registry
+// lib/tenantRegistry.js - it must not widen to every tenant when the registry
 // is unreadable), so the tenant carries its own password. The credential
 // happens to be the same string, which keeps the unauthed test below honest:
 // what makes that one a 401 is sending no Authorization header at all.

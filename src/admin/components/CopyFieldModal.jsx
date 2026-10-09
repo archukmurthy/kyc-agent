@@ -9,11 +9,11 @@ import { flagFor } from "../countries";
 //                                rendered in Section A (update); schemas missing
 //                                it are rendered in Section B (add, amber).
 //   Stage 2 "confirm-additions": For each checked Section B schema, ask
-//                                whether to actually add the field — one card
+//                                whether to actually add the field - one card
 //                                at a time, Enter=yes, Escape=skip.
 //   Stage 3 "summary":           Show what was updated / added / skipped.
 //
-// Field shape note — the rest of the codebase identifies fields by `field`
+// Field shape note - the rest of the codebase identifies fields by `field`
 // (not `id`), the type is `inputType` (not `type`), and the AI flag is
 // `aiSearch` (not `aiResearch`). This component uses those keys verbatim.
 export default function CopyFieldModal({
@@ -151,7 +151,7 @@ export default function CopyFieldModal({
     }
   }
 
-  // Early-out — no other schemas to copy to.
+  // Early-out - no other schemas to copy to.
   if (otherCells.length === 0) {
     return (
       <Overlay onClickOutside={onClose}>
@@ -211,7 +211,7 @@ export default function CopyFieldModal({
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Helpers — pure schema transforms
+// Helpers - pure schema transforms
 
 function updateFieldInSchema(schema, field) {
   const inResearch = (schema.researchFields || []).some((f) => f.field === field.field);
@@ -248,7 +248,7 @@ function addFieldToSchema(schema, field) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Stage 1 — choose
+// Stage 1 - choose
 
 function StageChoose({
   field, sourceCell, getCellDisplayName,
@@ -424,7 +424,7 @@ function Fragment2({ children }) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Stage 2 — confirm additions, one cell at a time
+// Stage 2 - confirm additions, one cell at a time
 
 function StageConfirmAdditions({ field, cellKey, cursor, total, getCellDisplayName, allSchemas, onDecision }) {
   const schema = allSchemas?.[cellKey] || { researchFields: [], gapFields: [] };
@@ -507,7 +507,7 @@ function StageConfirmAdditions({ field, cellKey, cursor, total, getCellDisplayNa
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Stage 3 — summary
+// Stage 3 - summary
 
 function StageSummary({ results, getCellDisplayName, onClose }) {
   const { updates, additions, skipped } = results;

@@ -1,6 +1,6 @@
-# Evidence Platform — Controlled Implementation Roadmap
+# Evidence Platform - Controlled Implementation Roadmap
 
-## Stage A — Build Evidence Platform V1 Independently
+## Stage A - Build Evidence Platform V1 Independently
 
 Goal:
 
@@ -42,13 +42,13 @@ An internal Evidence Lab/test harness should allow this lifecycle to be exercise
 
 Stage A should be delivered through small bounded build briefs rather than one large implementation.
 
-### Stage A0 — Platform Boundary and Evidence Lab Foundation
+### Stage A0 - Platform Boundary and Evidence Lab Foundation
 
 Establish the bounded Evidence Platform module, contracts, test boundary, and internal Evidence Lab shell.
 
 No legacy integration.
 
-### Stage A1 — Core Evidence Domain + Extraction Lineage
+### Stage A1 - Core Evidence Domain + Extraction Lineage
 
 Establish the durable model, contracts, and bounded persistence necessary for:
 
@@ -70,7 +70,7 @@ Schema-aligned extracted values
 
 Stage A1 uses fixtures/simulated data to prove this domain and lineage. It does not implement real Companies House acquisition, AI extraction, screenshot verification, matching, satisfaction, Evidence Ledger, Evidence Package, or KYC integration.
 
-### Stage A2 — Companies House Evidence Producer
+### Stage A2 - Companies House Evidence Producer
 
 Build the first real Evidence Platform producer using UK Companies House.
 
@@ -100,7 +100,7 @@ Evidence Lab must visibly distinguish live collection from fixtures and allow Ar
 
 Stage A2 does not include Companies House filing history or filing documents, KYC integration, UBO redesign, matching, satisfaction, verification, freshness/reuse decisioning, Ledger, Package, private-evidence APIs, other jurisdictions, or other producers.
 
-### Stage A3 — Extraction, Interpretation, and Verification Lineage
+### Stage A3 - Extraction, Interpretation, and Verification Lineage
 
 Extend the A1/A2 Evidence domain so preserved Artifacts can produce reconstructable evidence-grounded facts through:
 
@@ -124,11 +124,11 @@ A3 also includes interpretation of an explicitly selected coherent set of existi
 
 A3 does not own source-trust policy, redesign existing KYC source steering, decide requirement satisfaction, select a winning source/value, resolve customer disputes, mutate schemas, or make KYC/compliance decisions. Final KYC context handoff and downstream UI integration remain deferred.
 
-### Stage A4 — Evidence-to-Need Evaluation and Provisional Assessment
+### Stage A4 - Evidence-to-Need Evaluation and Provisional Assessment
 
 Stage A4 is split at a controlled semantic boundary.
 
-#### Stage A4a — Fact-to-Information-Need Evaluation
+#### Stage A4a - Fact-to-Information-Need Evaluation
 
 Add immutable, reconstructable Evidence-to-Need Evaluation that determines how a Fact relates to an explicitly supplied Information Need.
 
@@ -142,7 +142,7 @@ Comparable disagreement may be identified and explained without choosing a winni
 
 A4a does not implement final KYC requirement satisfaction, operative-value selection, customer correction or acceptance, analyst/risk decisions, onboarding progression, or changes to existing KYC behavior.
 
-#### Evidence Consumer Readiness R1 — Private Artifact Ingestion
+#### Evidence Consumer Readiness R1 - Private Artifact Ingestion
 
 Before A4b, add the generic production boundary required for an already-authorized host upload to become immutable private Evidence.
 
@@ -152,7 +152,7 @@ R1 reuses the approved A1/A2 Evidence and storage primitives. It distinguishes i
 
 R1 is generic Evidence infrastructure, not a UBO or KYC upload feature. It performs no extraction, interpretation, Fact creation, Evidence-to-Need evaluation, trust assessment, satisfaction, operative-value selection, or external-custody identity/biometric storage. R2, R3, R4, consumer integration, and A4b remain separately governed and deferred.
 
-#### Evidence Consumer Readiness R2 — Targeted Interpretation Boundary
+#### Evidence Consumer Readiness R2 - Targeted Interpretation Boundary
 
 **Accepted and implemented at `0e31ba490452b50e1cf618a23231d980d9ca4977`.** R2 exposes a stable provider-neutral consumer boundary around the existing A3 interpretation machinery. An authorized server-side consumer supplies persisted Artifact IDs, one or more neutral requested concepts, a bounded extraction context, and optional opaque correlation. Evidence resolves and authorizes persisted Artifacts, reads and verifies SHA-256, interprets one Artifact or a coherent same-Evidence-Asset set, and appends immutable Extraction Run, Fact, completeness, support, and Fact-to-Artifact lineage.
 
@@ -162,7 +162,7 @@ R2 uses only current JSON/HTML interpretation capability. PDF/image interpretati
 
 Every stable fresh R2 request carries a caller-supplied operation key. Atomic scoped uniqueness returns completed, in-progress, or failed operations without another provider call or Extraction Run; changed canonical input under the same key conflicts; deliberate retry or reinterpretation uses a new key. One bounded additive interpretation-operation migration after 014 is authorized. Opaque correlation remains separate from operation identity even though it participates in canonical request consistency.
 
-#### Evidence Consumer Readiness R3 — PDF/Image Interpretation and Locators
+#### Evidence Consumer Readiness R3 - PDF/Image Interpretation and Locators
 
 **Accepted and implemented at `ec96fe358ef09bdec15dd14f23a7ade1b36aba06`.**
 
@@ -174,13 +174,13 @@ Initial direct-base64 execution is bounded to 10 MiB and 100 pages per PDF, 7.5 
 
 R3 adds durable Evidence-owned source locators beneath the existing Fact-to-Artifact support relationship. JSON should retain a path/key and bounded source support; HTML should retain a reliable section/DOM reference where available and an excerpt; PDF must retain a page/page range and supporting text or truthful visual support description; image Facts must retain the supporting Artifact and a support description/excerpt. Bounding boxes are optional and must not be fabricated or stored without an explicit mappable coordinate space.
 
-Migration 013 remains the authoritative support pair but cannot represent per-Fact/per-Artifact locations. R3 therefore proposes one additive locator relation after migration 015, without rewriting migrations 010–015 or hiding locator identity in run/Fact JSON metadata.
+Migration 013 remains the authoritative support pair but cannot represent per-Fact/per-Artifact locations. R3 therefore proposes one additive locator relation after migration 015, without rewriting migrations 010-015 or hiding locator identity in run/Fact JSON metadata.
 
 One operation may interpret an explicit coherent ordered set of Artifacts only when they belong to the same Evidence Asset, including HTML plus a screenshot. Fact support and locators attach only to the Artifact(s) that actually support each Fact. Cross-Asset bundles remain prohibited.
 
 R3 preserves explicit current/ceased/historical/effective statements and uncertainty as source-supported Facts with locators. It does not infer currentness, calculate ownership, create UBO/controller conclusions, define typed relationship edges, determine satisfaction, select winners, or implement A4b. Typed relational Facts remain R4.
 
-#### Evidence Consumer Readiness R4 — Typed Relational Facts
+#### Evidence Consumer Readiness R4 - Typed Relational Facts
 
 **Accepted and implemented at `450ae41e2871a5145667b8fec906a84d5b5bbc93` under approved ADR-017.**
 
@@ -192,7 +192,7 @@ source party
 target party or arrangement
 ```
 
-The documented direction is always subject–relationship–object: the subject holds, exercises, performs, or is assigned the relationship toward the object. Provider-native direction and passive source wording must not leak into persisted semantics.
+The documented direction is always subject-relationship-object: the subject holds, exercises, performs, or is assigned the relationship toward the object. Provider-native direction and passive source wording must not leak into persisted semantics.
 
 R4 should support source-party snapshots for natural persons, legal entities, trusts/legal arrangements, and unknown/other parties without creating canonical global entities. It should introduce a versioned neutral vocabulary covering economic ownership, voting rights, appointment/removal rights, formal decision/control rights, significant influence/control, director/officer/signatory roles, trust roles, nominee/on-behalf-of relationships, and `OTHER` only for an understood out-of-vocabulary relationship. Ambiguous relationship meaning or direction remains untyped. Source-specific codes remain preserved metadata and map only through deterministic versioned rules.
 
@@ -204,7 +204,7 @@ R4 requires deterministic structured-output validation. Invalid typed output lea
 
 R4 does not determine UBO/controller status, indirect/effective ownership, thresholds, operative values, winners, requirement coverage, KYC satisfaction, or A4b conclusions. A4a remains the Fact-to-Information-Need evaluation boundary and requires no architecture change merely to receive a typed relational Fact.
 
-#### Stage A4b — Coverage, Conflict, and Provisional Requirement Assessment
+#### Stage A4b - Coverage, Conflict, and Provisional Requirement Assessment
 
 **Accepted and implemented at `e0dd4d85be47cfb851d86f41778a9c3a20286b16` under approved ADR-018.**
 
@@ -214,25 +214,25 @@ The diagnostic and proposed architecture are recorded in ADR-018. The existing I
 
 A4b outcomes remain multidimensional and provisional: coverage, completeness, comparable disagreement, temporal applicability, and missing-policy/input limitations must not be collapsed into one satisfaction status. A4b does not select an operative value or source winner, calculate indirect ownership, determine UBO/controller status, or determine final KYC satisfaction.
 
-Migration 018 is additive and forward-only. Migrations 010–017 remain immutable and no historical backfill occurred.
+Migration 018 is additive and forward-only. Migrations 010-017 remain immutable and no historical backfill occurred.
 
 #### Downstream KYC/Onboarding
 
 KYC/Onboarding retains source/value winner selection, operative customer values, customer dispute resolution, corroboration requirements, final KYC satisfaction, analyst/risk decisions, and approve/reject/refer/escalate or onboarding-progression decisions.
 
-### Stage A5 — Evidence Reconstruction and Package
+### Stage A5 - Evidence Reconstruction and Package
 
 Stage A5 is split at the persistence boundary under approved ADR-019. A5a was implemented and accepted at `851a029dff6a66e75c94f323007061c645cb7483`. A5b was implemented and accepted at `4602d763bd728f36b16de335cdd85cd6abced55d`.
 
-#### Stage A5a — Evidence Ledger / Reconstruction
+#### Stage A5a - Evidence Ledger / Reconstruction
 
-Provide an authorized, deterministic point-in-time reconstruction over the existing A1–A4b/R1–R4 source-of-truth records. Present a stable chronology of Requirements and Information Needs, collections and failures, Assets and Artifacts, extraction/interpretation, Facts and source relationships, locators and integrity lineage, A4a evaluations, A4b assessments, conflicts, gaps, and limitations.
+Provide an authorized, deterministic point-in-time reconstruction over the existing A1-A4b/R1-R4 source-of-truth records. Present a stable chronology of Requirements and Information Needs, collections and failures, Assets and Artifacts, extraction/interpretation, Facts and source relationships, locators and integrity lineage, A4a evaluations, A4b assessments, conflicts, gaps, and limitations.
 
 A5a should initially be a read projection, not a duplicate persisted event ledger. It distinguishes governed record availability/knowledge time from collection, capture, observation, source-effective, extraction, verification, evaluation, and assessment time. Because `created_at` is not universally a database-commit timestamp, the projection uses safe parent operation/run completion bounds and prevents later terminal results from leaking into earlier as-of views. It exposes places where the present model cannot reproduce overwritten intermediate transitions, exact commit time, prior requirement status, access-scope revocation history, or unpersisted denied/invalid requests.
 
 A5a does not choose latest Evidence, select a winner, create an operative value, determine KYC/UBO satisfaction, or fabricate downstream decision rationale. It is implemented as a read-only projection and introduced no migration.
 
-#### Stage A5b — Immutable Evidence Package
+#### Stage A5b - Immutable Evidence Package
 
 Allow the complete fresh server-generated, authorized A5a reconstruction to be explicitly frozen as a durable immutable package. A package has its own opaque identity, subject/context/purpose and `asOf` scope, exact ordered member references plus bounded frozen member projections, manifest/canonicalization version, assembly time and actor lineage, explicit limitations, SHA-256 manifest fingerprint, and an optional neutral `derivedFrom` predecessor. The browser does not submit arbitrary member IDs. Caller-selected subsets, exclusions, inclusion profiles, and purpose-specific filtering are deferred.
 
@@ -240,7 +240,7 @@ Package membership references canonical Evidence records; it does not copy or re
 
 A frozen package never silently gains later Evidence. A later reconstruction is frozen as a new package with a new freeze-operation key; idempotent retry returns the original Package while same-key changed input conflicts. Canonical JSON bytes and their SHA-256 are stored with relational membership in one atomic transaction. Reopen verifies manifest bytes, digest, version, canonical structure, and member order before authorization/materialization. Optional PDF/ZIP/human-readable output is a derived export, not the canonical package. Additive forward-only migration 019 and the bounded A5b implementation are accepted; export remains deferred.
 
-### Stage A6 — End-to-End Evidence Lab Validation
+### Stage A6 - End-to-End Evidence Lab Validation
 
 Exercise and demonstrate the complete lifecycle through the Evidence Lab.
 
@@ -267,7 +267,7 @@ Architecture Authority confirms that this completes Evidence Core V1 architectur
 
 ---
 
-## Stage B — Prove the Producer Abstraction
+## Stage B - Prove the Producer Abstraction
 
 Prove that materially different evidence producers fit naturally into the same platform model.
 
@@ -275,19 +275,19 @@ This is a post-Core producer track. The accepted Companies House producer and ge
 
 At minimum validate:
 
-### Producer 1 — Automated web/regulator evidence
+### Producer 1 - Automated web/regulator evidence
 
 Example: FCA/regulatory source.
 
-### Producer 2 — Customer document
+### Producer 2 - Customer document
 
 Example: an authorized customer-provided PDF/image such as proof of address. External-custody passport, selfie, or biometric Evidence requires the separate IDV/Vault architecture and is not an R1/Core V1 upload case.
 
-### Producer 3 — Authoritative registry/API evidence
+### Producer 3 - Authoritative registry/API evidence
 
 Example: Companies House or equivalent structured authoritative source.
 
-### Producer 4 — Analyst evidence
+### Producer 4 - Analyst evidence
 
 Manual analyst-provided evidence with actor attribution.
 
@@ -295,7 +295,7 @@ Stage B should test the architecture rather than create producer-specific parall
 
 ---
 
-## Stage C — Integrate Existing Products
+## Stage C - Integrate Existing Products
 
 Once the independent Evidence Platform is proven, progressively integrate KYC and Pre-boarding.
 
@@ -322,7 +322,7 @@ Feature flags or equivalent controlled activation should be used where appropria
 
 ---
 
-## Stage D — Retire Legacy Evidence Architecture
+## Stage D - Retire Legacy Evidence Architecture
 
 Only after replacement behavior is proven:
 
@@ -337,7 +337,7 @@ Deletion is the final step, not the migration strategy.
 
 ---
 
-## Evidence Core V1 final closure implementation — Consumer Façade
+## Evidence Core V1 final closure implementation - Consumer Façade
 
 **Implemented, accepted, and frozen under ADR-020 at `c55354aeb334c7c99201ade7a5b3d96e030d3266`.**
 

@@ -4,17 +4,17 @@
 
 **Goal:** Guarantee a KYC submission is never lost and never half-saved, tell the customer the honest status of their save, and let them resume a form after a refresh or crash without retyping.
 
-**Architecture:** On submit, the frontend first writes the whole submission bundle into a durable `submission_inbox` table (one tiny idempotent insert = the never-lose anchor), then the server attempts the real save once, inline. The real save (`finalizeSubmission`) writes all 11 tables inside ONE Neon `Pool` transaction — all-or-nothing, keyed on a stable `submissionId` so re-runs never duplicate. If the inline save succeeds the customer sees "Submitted successfully"; if it fails the row stays `pending` and a Vercel-cron worker retries it server-side forever, while the customer sees "Received — saving shortly". The wizard also autosaves a draft to `localStorage` so a refresh/crash can be resumed.
+**Architecture:** On submit, the frontend first writes the whole submission bundle into a durable `submission_inbox` table (one tiny idempotent insert = the never-lose anchor), then the server attempts the real save once, inline. The real save (`finalizeSubmission`) writes all 11 tables inside ONE Neon `Pool` transaction - all-or-nothing, keyed on a stable `submissionId` so re-runs never duplicate. If the inline save succeeds the customer sees "Submitted successfully"; if it fails the row stays `pending` and a Vercel-cron worker retries it server-side forever, while the customer sees "Received - saving shortly". The wizard also autosaves a draft to `localStorage` so a refresh/crash can be resumed.
 
 **Tech Stack:** React 18 (CRA, single-file `src/App.js`), Vercel serverless functions (`api/*.js`, CommonJS), Neon Postgres via `@neondatabase/serverless` (HTTP driver for simple writes, new `Pool` driver for the transaction), `ws` (new dep, WebSocket constructor for the Pool driver), Vercel Cron, `node:test` for unit tests.
 
 ## Global Constraints
 
-- **Never lose a submission** — the durable inbox insert is the anchor; every later failure is retried, never surfaced as data loss.
-- **Never a half-saved record** — the 11-table finalize is one transaction: full commit or full rollback.
-- **Idempotent by `submissionId`** — one `submissionId` per submission, reused across every retry; no path may create duplicate clients / sessions / journeys.
-- **Best-effort → durable-retry, never blocking** — the customer is never blocked at Declaration by a DB problem; a failed save becomes a queued save.
-- CommonJS (`module.exports` / `require`) for all `api/*` and `db/*` files so `src/setupProxy.js` can `require()` them in dev — mirror `api/submit.js`, `api/config.js`.
+- **Never lose a submission** - the durable inbox insert is the anchor; every later failure is retried, never surfaced as data loss.
+- **Never a half-saved record** - the 11-table finalize is one transaction: full commit or full rollback.
+- **Idempotent by `submissionId`** - one `submissionId` per submission, reused across every retry; no path may create duplicate clients / sessions / journeys.
+- **Best-effort → durable-retry, never blocking** - the customer is never blocked at Declaration by a DB problem; a failed save becomes a queued save.
+- CommonJS (`module.exports` / `require`) for all `api/*` and `db/*` files so `src/setupProxy.js` can `require()` them in dev - mirror `api/submit.js`, `api/config.js`.
 - Migrations are additive and idempotent (`IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`), applied with `node db/apply.js db/migrations/<file>.sql`. Next migration number is **024**.
 - SQL connection string: `process.env.DATABASE_URL` (same as `api/submit.js`).
 - Tests are `node:test` files named `*.nodetest.js`, run via `node --test`. No new test framework.
@@ -24,20 +24,20 @@
 ## File Structure
 
 **Create:**
-- `db/migrations/024_submission_inbox.sql` — inbox table + `onboarding_sessions.submission_id` unique column.
-- `api/lib/submissionInboxStore.js` — data access for `submission_inbox` (enqueue, claim pending, mark done/failed).
-- `api/lib/finalizeSubmission.js` — the all-or-nothing 11-table transaction (Pool driver), idempotent on `submissionId`.
-- `api/lib/neonPool.js` — shared Pool factory (sets `neonConfig.webSocketConstructor = require("ws")`).
-- `api/finalize-submissions.js` — Vercel-cron worker endpoint: claims pending rows, finalizes each.
-- `scripts/run-finalize-worker.js` — local one-shot runner for the worker (cron doesn't fire in dev).
-- `src/utils/submissionDraft.js` — localStorage draft save/load/clear helpers.
+- `db/migrations/024_submission_inbox.sql` - inbox table + `onboarding_sessions.submission_id` unique column.
+- `api/lib/submissionInboxStore.js` - data access for `submission_inbox` (enqueue, claim pending, mark done/failed).
+- `api/lib/finalizeSubmission.js` - the all-or-nothing 11-table transaction (Pool driver), idempotent on `submissionId`.
+- `api/lib/neonPool.js` - shared Pool factory (sets `neonConfig.webSocketConstructor = require("ws")`).
+- `api/finalize-submissions.js` - Vercel-cron worker endpoint: claims pending rows, finalizes each.
+- `scripts/run-finalize-worker.js` - local one-shot runner for the worker (cron doesn't fire in dev).
+- `src/utils/submissionDraft.js` - localStorage draft save/load/clear helpers.
 - Tests: `api/__tests__/finalizeSubmission.nodetest.js`, `api/__tests__/submissionInboxStore.nodetest.js`, `api/__tests__/finalize-worker.nodetest.js`, `src/utils/__tests__/submissionDraft.test.js`.
 
 **Modify:**
-- `package.json` — add `ws` dependency; add `worker:finalize` script.
-- `vercel.json` — add `crons` entry for `/api/finalize-submissions`; add `functions` maxDuration for it.
-- `api/submit.js` — port the 11 writes into `finalizeSubmission.js`; rewrite the handler as two-phase (enqueue → inline finalize → status).
-- `src/App.js` — stable `submissionId`; submit UX (`saved` / `queued` / `retry`); the done-screen copy; draft autosave + resume prompt.
+- `package.json` - add `ws` dependency; add `worker:finalize` script.
+- `vercel.json` - add `crons` entry for `/api/finalize-submissions`; add `functions` maxDuration for it.
+- `api/submit.js` - port the 11 writes into `finalizeSubmission.js`; rewrite the handler as two-phase (enqueue → inline finalize → status).
+- `src/App.js` - stable `submissionId`; submit UX (`saved` / `queued` / `retry`); the done-screen copy; draft autosave + resume prompt.
 
 **Idempotency contract (threads through everything):**
 - `submission_inbox.id` = `submissionId` (PK) → duplicate enqueue is a no-op.
@@ -48,9 +48,9 @@
 
 ---
 
-## Phase 1 — Durable inbox schema (additive, harmless on its own)
+## Phase 1 - Durable inbox schema (additive, harmless on its own)
 
-### Task 1: Migration — `submission_inbox` table + `onboarding_sessions.submission_id`
+### Task 1: Migration - `submission_inbox` table + `onboarding_sessions.submission_id`
 
 **Files:**
 - Create: `db/migrations/024_submission_inbox.sql`
@@ -64,7 +64,7 @@ Run:
 ```bash
 node -r dotenv/config -e "const {neon}=require('@neondatabase/serverless');const sql=neon(process.env.DATABASE_URL);sql\`SELECT column_name FROM information_schema.columns WHERE table_name='onboarding_sessions'\`.then(r=>{console.log(r.map(x=>x.column_name).join(', '));process.exit(0)}).catch(e=>{console.error(e.message);process.exit(1)})" dotenv_config_path=.env.local
 ```
-Expected: a comma list including `id`, `client_id`, `tenant_id`. (Confirms the table exists and is safe to `ALTER`.) If `submission_id` already appears, Step 2's ALTER is a no-op — fine.
+Expected: a comma list including `id`, `client_id`, `tenant_id`. (Confirms the table exists and is safe to `ALTER`.) If `submission_id` already appears, Step 2's ALTER is a no-op - fine.
 
 - [ ] **Step 2: Write the migration**
 
@@ -121,7 +121,7 @@ git commit -m "feat(db): add submission_inbox + onboarding_sessions.submission_i
 
 ---
 
-## Phase 2 — Inbox data-access layer
+## Phase 2 - Inbox data-access layer
 
 ### Task 2: `submissionInboxStore.js`
 
@@ -131,11 +131,11 @@ git commit -m "feat(db): add submission_inbox + onboarding_sessions.submission_i
 
 **Interfaces:**
 - Produces:
-  - `enqueue({ submissionId, tenantId, payload }) -> Promise<{ id, inserted: boolean }>` — idempotent insert (`ON CONFLICT (id) DO NOTHING`).
-  - `claimPending({ limit = 10, maxAttempts = 25 }) -> Promise<Array<{ id, tenant_id, payload, attempts }>>` — atomically flips `pending`/`failed` rows (under `maxAttempts`) to `processing`, returns them.
+  - `enqueue({ submissionId, tenantId, payload }) -> Promise<{ id, inserted: boolean }>` - idempotent insert (`ON CONFLICT (id) DO NOTHING`).
+  - `claimPending({ limit = 10, maxAttempts = 25 }) -> Promise<Array<{ id, tenant_id, payload, attempts }>>` - atomically flips `pending`/`failed` rows (under `maxAttempts`) to `processing`, returns them.
   - `markDone(id, sessionId) -> Promise<void>`
-  - `markFailed(id, errorMessage) -> Promise<void>` — sets status back to `failed`, `attempts = attempts + 1`, records `last_error`.
-- Consumes: `process.env.DATABASE_URL`, `@neondatabase/serverless` `neon` (HTTP driver — these are single-statement writes, no transaction needed here).
+  - `markFailed(id, errorMessage) -> Promise<void>` - sets status back to `failed`, `attempts = attempts + 1`, records `last_error`.
+- Consumes: `process.env.DATABASE_URL`, `@neondatabase/serverless` `neon` (HTTP driver - these are single-statement writes, no transaction needed here).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -144,7 +144,7 @@ git commit -m "feat(db): add submission_inbox + onboarding_sessions.submission_i
 const { test } = require("node:test");
 const assert = require("node:assert");
 
-// Pure unit test with an injected fake `sql` tag function — no live DB. The store
+// Pure unit test with an injected fake `sql` tag function - no live DB. The store
 // accepts an optional deps.sql so tests can capture the query + args.
 const store = require("../lib/submissionInboxStore");
 
@@ -189,7 +189,7 @@ test("enqueue rejects a missing submissionId", async () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `node --test api/__tests__/submissionInboxStore.nodetest.js`
-Expected: FAIL — `Cannot find module '../lib/submissionInboxStore'`.
+Expected: FAIL - `Cannot find module '../lib/submissionInboxStore'`.
 
 - [ ] **Step 3: Write the store**
 
@@ -278,7 +278,7 @@ git commit -m "feat(submit): add durable submission_inbox store (enqueue/claim/m
 
 ---
 
-## Phase 3 — All-or-nothing finalize transaction
+## Phase 3 - All-or-nothing finalize transaction
 
 ### Task 3: Shared Neon Pool factory + `ws` dependency
 
@@ -300,7 +300,7 @@ Expected: `package.json` `dependencies` now contains `"ws"`; `package-lock.json`
 // api/lib/neonPool.js
 "use strict";
 
-// Pool (WebSocket) driver for INTERACTIVE transactions — the HTTP `neon()` driver
+// Pool (WebSocket) driver for INTERACTIVE transactions - the HTTP `neon()` driver
 // cannot BEGIN/COMMIT across statements that chain on RETURNING ids, which the
 // 11-table finalize needs. One shared Pool per process (Fluid Compute reuses the
 // instance across invocations, so we do NOT end() it per request).
@@ -331,7 +331,7 @@ git add package.json package-lock.json api/lib/neonPool.js
 git commit -m "feat(submit): add Neon Pool factory for interactive transactions (ws dep)"
 ```
 
-### Task 4: `finalizeSubmission.js` — the 11-table transaction
+### Task 4: `finalizeSubmission.js` - the 11-table transaction
 
 **Files:**
 - Create: `api/lib/finalizeSubmission.js`
@@ -340,15 +340,15 @@ git commit -m "feat(submit): add Neon Pool factory for interactive transactions 
 
 **Interfaces:**
 - Consumes: `getPool` from `api/lib/neonPool.js`; the submit payload shape (`api/submit.js:375-402`).
-- Produces: `finalizeSubmission(payload, deps?) -> Promise<{ sessionId, clientId, journeyId }>` — runs ALL writes in ONE transaction on a pooled client; throws on any failure (caller rolls back and leaves the inbox row pending). Idempotent on `payload.submissionId`.
+- Produces: `finalizeSubmission(payload, deps?) -> Promise<{ sessionId, clientId, journeyId }>` - runs ALL writes in ONE transaction on a pooled client; throws on any failure (caller rolls back and leaves the inbox row pending). Idempotent on `payload.submissionId`.
 
 **Design notes for the implementer (read before writing):**
 - The body of this function is the SAME sequence of `INSERT`s already in `api/submit.js`, with FOUR mechanical changes:
-  1. Every `await sql\`…\`` becomes `await client.query(text, params)` on a `pg`-style pooled client (the Pool driver speaks the `pg` protocol; use `$1,$2,…` placeholders, not tagged templates). Keep the exact column lists and values — only the call form changes.
+  1. Every `await sql\`…\`` becomes `await client.query(text, params)` on a `pg`-style pooled client (the Pool driver speaks the `pg` protocol; use `$1,$2,…` placeholders, not tagged templates). Keep the exact column lists and values - only the call form changes.
   2. Wrap the whole sequence in `await client.query("BEGIN")` … `await client.query("COMMIT")`, with `ROLLBACK` in a `catch`.
   3. Make `onboarding_sessions` idempotent: add `submission_id` to the INSERT column list with value `payload.submissionId`, and append `ON CONFLICT (submission_id) DO UPDATE SET status = EXCLUDED.status, completed_at = EXCLUDED.completed_at RETURNING id`. Re-finalize returns the SAME session id.
-  4. Every child-table write becomes DELETE-by-parent-then-INSERT so a re-run rewrites, never duplicates: `DELETE FROM field_values WHERE session_id = $1` before the field loop; `persistJourneyModel` already deletes `api_usage`/`field_provenance` by `journey_id` — keep those; add `DELETE FROM session_timeline WHERE session_id = $1 AND event_type = 'applicant_field_overridden'` before the overrides loop; add `DELETE FROM documents WHERE journey_id = $1` before the documents loop.
-- Remove the per-insert `try/catch` swallows that exist in `api/submit.js` (e.g. `api/submit.js:185-187, 237-239, 265-267, 302-307, 331-333, 362-364, 593-599, 628-633`). Inside the transaction a child-row failure MUST abort the whole thing — that is the all-or-nothing requirement. No inner catches.
+  4. Every child-table write becomes DELETE-by-parent-then-INSERT so a re-run rewrites, never duplicates: `DELETE FROM field_values WHERE session_id = $1` before the field loop; `persistJourneyModel` already deletes `api_usage`/`field_provenance` by `journey_id` - keep those; add `DELETE FROM session_timeline WHERE session_id = $1 AND event_type = 'applicant_field_overridden'` before the overrides loop; add `DELETE FROM documents WHERE journey_id = $1` before the documents loop.
+- Remove the per-insert `try/catch` swallows that exist in `api/submit.js` (e.g. `api/submit.js:185-187, 237-239, 265-267, 302-307, 331-333, 362-364, 593-599, 628-633`). Inside the transaction a child-row failure MUST abort the whole thing - that is the all-or-nothing requirement. No inner catches.
 - Keep `persistJourneyModel`'s recompute-cost-from-pricing logic and all provenance rules verbatim (only the call form + the removed catches change).
 - `tenants` upsert keeps `ON CONFLICT (id) DO NOTHING`; `clients` keeps `ON CONFLICT (tenant_id, legal_name, country_code) DO UPDATE … RETURNING id`; `journeys` keeps `ON CONFLICT (session_id) DO UPDATE … RETURNING journey_id`.
 
@@ -425,7 +425,7 @@ test("finalize rolls back when a write throws (no partial commit)", async () => 
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `node --test api/__tests__/finalizeSubmission.nodetest.js`
-Expected: FAIL — `Cannot find module '../lib/finalizeSubmission'`.
+Expected: FAIL - `Cannot find module '../lib/finalizeSubmission'`.
 
 - [ ] **Step 3: Write `finalizeSubmission.js`**
 
@@ -440,7 +440,7 @@ Structure (fill the domain writes by porting `api/submit.js` per the Design note
 // half-written. Idempotent on payload.submissionId: onboarding_sessions upserts on
 // submission_id and every child table is DELETE-by-parent-then-INSERT, so the
 // worker can retry safely without duplicating. Throws on ANY failure after
-// ROLLBACK — the caller keeps the inbox row pending for a later retry.
+// ROLLBACK - the caller keeps the inbox row pending for a later retry.
 const { getPool } = require("./neonPool");
 const { deriveScalarProvenance } = require("../../src/utils/fieldProvenance");
 
@@ -467,22 +467,22 @@ async function finalizeSubmission(payload, deps = {}) {
   try {
     await client.query("BEGIN");
 
-    // 1. tenants upsert            — port api/submit.js:424-428
-    // 2. clients upsert  RETURNING id → clientId   — port api/submit.js:431-453
+    // 1. tenants upsert            - port api/submit.js:424-428
+    // 2. clients upsert  RETURNING id → clientId   - port api/submit.js:431-453
     // 3. onboarding_sessions INSERT ... , submission_id = $submissionId,
     //    ON CONFLICT (submission_id) DO UPDATE SET status=EXCLUDED.status,
     //    completed_at=EXCLUDED.completed_at RETURNING id → sessionId
-    //    — port api/submit.js:459-564, adding the submission_id column + conflict clause
+    //    - port api/submit.js:459-564, adding the submission_id column + conflict clause
     // 4. DELETE FROM field_values WHERE session_id=$sessionId; then the field loop
-    //    — port api/submit.js:566-600 (NO inner try/catch)
+    //    - port api/submit.js:566-600 (NO inner try/catch)
     // 5. DELETE FROM session_timeline WHERE session_id=$sessionId
     //    AND event_type='applicant_field_overridden'; then the overrides loop
-    //    — port api/submit.js:602-644 (NO inner try/catch)
+    //    - port api/submit.js:602-644 (NO inner try/catch)
     // 6. journey model: journeys upsert RETURNING journey_id → journeyId,
     //    completion_choice, declaration, api_usage (DELETE then insert),
     //    field_provenance (DELETE then insert, scalars + stakeholders + attrs +
     //    applicant), documents (DELETE FROM documents WHERE journey_id=$journeyId
-    //    then insert satisfied docs) — port api/submit.js:71-368 (NO inner try/catch)
+    //    then insert satisfied docs) - port api/submit.js:71-368 (NO inner try/catch)
 
     await client.query("COMMIT");
     return { sessionId, clientId, journeyId };
@@ -504,7 +504,7 @@ Implement every `// port …` comment as real `await client.query("<SQL with $1,
 Run: `node --test api/__tests__/finalizeSubmission.nodetest.js`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Real-DB smoke — finalize twice, assert exactly one session**
+- [ ] **Step 5: Real-DB smoke - finalize twice, assert exactly one session**
 
 Run:
 ```bash
@@ -516,7 +516,7 @@ const id='smoke-'+process.pid;
 const p={submissionId:id,tenantId:'nium',company:{name:'Smoke Co '+process.pid,code:'GB'},entityType:'company',journeyType:'ai_only',fieldValues:{legal_name:'Smoke Co'},declaration:{agreedAt:new Date().toISOString(),declarationVersion:'v1'},submittedAt:new Date().toISOString()};
 (async()=>{
   await finalizeSubmission(p);
-  await finalizeSubmission(p); // retry — must NOT create a second session
+  await finalizeSubmission(p); // retry - must NOT create a second session
   const rows=await sql\`SELECT count(*)::int n FROM onboarding_sessions WHERE submission_id=\${id}\`;
   console.log('sessions for submission:',rows[0].n);
   if(rows[0].n!==1){process.exit(1);}
@@ -535,13 +535,13 @@ git commit -m "feat(submit): all-or-nothing 11-table finalize (Pool transaction,
 
 ---
 
-## Phase 4 — Two-phase submit handler
+## Phase 4 - Two-phase submit handler
 
 ### Task 5: Rewrite `api/submit.js` as enqueue → inline finalize → status
 
 **Files:**
 - Modify: `api/submit.js` (replace the handler body; the ported SQL now lives in `finalizeSubmission.js`)
-- Test: extend `api/__tests__/finalizeSubmission.nodetest.js` is NOT enough — add handler test below.
+- Test: extend `api/__tests__/finalizeSubmission.nodetest.js` is NOT enough - add handler test below.
 - Test: `api/__tests__/submit-handler.nodetest.js` (create)
 
 **Interfaces:**
@@ -610,7 +610,7 @@ test("returns 400 when submissionId is missing", async () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `node --test api/__tests__/submit-handler.nodetest.js`
-Expected: FAIL — either `__setDeps is not a function` or wrong `status` values (current handler returns `success`, not `status`).
+Expected: FAIL - either `__setDeps is not a function` or wrong `status` values (current handler returns `success`, not `status`).
 
 - [ ] **Step 3: Rewrite the handler**
 
@@ -643,7 +643,7 @@ module.exports = async function handler(req, res) {
   }
 
   // Phase 1: durable capture. If this throws, the request fails loudly (non-200) so
-  // the browser keeps retrying from its saved draft — the bundle is NOT yet safe.
+  // the browser keeps retrying from its saved draft - the bundle is NOT yet safe.
   try {
     await _deps.enqueue({ submissionId, tenantId, payload: body });
   } catch (err) {
@@ -656,7 +656,7 @@ module.exports = async function handler(req, res) {
   try {
     const r = await _deps.finalizeSubmission(body);
     await _deps.markDone(submissionId, r.sessionId);
-    console.log(`[api/submit] ✅ saved inline — session ${r.sessionId}`);
+    console.log(`[api/submit] ✅ saved inline - session ${r.sessionId}`);
     return res.status(200).json({ status: "saved", ...r });
   } catch (err) {
     await _deps.markFailed(submissionId, err.message).catch(() => {});
@@ -685,12 +685,12 @@ Expected: all `api/__tests__/*.nodetest.js` and `lib/__tests__/*.nodetest.js` PA
 
 ```bash
 git add api/submit.js api/__tests__/submit-handler.nodetest.js
-git commit -m "feat(submit): two-phase submit — durable enqueue + inline finalize, saved/queued status"
+git commit -m "feat(submit): two-phase submit - durable enqueue + inline finalize, saved/queued status"
 ```
 
 ---
 
-## Phase 5 — Background retry worker
+## Phase 5 - Background retry worker
 
 ### Task 6: `finalize-submissions.js` cron worker + local runner
 
@@ -750,7 +750,7 @@ test("a row that throws is marked failed, and the batch continues", async () => 
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `node --test api/__tests__/finalize-worker.nodetest.js`
-Expected: FAIL — `Cannot find module '../finalize-submissions'`.
+Expected: FAIL - `Cannot find module '../finalize-submissions'`.
 
 - [ ] **Step 3: Write the worker**
 
@@ -762,7 +762,7 @@ Expected: FAIL — `Cannot find module '../finalize-submissions'`.
 // runs the all-or-nothing finalize for each. Invoked by Vercel Cron on a schedule;
 // also runnable locally via scripts/run-finalize-worker.js. A row that fails is
 // marked failed (attempts++) and retried on the next tick until it succeeds or hits
-// the attempts ceiling — the submission is never lost.
+// the attempts ceiling - the submission is never lost.
 const store = require("./lib/submissionInboxStore");
 const { finalizeSubmission } = require("./lib/finalizeSubmission");
 
@@ -844,7 +844,7 @@ In `package.json` `scripts`, add:
 Run: `node --test api/__tests__/finalize-worker.nodetest.js`
 Expected: PASS (2 tests).
 
-- [ ] **Step 7: End-to-end DB smoke — queue a row, run the worker, assert done**
+- [ ] **Step 7: End-to-end DB smoke - queue a row, run the worker, assert done**
 
 Run:
 ```bash
@@ -876,16 +876,16 @@ git commit -m "feat(submit): Vercel-cron worker retries pending submissions to d
 
 ---
 
-## Phase 6 — Frontend: stable submissionId + saved/queued UX
+## Phase 6 - Frontend: stable submissionId + saved/queued UX
 
 ### Task 7: Stable `submissionId` and two-status submit result
 
 **Files:**
-- Modify: `src/App.js` — `submitApplication` (`src/App.js:2645-2954`), the done-screen (`src/App.js:5197-5234`), new state near the other `useState`s (~`src/App.js:533-538`).
+- Modify: `src/App.js` - `submitApplication` (`src/App.js:2645-2954`), the done-screen (`src/App.js:5197-5234`), new state near the other `useState`s (~`src/App.js:533-538`).
 
 **Interfaces:**
 - Consumes: `POST /api/submit` returning `{ status: "saved" | "queued" | "capture_failed", … }`.
-- Produces: two React states — `submitStatus` (`"" | "saved" | "queued" | "retrying"`) and a stable `submissionIdRef`; the done screen reads `submitStatus` to pick copy.
+- Produces: two React states - `submitStatus` (`"" | "saved" | "queued" | "retrying"`) and a stable `submissionIdRef`; the done screen reads `submitStatus` to pick copy.
 
 **Design notes:**
 - Today `payload.submissionId = genUUID()` is minted fresh on every `submitApplication` call (`src/App.js:2793`). For idempotent retries the id MUST be stable across retries of the SAME submission. Mint it once into a ref when the customer first reaches submit, reuse it for retries, and reset it only on "Start New Application".
@@ -921,11 +921,11 @@ In `submitApplication`, change `submissionId: genUUID(),` (`src/App.js:2793`) to
           agentType: agentType || "onboarding", submittedAt: new Date().toISOString(),
         });
       } else {
-        // queued or capture_failed — durable capture will finalize later.
+        // queued or capture_failed - durable capture will finalize later.
         setSubmitStatus("queued");
       }
     } catch (err) {
-      // The POST itself never reached a definite answer — treat as queued; the
+      // The POST itself never reached a definite answer - treat as queued; the
       // browser draft (Task 9) is the backstop and can resubmit on next load.
       // eslint-disable-next-line no-console
       console.error("[Submit] network error:", err);
@@ -945,7 +945,7 @@ In the done block (`src/App.js:5200-5201`), replace the fixed heading + subline 
             <p style={{ fontSize: 13, color: "#1a3a4a70", margin: "0 0 22px" }}>
               {submitStatus === "saved"
                 ? <>KYC onboarding for <strong>{research?.companyName || companyName}</strong> submitted successfully.</>
-                : <>KYC onboarding for <strong>{research?.companyName || companyName}</strong> received — we're saving it now and it will be finalized shortly.</>}
+                : <>KYC onboarding for <strong>{research?.companyName || companyName}</strong> received - we're saving it now and it will be finalized shortly.</>}
             </p>
 ```
 Also change the check-circle color to a neutral "in progress" tone when queued: replace the icon `background` with
@@ -957,7 +957,7 @@ and the glyph from `✓` to `{submitStatus === "saved" ? "✓" : "⏳"}`.
 - [ ] **Step 4: Manual verification in the running app (happy path = saved)**
 
 Run: `npm start`, complete a submission end-to-end in the browser (dev proxy runs `/api/submit` + the inline finalize).
-Expected: done screen reads **"Application Submitted … submitted successfully."** Confirm in the DB the row landed: `node -r dotenv/config scripts/demo/inspect.js <sessionId> dotenv_config_path=.env.local` (sessionId from the server console log `✅ saved inline — session …`).
+Expected: done screen reads **"Application Submitted … submitted successfully."** Confirm in the DB the row landed: `node -r dotenv/config scripts/demo/inspect.js <sessionId> dotenv_config_path=.env.local` (sessionId from the server console log `✅ saved inline - session …`).
 
 - [ ] **Step 5: Manual verification of the queued path**
 
@@ -973,7 +973,7 @@ git commit -m "feat(submit): stable submissionId + saved/received UX driven by s
 
 ---
 
-## Phase 7 — Frontend: browser draft autosave + resume
+## Phase 7 - Frontend: browser draft autosave + resume
 
 ### Task 8: `submissionDraft.js` helpers
 
@@ -983,7 +983,7 @@ git commit -m "feat(submit): stable submissionId + saved/received UX driven by s
 
 **Interfaces:**
 - Produces:
-  - `saveDraft(state) -> void` — writes `{ savedAt, state }` to `localStorage["kyc_draft_v1"]`, swallowing quota/serialization errors.
+  - `saveDraft(state) -> void` - writes `{ savedAt, state }` to `localStorage["kyc_draft_v1"]`, swallowing quota/serialization errors.
   - `loadDraft() -> { savedAt, state } | null`
   - `clearDraft() -> void`
   - `DRAFT_KEY = "kyc_draft_v1"`
@@ -1023,7 +1023,7 @@ test("loadDraft returns null on corrupt JSON instead of throwing", () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `CI=true npx react-scripts test --watchAll=false src/utils/__tests__/submissionDraft.test.js`
-Expected: FAIL — cannot find `../submissionDraft`.
+Expected: FAIL - cannot find `../submissionDraft`.
 
 - [ ] **Step 3: Write the helpers**
 
@@ -1038,7 +1038,7 @@ export const DRAFT_KEY = "kyc_draft_v1";
 export function saveDraft(state) {
   try {
     localStorage.setItem(DRAFT_KEY, JSON.stringify({ savedAt: new Date().toISOString(), state }));
-  } catch (_) { /* quota/serialization — ignore, draft is a convenience not a guarantee */ }
+  } catch (_) { /* quota/serialization - ignore, draft is a convenience not a guarantee */ }
 }
 
 export function loadDraft() {
@@ -1071,14 +1071,14 @@ git commit -m "feat(submit): localStorage draft helpers (save/load/clear)"
 ### Task 9: Wire autosave + resume into the wizard
 
 **Files:**
-- Modify: `src/App.js` — imports; an autosave effect; a resume prompt on mount; clear-on-terminal.
+- Modify: `src/App.js` - imports; an autosave effect; a resume prompt on mount; clear-on-terminal.
 
 **Interfaces:**
 - Consumes: `saveDraft`, `loadDraft`, `clearDraft` from `src/utils/submissionDraft.js`; the state atoms that `resetAll()` (`src/App.js:738-754`) clears.
 
 **Design notes:**
-- The set of state to persist is EXACTLY the set `resetAll()` clears — read `resetAll` and mirror its atoms: `companyName, countryCode, entityType, ownershipType, research, activeSchema, checks, gapRef.current, drsSubmitted, drsFlags, drsGapsCleared, drsUploads, factChecks, ownershipFork, ownershipChangeDeclared, regNumberFork, regNumberChangeDeclared, step`, plus `stakeholdersRef.current` and `fieldMetadata`. Include `submissionIdRef.current` so a resumed submit keeps the same idempotency key. Do NOT persist transient UI-only atoms (hover, tooltip, error strings).
-- `gapRef` and `stakeholdersRef` are refs, not state — snapshot `.current` in the saved object and restore into `.current` on resume.
+- The set of state to persist is EXACTLY the set `resetAll()` clears - read `resetAll` and mirror its atoms: `companyName, countryCode, entityType, ownershipType, research, activeSchema, checks, gapRef.current, drsSubmitted, drsFlags, drsGapsCleared, drsUploads, factChecks, ownershipFork, ownershipChangeDeclared, regNumberFork, regNumberChangeDeclared, step`, plus `stakeholdersRef.current` and `fieldMetadata`. Include `submissionIdRef.current` so a resumed submit keeps the same idempotency key. Do NOT persist transient UI-only atoms (hover, tooltip, error strings).
+- `gapRef` and `stakeholdersRef` are refs, not state - snapshot `.current` in the saved object and restore into `.current` on resume.
 
 - [ ] **Step 1: Add the import**
 
@@ -1162,11 +1162,11 @@ The draft is a backstop for the pre-capture window only; once the server acknowl
 ```js
     clearDraft();
 ```
-(If the POST threw before any server ack, `setSubmitStatus("queued")` still runs and `setDone(true)` shows the received screen; the draft is cleared because the browser will not silently resubmit — resume is an explicit user action on next load. Leaving stale drafts around would double-submit under a new submissionId.)
+(If the POST threw before any server ack, `setSubmitStatus("queued")` still runs and `setDone(true)` shows the received screen; the draft is cleared because the browser will not silently resubmit - resume is an explicit user action on next load. Leaving stale drafts around would double-submit under a new submissionId.)
 
-> ponytail: single-slot draft — one active application per browser. Multi-draft keyed by company is a future change only if customers run concurrent applications in one browser.
+> ponytail: single-slot draft - one active application per browser. Multi-draft keyed by company is a future change only if customers run concurrent applications in one browser.
 
-- [ ] **Step 5: Manual verification — refresh mid-wizard, resume**
+- [ ] **Step 5: Manual verification - refresh mid-wizard, resume**
 
 Run: `npm start`. Fill the Input step + run research, reach Confirm. Hard-refresh the tab.
 Expected: on reload, the amber "Found an unfinished application…" banner appears. Click **Resume** → company, research results, and step are restored; continue to submit normally. Then submit and confirm the banner does not reappear on the next load (draft cleared).
@@ -1185,13 +1185,13 @@ git commit -m "feat(submit): autosave wizard draft to localStorage + resume-on-r
 **Spec coverage:**
 - Never lose a submission → Phase 1 inbox (durable anchor) + Phase 5 worker (infinite server-side retry) + Phase 7 browser draft (pre-capture backstop). ✔
 - Never a half-saved record → Phase 3 `finalizeSubmission` single transaction (BEGIN/COMMIT/ROLLBACK), inner catches removed. ✔
-- No duplicate customer on retry → stable `submissionId` (Phase 6) + `onboarding_sessions.submission_id` upsert + child DELETE-then-insert + inbox `ON CONFLICT DO NOTHING` (Phases 1–4). ✔
+- No duplicate customer on retry → stable `submissionId` (Phase 6) + `onboarding_sessions.submission_id` upsert + child DELETE-then-insert + inbox `ON CONFLICT DO NOTHING` (Phases 1-4). ✔
 - All 11 tables atomic → Task 4 ports all writes (tenants, clients, onboarding_sessions, field_values, session_timeline, journeys, completion_choice, declaration, api_usage, field_provenance, documents) into one transaction. ✔
 - Retries on the server → Phase 5 Vercel cron worker. ✔
-- "Submitted successfully" vs "Received — saving later" → Task 7 `submitStatus`-driven copy. ✔
+- "Submitted successfully" vs "Received - saving later" → Task 7 `submitStatus`-driven copy. ✔
 - Draft autosave surviving refresh/crash → Phase 7. ✔
 
-**Placeholder scan:** the only deliberate "port from" markers are in Task 4 Step 3, each pointing at an exact `api/submit.js` line range containing real, existing SQL to copy verbatim — not invented behavior. Helper bodies (`isInetLiteral`, `mapMethod`, `mapLayerFromJourney`, `toTimestamp`) are copied verbatim from cited lines.
+**Placeholder scan:** the only deliberate "port from" markers are in Task 4 Step 3, each pointing at an exact `api/submit.js` line range containing real, existing SQL to copy verbatim - not invented behavior. Helper bodies (`isInetLiteral`, `mapMethod`, `mapLayerFromJourney`, `toTimestamp`) are copied verbatim from cited lines.
 
 **Type/name consistency:** `submissionId` (string) is the single idempotency key across inbox PK, `onboarding_sessions.submission_id`, and the payload; `finalizeSubmission` returns `{ sessionId, clientId, journeyId }` and every caller (handler Task 5, worker Task 6) destructures exactly those names; store methods `enqueue/claimPending/markDone/markFailed` are named identically in the store, the handler deps, and the worker deps.
 
@@ -1201,8 +1201,8 @@ git commit -m "feat(submit): autosave wizard draft to localStorage + resume-on-r
 
 **Plan complete and saved to `docs/superpowers/plans/2026-09-13-durable-submission-pipeline.md`. Two execution options:**
 
-**1. Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks, fast iteration.
+**1. Subagent-Driven (recommended)** - I dispatch a fresh subagent per task, review between tasks, fast iteration.
 
-**2. Inline Execution** — Execute tasks in this session using executing-plans, batch execution with checkpoints.
+**2. Inline Execution** - Execute tasks in this session using executing-plans, batch execution with checkpoints.
 
 **Which approach?**

@@ -7,7 +7,7 @@
   tickets, email, chat, or support channels.
 - Test IDs must match `TEST-[A-Z0-9-]` and contain no names or identifiers.
 - The return page displays only internal session ID and status. Provider webhook
-  results—not browser return—are authoritative.
+  results-not browser return-are authoritative.
 - Use the scorecard only as `OUR_MEASURED_METRIC`; do not import vendor claims.
 
 ## Stage A: automated synthetic
@@ -27,7 +27,7 @@ attempt/stage timestamp is actually exposed.
 
 ## Stage C: controlled genuine-user POC
 
-Start with approximately 5–10 consenting testers using both providers where
+Start with approximately 5-10 consenting testers using both providers where
 practical. Vary iOS/Android, passport/driving licence/national ID, legitimate
 issuing countries, and ordinary camera/lighting conditions. This sample is for
 integration and measurement discovery, not statistical provider selection.

@@ -16,7 +16,7 @@ test("picks the officer the document belongs to", () => {
 });
 
 test("tolerates a name variance an equivalence rule explains (still matches)", () => {
-  // Transliteration/phonetic variance of the surname — resolved by a rule, so a
+  // Transliteration/phonetic variance of the surname - resolved by a rule, so a
   // plausible match, not an LOA.
   const r = pickBestOfficer({ candidates: [{ name: "SMYTHE, Jon" }], identity: { first_name: "John", last_name: "Smythe" } });
   assert.strictEqual(r.matched, true);

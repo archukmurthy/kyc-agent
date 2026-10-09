@@ -122,7 +122,7 @@ describe("signalLines - wording is derived, not hardcoded per row", () => {
     const signal = buildAnalystSignal({
       event: { ...addressEvent, workflow: "analyst_review", docType: null, matchedRule: "VERIFIABILITY-GUARD" },
     });
-    // analyst_review drives nothing automatically, so it is a type-2 outcome —
+    // analyst_review drives nothing automatically, so it is a type-2 outcome -
     // but it is still a recorded decision the customer never sees.
     expect(signal.type).toBe("type2");
     const lines = signalLines(signal);

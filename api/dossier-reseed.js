@@ -10,7 +10,7 @@
 // src/), so this thin route is the bridge: App.js POSTs the dispute, the real
 // machine validates the two edges, and the route returns the resulting mode.
 //
-// Pure w.r.t. the database — it runs the state machine and returns a decision;
+// Pure w.r.t. the database - it runs the state machine and returns a decision;
 // it writes nothing. seeded_by:customer is stamped at dossier SAVE time
 // (api/save-dossier.js), and the dispute itself is audited as a change_event by
 // the caller. "Nothing more of dossierLifecycle" is wired than these two edges.

@@ -10,7 +10,7 @@ const CALCULATION_DEFAULT_VERSION = 2;
 
 export const CALCULATION_METHODS = Object.freeze([
   { code: "POLICY_ALL_ROUTES", label: "All policy routes", explanation: "Existing combined policy assessment." },
-  { code: "EFFECTIVE_INTEREST", label: "Effective ownership — multiply + add", explanation: "Multiply each chain, then add the same person's independent direct and indirect interests." },
+  { code: "EFFECTIVE_INTEREST", label: "Effective ownership - multiply + add", explanation: "Multiply each chain, then add the same person's independent direct and indirect interests." },
   { code: "PSC_CONDITION_ATTRIBUTION", label: "Control attribution", explanation: "Existing supported majority-control/PSC attribution assessment. Not an additive percentage formula." },
 ]);
 

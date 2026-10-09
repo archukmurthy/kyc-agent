@@ -1,23 +1,23 @@
 /**
  * components/Step2DynamicForm.jsx
  *
- * Required Documents step of the KYC Onboarding Agent — dynamically shaped by
+ * Required Documents step of the KYC Onboarding Agent - dynamically shaped by
  * the DRS checklist (live POST /api/document-requirements, computed from the
  * bundled documentRequirements.js engine).
  *
  * Props:
- *   step1Data        — { companyName, entityType, ownershipType, incorporationCountry }
- *   researchData     — (optional) research result, currently unused here
- *   onComplete(data) — called when customer advances; data includes submittedRequirements[]
+ *   step1Data        - { companyName, entityType, ownershipType, incorporationCountry }
+ *   researchData     - (optional) research result, currently unused here
+ *   onComplete(data) - called when customer advances; data includes submittedRequirements[]
  *
- * IMPORTANT — render the WHOLE checklist, drop nothing:
+ * IMPORTANT - render the WHOLE checklist, drop nothing:
  *   Each checklist item carries a `selfSource` tag, one of:
  *     - "Client-provided only"      → customer must upload it
  *     - "Preferred self-source"     → Nium retrieves it
  *     - "Supplementary self-source" → Nium retrieves it
  *   and an `rfi` tag ("Required from client" | "Request if self-source insufficient").
  *   The previous version only showed items where rfi === "Required from client"
- *   (cards) or selfSource === "Preferred self-source" (a banner) — so anything
+ *   (cards) or selfSource === "Preferred self-source" (a banner) - so anything
  *   tagged "Supplementary self-source" (e.g. Regulatory status, Business
  *   activity, UK signatory authority evidence) was dropped entirely, and the
  *   "Preferred self-source" items (Legal existence, Constitution) were buried in
@@ -51,7 +51,7 @@ const clientMayAlsoProvide = (item) => /insufficient/i.test(item.rfi || '');
 
 // The doc-search agent (Step 2) sources two document types. The DRS checklist
 // keys items by human-readable `requirement` strings (no doc IDs), and Wolfsberg
-// is rendered in its own section — so we match an auto-sourced agent doc to a
+// is rendered in its own section - so we match an auto-sourced agent doc to a
 // checklist card by keyword on the card title rather than by an ID lookup.
 const AUTO_SOURCED_MATCHERS = {
   wolfsberg_questionnaire: /wolfsberg|cbddq|fccq/i,
@@ -60,7 +60,7 @@ const AUTO_SOURCED_MATCHERS = {
 
 // Returns the doc-search result already covering this checklist item (matched by
 // title keyword), or null if it was not auto-sourced. Only docs the agent
-// actually has (downloaded / url_found) count — a failed search still asks.
+// actually has (downloaded / url_found) count - a failed search still asks.
 function getAutoSourcedResult(requirementName, docSearchResults, selfSourceResults) {
   if (!requirementName) return null;
 
@@ -126,7 +126,7 @@ function AutoSourcedBanner({ result, showUploadHint = true }) {
 
 // Exported so the Applicant page (App.js, PR-044) can reuse this exact card for
 // the "Authority to act" upload when the applicant declares they are not a
-// listed director/officer — same markup, styling, and "why required" details.
+// listed director/officer - same markup, styling, and "why required" details.
 export function DocumentUploadCard({ item, onUpload, onRemove, uploaded, autoSourcedResult, brandName }) {
   const selfSource = isSelfSourced(item);
   const done = !!uploaded;
@@ -300,14 +300,14 @@ export default function Step2DynamicForm({
     onUploadsChange && onUploadsChange(next);
   };
 
-  // Partition the FULL checklist — nothing is dropped.
+  // Partition the FULL checklist - nothing is dropped.
   const selfSourced = checklist.filter(isSelfSourced);
   const provide     = checklist.filter(i => !isSelfSourced(i));
   const coreItems   = provide.filter(i => !isPersonItem(i.requirement));
   const personItems = provide.filter(i => isPersonItem(i.requirement));
 
   // Auto-sourced docs (from the Step 2 doc search agent) that DON'T map to any
-  // checklist card — e.g. an Annual Report for a Corporate entity, where the DRS
+  // checklist card - e.g. an Annual Report for a Corporate entity, where the DRS
   // checklist has no Annual Report requirement. These would otherwise be
   // invisible on Step 6, so we surface them in their own "Already sourced" panel.
   const renderedTitles = [
@@ -354,7 +354,7 @@ export default function Step2DynamicForm({
   const handleContinue = () => {
     const submittedRequirements = [
       ...Object.keys(uploads),
-      // Nium-sourced items count as submitted — Nium will retrieve them.
+      // Nium-sourced items count as submitted - Nium will retrieve them.
       ...selfSourced.map(i => i.requirement),
     ];
     onComplete({ uploads, submittedRequirements, checklist, flags });

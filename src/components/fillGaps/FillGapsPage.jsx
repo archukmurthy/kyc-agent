@@ -1,8 +1,8 @@
 /**
- * FillGapsPage.jsx — the Fill Gaps step of the onboarding wizard.
+ * FillGapsPage.jsx - the Fill Gaps step of the onboarding wizard.
  *
  * EXTRACTED FROM App.js as a PURE MOVE, zero behaviour change. renderGapSection
- * and the page's JSX moved here VERBATIM — the bodies below are the same text
+ * and the page's JSX moved here VERBATIM - the bodies below are the same text
  * that ran in App.js. What changed is only how they get their data: they used to
  * close over App's scope, and now arrive through the prop interface declared on
  * the component.
@@ -10,13 +10,13 @@
  * gapSectionOrder did NOT move, despite reading as part of the same cluster: at
  * the time of the extraction the pre-boarding/dossier path called it too (via
  * App.js#getGapSections), so it stayed in App.js and is drilled. Same rule the
- * earlier slices followed — anything with a consumer outside this page stays
+ * earlier slices followed - anything with a consumer outside this page stays
  * put. That second consumer has since been deleted as superseded legacy, so
  * this page is now its only caller; the drill is kept rather than churned.
  *
  * THIS ONE AUTHORED ITS OWN BOUNDARY. Confirm, Applicant and slice 1 each had a
  * named render function to relocate; this page was inline JSX in App's return,
- * so there was nothing to lift — the component had to be invented around it.
+ * so there was nothing to lift - the component had to be invented around it.
  * That is precisely why the oracle (FillGapsPage.render.test.jsx, 20 tests)
  * was written first, and why it must stay green UNCHANGED: "I moved a function"
  * is checkable by eye, "I invented a boundary" is not.
@@ -26,7 +26,7 @@
  *
  * THIS COMPONENT OWNS NO STATE. Everything is drilled:
  *
- *   - gapRef crosses AS A REF and setFormVersion is not needed here at all —
+ *   - gapRef crosses AS A REF and setFormVersion is not needed here at all -
  *     the write path is updateGap, which App owns and which bumps the version
  *     itself. renderGapSection reads gapRef.current at render time. Do NOT lift
  *     these values into state: that re-renders the form on every keystroke and
@@ -40,7 +40,7 @@
  *     App.js. Their call sites moved; the functions did not.
  *
  * The <StakeholderGapForms/> mount is passed through exactly as slice 1 left
- * it — same eleven props, same order. This component receives them and hands
+ * it - same eleven props, same order. This component receives them and hands
  * them straight down; it does not re-wire the cluster.
  */
 

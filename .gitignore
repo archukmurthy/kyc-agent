@@ -11,7 +11,7 @@ public/ubo-control-lab/
 .config-store.json
 .didit-store.json
 # Claude Code: local settings stay private, the shared project hooks are tracked.
-# (Must be `.claude/*` not `.claude/` — git cannot re-include a file whose
+# (Must be `.claude/*` not `.claude/` - git cannot re-include a file whose
 # parent directory is excluded.)
 .claude/*
 !.claude/settings.json
@@ -21,13 +21,13 @@ public/ubo-control-lab/
 benchmark/out/
 migrate.sql
 
-# Doc search agent downloads (audit copies of fetched PDFs — local dev only)
+# Doc search agent downloads (audit copies of fetched PDFs - local dev only)
 downloads/
 
-# Self-source agent test-run output (generated locally — not source)
+# Self-source agent test-run output (generated locally - not source)
 test-output-self-source/
 
-# Durable local backups of DB rows (full dossier data — must NEVER be committed)
+# Durable local backups of DB rows (full dossier data - must NEVER be committed)
 backups/
 
 # Local notification helper (run by Claude Code after task completion)
@@ -36,7 +36,7 @@ alert.ps1
 # Local idle-watcher helper (run in a separate PowerShell window)
 watch-claude.ps1
 
-# Codex/agent worktrees (local git worktrees — never commit; they are embedded repos)
+# Codex/agent worktrees (local git worktrees - never commit; they are embedded repos)
 .codex-worktrees/
 
 # Local scratch/preview work (standalone HTML previews of parked screens, throwaway

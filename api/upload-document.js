@@ -1,7 +1,7 @@
 /**
  * /api/upload-document
  *
- * PR-034 — Vercel Blob permanent document storage.
+ * PR-034 - Vercel Blob permanent document storage.
  *
  * Receives a single file as multipart/form-data (field name: "file"), uploads
  * it to Vercel Blob, and returns the permanent URL. This replaces the previous
@@ -9,13 +9,13 @@
  * that do not survive a page reload. Unblocks PR-040 / PR-043.
  *
  * ACCESS: private. The linked Blob store is configured private, and this handler
- * previously asked for `access: "public"` — a combination the Blob API rejects
+ * previously asked for `access: "public"` - a combination the Blob API rejects
  * outright, so every upload 500'd and no upload has ever succeeded. Writing
  * private makes the code and the store agree.
  *
  * What "private" does and does NOT buy us: blobs are no longer world-readable by
  * URL (a real improvement for KYC identity documents), but retrieval via
- * /api/get-document is still gated only by possession of the dossier context —
+ * /api/get-document is still gated only by possession of the dossier context -
  * the same capability that already opens the dossier itself. Real access control
  * (session-bound signed URLs, audited retrieval) belongs to the auth layer,
  * tracked as a P1 go-live blocker. Do not read this as "documents are now
@@ -45,7 +45,7 @@ const { enforceRateLimit } = rateLimit;
 const { validateUpload, MAX_UPLOAD_BYTES } = uploadValidation;
 
 // Vercel's default body parser would consume the multipart stream before we can
-// read it — disable it so formidable can parse the raw request.
+// read it - disable it so formidable can parse the raw request.
 export const config = { api: { bodyParser: false } };
 
 export default async function handler(req, res) {
@@ -99,7 +99,7 @@ export default async function handler(req, res) {
     // Return `pathname` as well as `url`. addRandomSuffix means the pathname is
     // NOT reconstructable from `filename`, so dropping it here (as this handler
     // used to) is what would later force a list()/head() backfill to adopt
-    // signed URLs — the cleaner long-term read path, which is keyed by pathname.
+    // signed URLs - the cleaner long-term read path, which is keyed by pathname.
     // Streaming retrieval works from the full URL and does not need it; persist
     // it anyway as cheap insurance that keeps that door open.
     return res.status(200).json({ blobUrl: blob.url, pathname: blob.pathname, filename });

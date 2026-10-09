@@ -1,4 +1,4 @@
-# Evidence Platform V1 — UBO Integration Readiness Export
+# Evidence Platform V1 - UBO Integration Readiness Export
 
 **Conclusion:** `READY_FOR_G4_1`
 
@@ -30,7 +30,7 @@ The authoritative frozen definitions are the `V1 contract-freeze status`, `Froze
 | PR numbers | None recorded or supplied |
 | Evidence tests | 255/255 passed including 9/9 focused V1 consumer-contract tests |
 | KYC regression | 24 suites / 475 tests passed after façade implementation |
-| Database verification | Disposable PostgreSQL migrations 010–019 and A5b smoke passed |
+| Database verification | Disposable PostgreSQL migrations 010-019 and A5b smoke passed |
 | Production build | Passed after façade implementation |
 
 Evidence V1 consumer contracts are **FROZEN** at the single in-process import below, implemented and accepted at `c55354aeb334c7c99201ade7a5b3d96e030d3266`. Trusted host authentication/authorization and production release controls remain separate activation blockers.
@@ -59,16 +59,16 @@ A future authenticated HTTP/RPC transport may wrap the façade. It remains a pro
 
 | Need | Nearest current implementation/export | Exact current signature | Classification |
 |---|---|---|---|
-| Resolve an authorized Artifact | `evidence/a3/repository.js` — `PostgresA3Repository.findArtifactForInterpretation` | `findArtifactForInterpretation({ artifactId, tenantId, contextId = null })` | **INTERNAL ONLY** |
-| Read verified Artifact bytes | `evidence/a3/artifactReader.js` — `EvidenceArtifactReader.read` | `read(artifact)` | **INTERNAL ONLY** |
-| Targeted interpretation | `evidence/r2/service.js` — `TargetedInterpretationService.interpret` | `interpret(input, trustedAuthorization)` | **PROVISIONAL** |
-| Interpretation history | `evidence/r2/service.js` — `TargetedInterpretationService.history` | `history({ artifactIds = [] }, trustedAuthorization)` | **PROVISIONAL** |
+| Resolve an authorized Artifact | `evidence/a3/repository.js` - `PostgresA3Repository.findArtifactForInterpretation` | `findArtifactForInterpretation({ artifactId, tenantId, contextId = null })` | **INTERNAL ONLY** |
+| Read verified Artifact bytes | `evidence/a3/artifactReader.js` - `EvidenceArtifactReader.read` | `read(artifact)` | **INTERNAL ONLY** |
+| Targeted interpretation | `evidence/r2/service.js` - `TargetedInterpretationService.interpret` | `interpret(input, trustedAuthorization)` | **PROVISIONAL** |
+| Interpretation history | `evidence/r2/service.js` - `TargetedInterpretationService.history` | `history({ artifactIds = [] }, trustedAuthorization)` | **PROVISIONAL** |
 | Single interpretation operation | No dedicated service/public export | Not available; current authorized history returns an operation list | **PROVISIONAL** |
-| Ordinary/typed Fact result retrieval | `evidence/r2/service.js` — internal helpers `publicFact`, `publicTypedRelationship` | `publicFact(fact, requestedConcepts)`; `publicTypedRelationship(relationship)` | **PROVISIONAL** |
-| Point-in-time reconstruction | `evidence/a5a/service.js` — `EvidenceReconstructionService.reconstructEvidence` | `reconstructEvidence({ authorizedTenant, authorizedContext, subject = null, asOf })` | **INTERNAL ONLY** |
-| Package list | `evidence/a5b/service.js` — `EvidencePackageService.listAuthorizedPackages` | `listAuthorizedPackages({ tenantId, contextId, subjectReferenceId })` | **INTERNAL ONLY** |
-| Package reopen | `evidence/a5b/service.js` — `EvidencePackageService.reopenPackage` | `reopenPackage({ tenantId, contextId, packageId })` | **INTERNAL ONLY** |
-| Package verify | `evidence/a5b/service.js` — `EvidencePackageService.verifyPackageManifest` | `verifyPackageManifest({ tenantId, contextId, packageId })` | **INTERNAL ONLY** |
+| Ordinary/typed Fact result retrieval | `evidence/r2/service.js` - internal helpers `publicFact`, `publicTypedRelationship` | `publicFact(fact, requestedConcepts)`; `publicTypedRelationship(relationship)` | **PROVISIONAL** |
+| Point-in-time reconstruction | `evidence/a5a/service.js` - `EvidenceReconstructionService.reconstructEvidence` | `reconstructEvidence({ authorizedTenant, authorizedContext, subject = null, asOf })` | **INTERNAL ONLY** |
+| Package list | `evidence/a5b/service.js` - `EvidencePackageService.listAuthorizedPackages` | `listAuthorizedPackages({ tenantId, contextId, subjectReferenceId })` | **INTERNAL ONLY** |
+| Package reopen | `evidence/a5b/service.js` - `EvidencePackageService.reopenPackage` | `reopenPackage({ tenantId, contextId, packageId })` | **INTERNAL ONLY** |
+| Package verify | `evidence/a5b/service.js` - `EvidencePackageService.verifyPackageManifest` | `verifyPackageManifest({ tenantId, contextId, packageId })` | **INTERNAL ONLY** |
 
 UBO must not import these paths. G4.1 may inspect and map the documented shapes without compiling an adapter against them. A later bounded Evidence task must publish a versioned façade whose implementation delegates to these services.
 
@@ -177,8 +177,8 @@ Sanitized G4.1 candidate usage:
 | `trustedAuthorization.actorType` | Required | Trusted host/server only |
 | `trustedAuthorization.actorId` | Optional | Trusted host/server only |
 | `input.operationKey` | Required | Caller supplies a deliberate idempotency key; a new key expresses a fresh interpretation intent |
-| `input.artifactIds` | Required, unique list of 1–20 | Caller selects opaque persisted references; Evidence resolves them authoritatively |
-| `input.requestedConcepts[].concept` | Required, unique list of 1–20 | Caller supplies neutral information concepts |
+| `input.artifactIds` | Required, unique list of 1-20 | Caller selects opaque persisted references; Evidence resolves them authoritatively |
+| `input.requestedConcepts[].concept` | Required, unique list of 1-20 | Caller supplies neutral information concepts |
 | Concept `description`, `schemaFieldId`, `informationNeedId` | Optional | Caller may supply only authorized upstream context; neutral concepts must not fabricate schema linkage |
 | `input.extractionContext` | Optional | Caller-supplied bounded context; allowed keys are listed below |
 | `input.correlation` | Optional | Caller-supplied opaque request/references; not sent to the semantic provider |
@@ -516,17 +516,17 @@ Fresh interpretation never recollects Evidence. Recollection never automatically
 
 | Contract concern | Test reference |
 |---|---|
-| Trusted R2 authorization and bounded API result | `evidence/r2/__tests__/api.nodetest.js` — `stable R2 interpret API uses trusted request authorization and returns a bounded result` |
-| History/options make no provider call | `evidence/r2/__tests__/api.nodetest.js` — `history and options are explicit no-provider read operations` |
-| Idempotency and immutable replay | `evidence/r2/__tests__/r2.nodetest.js` — operation-key/replay characterizations |
-| `not_found` remains distinct | `evidence/r2/__tests__/r2.nodetest.js` — `legitimate requested-concept absence remains not-found rather than unsupported` |
-| Integrity checked before provider | `evidence/r2/__tests__/r2.nodetest.js` — `Artifact integrity mismatch is detected before provider execution` |
-| Storage failure creates no Fact/provider call | `evidence/r2/__tests__/r2.nodetest.js` — `unavailable Artifact bytes make no provider call or Fact and retain immutable failed-operation history` |
-| Neutral concept does not fabricate schema linkage | `evidence/r2/__tests__/r2.nodetest.js` — `the R2 adapter never fabricates schema linkage for a neutral requested concept` |
-| Full typed value grammar and direction | `evidence/r4/__tests__/r4.nodetest.js` — exact/range/unknown/qualitative, vocabulary, direction, temporal and lineage tests |
-| Bettercomms-shaped provider output | `evidence/r4/__tests__/liveProviderStructured.nodetest.js` — `structured live contract validates 75, 25 and 100 percentage-point ownership plus director/officer roles` |
-| Closed provider schema and media locators | Same file — structured locator and closed-schema tests |
-| No UBO engine/import | `evidence/r4/__tests__/r4.nodetest.js` — `R4 remains generic Evidence infrastructure with no UBO, indirect-ownership, winner or A4b engine` |
+| Trusted R2 authorization and bounded API result | `evidence/r2/__tests__/api.nodetest.js` - `stable R2 interpret API uses trusted request authorization and returns a bounded result` |
+| History/options make no provider call | `evidence/r2/__tests__/api.nodetest.js` - `history and options are explicit no-provider read operations` |
+| Idempotency and immutable replay | `evidence/r2/__tests__/r2.nodetest.js` - operation-key/replay characterizations |
+| `not_found` remains distinct | `evidence/r2/__tests__/r2.nodetest.js` - `legitimate requested-concept absence remains not-found rather than unsupported` |
+| Integrity checked before provider | `evidence/r2/__tests__/r2.nodetest.js` - `Artifact integrity mismatch is detected before provider execution` |
+| Storage failure creates no Fact/provider call | `evidence/r2/__tests__/r2.nodetest.js` - `unavailable Artifact bytes make no provider call or Fact and retain immutable failed-operation history` |
+| Neutral concept does not fabricate schema linkage | `evidence/r2/__tests__/r2.nodetest.js` - `the R2 adapter never fabricates schema linkage for a neutral requested concept` |
+| Full typed value grammar and direction | `evidence/r4/__tests__/r4.nodetest.js` - exact/range/unknown/qualitative, vocabulary, direction, temporal and lineage tests |
+| Bettercomms-shaped provider output | `evidence/r4/__tests__/liveProviderStructured.nodetest.js` - `structured live contract validates 75, 25 and 100 percentage-point ownership plus director/officer roles` |
+| Closed provider schema and media locators | Same file - structured locator and closed-schema tests |
+| No UBO engine/import | `evidence/r4/__tests__/r4.nodetest.js` - `R4 remains generic Evidence infrastructure with no UBO, indirect-ownership, winner or A4b engine` |
 | Reconstruction access/as-of | `evidence/a5a/__tests__/a5a.nodetest.js` |
 | Package identity/integrity/member authorization | `evidence/a5b/__tests__/a5b.nodetest.js` |
 

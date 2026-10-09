@@ -1,4 +1,4 @@
-# Didit IDV Spike — Design Spec
+# Didit IDV Spike - Design Spec
 
 **Date:** 2026-09-07
 **Status:** Approved design (spike scope)
@@ -17,17 +17,17 @@ Prove the end-to-end Didit identity-verification loop, wired into the KYC wizard
 
 ## 2. Guiding decisions (agreed)
 
-- **Hybrid Option A.** Thin connector for the spike; adopt the hardened `idv/` module's storage/security model at productionization — *before any real PII flows*.
+- **Hybrid Option A.** Thin connector for the spike; adopt the hardened `idv/` module's storage/security model at productionization - *before any real PII flows*.
 - **Self-contained connector, not idv internals.** The `idv/` module's rule is "consume only `idv/index.js`," and it exposes no standalone Didit adapter. Rather than breach that boundary (and couple to a module under active Wave development), the spike uses a small `lib/didit/` connector that mirrors the documented Didit v3 contract. Retiring it for the real module is IDV-1.
 - **Poll-on-return retrieval** for the spike (no public webhook ingress needed). Webhook is IDV-3.
 - **Dev-only shortcut** to reach the step, bypassing the AI-research step (which needs `ANTHROPIC_API_KEY` we don't have). Removed/disabled in production.
-- **New dedicated wizard step** ("Identity Verification") right after **Applicant** — smallest, gate-able App.js change.
+- **New dedicated wizard step** ("Identity Verification") right after **Applicant** - smallest, gate-able App.js change.
 - **Local file store** for persistence during the spike; flip to Neon once the DB is confirmed a test DB (DEP-1).
 
 ## 3. Didit mechanics (confirmed from live docs + existing `idv/` adapter)
 
 - **Create session:** `POST https://verification.didit.me/v3/session/`, header `x-api-key`. Body: `workflow_id`, `vendor_data` (our correlation id), `callback`, `metadata`, and (sandbox) `sandbox_scenario`. Returns `session_id` + hosted `url`.
-- **Retrieve decision (cross-device safe, poll-able):** `GET /v3/session/{session_id}/decision/`, header `x-api-key`. Pure session-id lookup — no device/cookie dependency.
+- **Retrieve decision (cross-device safe, poll-able):** `GET /v3/session/{session_id}/decision/`, header `x-api-key`. Pure session-id lookup - no device/cookie dependency.
 - **User correlation:** `vendor_data` = our `submissionId`; echoed in create response, webhook, and decision. Plus `session_id` join key.
 - **Data returned (Full KYC):** name, DOB, nationality, gender, place/date of birth, document type/number/expiry/issue, MRZ, address/parsed address, liveness score, face-match, optional AML/PEP. Images/videos are temporary presigned links (not stored in spike).
 
@@ -85,7 +85,7 @@ Page: applicant cells populate (mappedFields) + extras shown; extras persisted i
 
 ## 7. Persistence (spike)
 
-- Local JSON file in the worktree (e.g. `.didit-store.json`), **gitignored** — never committed, never leaves the machine.
+- Local JSON file in the worktree (e.g. `.didit-store.json`), **gitignored** - never committed, never leaves the machine.
 - Keyed by our `ref` (`submissionId`). Holds: `{ providerSessionId, status, mappedFields, extras, updatedAt }`.
 - Swap to Neon (or the idv encrypted store) is a store-implementation change only; call sites unchanged (DEP-1 / IDV-1).
 
@@ -105,18 +105,18 @@ Page: applicant cells populate (mappedFields) + extras shown; extras persisted i
 
 ## 10. Testing
 
-- **Unit:** `lib/didit/mapDecision.js` against a synthetic Didit decision fixture — asserts correct `mappedFields` + `extras` extraction (the money path).
+- **Unit:** `lib/didit/mapDecision.js` against a synthetic Didit decision fixture - asserts correct `mappedFields` + `extras` extraction (the money path).
 - **Smoke:** `diditClient` happy-path with a stubbed `fetch` (no live network).
 - Existing `appMounts` characterization test guards the App.js edit (wizard still mounts).
 - No live Didit/DB calls in automated tests.
 
 ## 11. Deferred to productionization (tracked in BACKLOG.md)
 
-- **IDV-1** — adopt the `idv/` module's encrypted-storage model (envelope encryption, RLS, OIDC-gated) before real PII.
-- **IDV-2** — provision KMS key provider, OIDC issuer/JWKS, separate `IDV_DATABASE_URL` DB.
-- **IDV-3** — production webhook ingestion (HMAC) alongside polling; replace ephemeral Cloudflare tunnel with a stable endpoint.
-- **IDV-4** — first-class platform fields for document number/type/expiry/address.
-- **DEP-1** — confirm/obtain a writable test database (interim: local store).
+- **IDV-1** - adopt the `idv/` module's encrypted-storage model (envelope encryption, RLS, OIDC-gated) before real PII.
+- **IDV-2** - provision KMS key provider, OIDC issuer/JWKS, separate `IDV_DATABASE_URL` DB.
+- **IDV-3** - production webhook ingestion (HMAC) alongside polling; replace ephemeral Cloudflare tunnel with a stable endpoint.
+- **IDV-4** - first-class platform fields for document number/type/expiry/address.
+- **DEP-1** - confirm/obtain a writable test database (interim: local store).
 
 ## 12. Success criteria (spike is "done")
 
@@ -129,5 +129,5 @@ Page: applicant cells populate (mappedFields) + extras shown; extras persisted i
 ## 13. Open items
 
 - Which single journey to wire the spike step into (default: the simplest reachable one; confirm at plan time).
-- QR helper choice (tiny dependency vs inline) — decided at plan time.
+- QR helper choice (tiny dependency vs inline) - decided at plan time.
 - Didit workflow confirmed as a sandbox/test workflow in the Business Console (optional verification).

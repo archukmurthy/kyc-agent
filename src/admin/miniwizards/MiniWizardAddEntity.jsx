@@ -38,7 +38,7 @@ export default function MiniWizardAddEntity({ config, onComplete, onCancel }) {
     setDraft({ ...draft, ...p });
   }
 
-  // Deep-merge nested maps (schemas, documents) — partial patches from the
+  // Deep-merge nested maps (schemas, documents) - partial patches from the
   // embedded StepSchemas / StepDocuments must add to the existing maps,
   // not overwrite them.
   function mergePatch(p) {

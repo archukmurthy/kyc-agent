@@ -1,4 +1,4 @@
-# KYC Lookup Agent — Handoff Document
+# KYC Lookup Agent - Handoff Document
 
 Owner: [assign to developer]
 Last updated: 2026-06-11
@@ -11,18 +11,18 @@ consumes from AI research. The main agent does not know the data came from Nium.
 
 Files:
 
-- `agents/kycLookupAgent.js` — the agent (entry point + mappers)
-- `api/kyc-lookup.js` — serverless function the browser calls
-- `src/setupProxy.js` — registers `/api/kyc-lookup` for local `npm start`
-- `src/App.js` — fourth journey card ("Nium API Lookup"), test-mode only
+- `agents/kycLookupAgent.js` - the agent (entry point + mappers)
+- `api/kyc-lookup.js` - serverless function the browser calls
+- `src/setupProxy.js` - registers `/api/kyc-lookup` for local `npm start`
+- `src/App.js` - fourth journey card ("Nium API Lookup"), test-mode only
 
-## Transport / auth — reused, not re-implemented
+## Transport / auth - reused, not re-implemented
 
 HTTP, auth, base URLs, and credentials are delegated to **`lib/niumClient.js`**
 (the verified working Nium V5 client). This agent calls its
 `fetchPublicDetails()` / `fetchExhaustiveDetails()` and only adds field mapping
 + orchestration + caching. There is **no duplicated fetch logic and no
-hardcoded credentials** — auth stays consistent with the rest of the app.
+hardcoded credentials** - auth stays consistent with the rest of the app.
 
 Auth pattern (from `lib/niumClient.js#getHeaders`):
 
@@ -35,7 +35,7 @@ X_REQUEST_ID: <uuid per call>
 
 ## Two API calls (sequential)
 
-### Step 1 — publicDetails
+### Step 1 - publicDetails
 
 Confirms the company exists and returns a `publicDetailsId`.
 
@@ -51,10 +51,10 @@ Returns: `matchResponses[0].publicDetailsId` (+ `businessName`,
 > search is not supported by this endpoint. The agent therefore returns a clear
 > error when `registrationNumber` is missing (see Limitations).
 
-### Step 2 — exhaustiveDetailsSearch
+### Step 2 - exhaustiveDetailsSearch
 
 Returns the full company record including stakeholders, addresses, and registry
-info. **CHARGEABLE** — the agent caches results (see Caching).
+info. **CHARGEABLE** - the agent caches results (see Caching).
 
 ```
 GET {EKYB_BASE_URL}/api/v5/client/{clientHashId}/corporate/exhaustiveDetailsSearch
@@ -128,7 +128,7 @@ types them.
 ## Caching
 
 `exhaustiveDetailsSearch` is chargeable. The agent caches its raw response via
-`lib/storage.js` under key `exhaustive:{publicDetailsId}` with a 90-day TTL —
+`lib/storage.js` under key `exhaustive:{publicDetailsId}` with a 90-day TTL -
 the **same key and TTL** as `api/nium/exhaustive-details.js`, so the agent and
 that route share one cache and never double-charge. Cache read/write failures
 are non-fatal (the agent falls through to the live API).
@@ -146,7 +146,7 @@ NIUM_API_KEY            # shared gateway key
 ```
 
 When these are unset (e.g. local dev without `.env.local`), `validateConfig()`
-in `niumClient` throws and the agent returns `error: "Missing env: ..."` — the
+in `niumClient` throws and the agent returns `error: "Missing env: ..."` - the
 serverless function responds `success:false` and the UI falls back to AI
 research. Nothing crashes.
 
@@ -157,7 +157,7 @@ research. Nothing crashes.
   `error: "Nium registry lookup requires a business registration number…"`.
   The fourth journey card currently sends `registrationNumber: null` (the
   company-input screen has no reg-number field yet), so the happy path needs a
-  reg number wired in — see Backlog.
+  reg number wired in - see Backlog.
 - **eKYB host is preprod.** Prod eKYB (`api.spend.nium.com`) needs a prod API
   key + real client hash (not yet issued); the agent stays on the verified
   preprod host via the env defaults.

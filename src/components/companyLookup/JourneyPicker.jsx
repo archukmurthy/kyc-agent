@@ -1,9 +1,9 @@
 /**
- * JourneyPicker.jsx — the journey-selection screen of the onboarding wizard
+ * JourneyPicker.jsx - the journey-selection screen of the onboarding wizard
  * ("How would you like to complete your application?").
  *
  * EXTRACTED FROM App.js as a PURE MOVE, zero behaviour change. The page's JSX
- * moved here VERBATIM — the body below is the same text that ran in App.js at
+ * moved here VERBATIM - the body below is the same text that ran in App.js at
  * {step === STEPS.input && journeyOpen}. What changed is only how it gets its
  * data: it used to close over App's scope, and now arrives through the prop
  * interface declared on the component.
@@ -26,13 +26,13 @@
  *     resetAll drive them, and ConfirmStep resets them on a re-search.
  *   - searchAttempts stays (read-only here); the server counter is authoritative
  *     (it is read from the dossier / attempt endpoints, never saved by the client).
- *   - companyName / countryCode are READ-ONLY here — three references, all in
+ *   - companyName / countryCode are READ-ONLY here - three references, all in
  *     the Nium fixture check and the resolver button. They belong to the Company
  *     Lookup screen, which is still inline in App.js (its own later slice).
  *
  * The research kickoffs (proceedFromJourney, startNiumApiLookup,
  * findNiumRegNumber) stay in App.js and are drilled. Their call sites moved; the
- * functions did not — proceedFromJourney in particular writes searchAttempts,
+ * functions did not - proceedFromJourney in particular writes searchAttempts,
  * posts to /api/search-attempt and routes into the AI-Documents step, none of
  * which is this component's business.
  *
@@ -42,7 +42,7 @@
  * NOTE ON THE LOCKED SEARCH-CAP BRANCH: the evaluateSearchCap lock (banner,
  * opacity-0.45 cards, not-allowed cursor, CONTACT_ADMIN_MSG) moved byte-identical
  * even though no test reaches it. It is reachable once a customer (a link
- * customer, or one who corrected a fact — App's isCustomerResearch) has used
+ * customer, or one who corrected a fact - App's isCustomerResearch) has used
  * their server-counted searches; the wiring is the same drilled searchAttempts
  * the covered unlocked state uses.
  */
@@ -80,7 +80,7 @@ export function JourneyPicker({
   setManualOpened,
   proceedFromJourney,
   // ── the tenant's own manual application form URL; Card C ("I'll complete
-  //     the form myself") only renders when this is configured — there is no
+  //     the form myself") only renders when this is configured - there is no
   //     platform-wide fallback, a link to another company's form is worse
   //     than no card at all ──
   manualFormUrl,
@@ -183,7 +183,7 @@ export function JourneyPicker({
           );
         })()}
 
-        {/* Card C — only when the tenant configured its own manual application
+        {/* Card C - only when the tenant configured its own manual application
             form. There is no platform-wide fallback: a link to someone else's
             form is worse than no card at all. */}
         {manualFormUrl ? (() => {
@@ -225,7 +225,7 @@ export function JourneyPicker({
                 // When the tester actually picked that fixture the result
                 // matches their selection, so stay silent; for any other
                 // selection, show a one-time informational notice that the
-                // next page is sample (not real) data — then continue either
+                // next page is sample (not real) data - then continue either
                 // way (no need to go back/edit).
                 const isFixtureSelection =
                   companyName.trim().toLowerCase().includes("star finance") &&

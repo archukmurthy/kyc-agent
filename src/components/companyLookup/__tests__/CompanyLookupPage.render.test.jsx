@@ -1,10 +1,10 @@
 /**
- * CompanyLookupPage.render.test.jsx — CHARACTERISATION of the Company Lookup
+ * CompanyLookupPage.render.test.jsx - CHARACTERISATION of the Company Lookup
  * screen while it is still inline JSX in App.js.
  *
  * WHY NOW: slice 2 of the Journey/Lookup extraction lifts the {step ===
- * STEPS.input && !journeyOpen} branch — the complement of the JourneyPicker
- * branch that landed in slice 1 — into CompanyLookupPage.jsx. Like the picker
+ * STEPS.input && !journeyOpen} branch - the complement of the JourneyPicker
+ * branch that landed in slice 1 - into CompanyLookupPage.jsx. Like the picker
  * and the AI-Documents step, it is inline JSX rather than a named render
  * function, so the move AUTHORS the component boundary.
  *
@@ -12,23 +12,23 @@
  * coverage at all before its net. This screen has heavy INCIDENTAL coverage:
  * render(<KYCAgent/>) lands here, and every other net's driver fills these
  * fields to get anywhere. That incidental coverage is worth very little as an
- * oracle — it asserts that the fields can be filled, not that the screen
+ * oracle - it asserts that the fields can be filled, not that the screen
  * behaves. A driver would keep passing while the licence banner vanished, the
  * ownership dependency inverted, or the reg-number provenance flag silently
  * stopped being set. This file makes the coverage DELIBERATE and NAMED.
  *
  * THE SHARP EDGE THIS NET EXISTS FOR: setRegNumberSource. The reg-number input
- * does two things in one handler — setRegNumber(v) AND setRegNumberSource(v.trim()
+ * does two things in one handler - setRegNumber(v) AND setRegNumberSource(v.trim()
  * ? "customer" : null). A move that carries only the first looks perfectly
  * correct on this screen (the text still round-trips) and silently breaks
  * provenance downstream. There is no signal for it here, so the provenance
- * block below drives to the Applicant gate and asserts the note it produces —
- * "✓ You provided this" vs "Found by research — please verify". That is the
+ * block below drives to the Applicant gate and asserts the note it produces -
+ * "✓ You provided this" vs "Found by research - please verify". That is the
  * only place the flag is observable.
  *
  * CHARACTERISATION, not specification: these assert what the screen does TODAY.
  * A surprising assertion is a recorded fact. After the move this file must stay
- * green UNCHANGED — editing it to make the move pass defeats the point.
+ * green UNCHANGED - editing it to make the move pass defeats the point.
  *
  * ONE PATH IS UNREACHABLE AND IS NOT ASSERTED (reported, not papered over).
  * (The old pendingReseedMode "re_derive" short-circuit on Continue was dead and
@@ -49,7 +49,7 @@ jest.setTimeout(60000);
 beforeEach(() => {
   // /api/config, track-event and ipify fire on mount. Rejecting them makes the
   // app fall back to buildLocalDefaultConfig(), which ships FI / Platform /
-  // Direct / Corporate and the GB licence — deterministic, no network.
+  // Direct / Corporate and the GB licence - deterministic, no network.
   global.fetch = jest.fn(() => Promise.reject(new Error("offline test")));
   jest.useFakeTimers();
 });
@@ -191,7 +191,7 @@ describe("entity type gates ownership type", () => {
       /Private Limited Company/i
     );
 
-    // Switching entity type runs setOwnershipType("") — the selection must go.
+    // Switching entity type runs setOwnershipType("") - the selection must go.
     fireEvent.change(entityInput(), { target: { value: "Financial Institution" } });
     pickOption("Financial Institution");
     await settle(0);
@@ -237,7 +237,7 @@ describe("reg-number provenance", () => {
     await mountLookup();
     fireEvent.change(regInput(), { target: { value: "00445790" } });
     await settle(0);
-    // Blanking runs setRegNumberSource(null) — the trim() branch of the handler.
+    // Blanking runs setRegNumberSource(null) - the trim() branch of the handler.
     fireEvent.change(regInput(), { target: { value: "" } });
     await settle(0);
     expect(regInput().value).toBe("");
@@ -351,7 +351,7 @@ describe("Continue gate", () => {
    *
    *   <button style={...} onClick={disabled ? undefined : onClick}>
    *
-   * So the gate is real but INERT-BY-STYLE rather than semantically disabled —
+   * So the gate is real but INERT-BY-STYLE rather than semantically disabled -
    * assistive tech and keyboard users see an enabled button that does nothing.
    * These assertions therefore pin what actually happens (dimmed + click does
    * nothing), not toBeDisabled(), which would be asserting a fiction. Flagged
@@ -411,7 +411,7 @@ describe("Continue gate", () => {
     await settle(0);
 
     // setJourneyOpen(true) swaps the branch: lookup out, picker in. Only the
-    // transition is pinned here — the picker has its own oracle.
+    // transition is pinned here - the picker has its own oracle.
     expect(
       screen.queryByRole("heading", { name: /Company Lookup/i })
     ).not.toBeInTheDocument();

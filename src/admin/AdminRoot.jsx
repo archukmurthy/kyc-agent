@@ -41,7 +41,7 @@ export default function AdminRoot() {
       console.error("Admin config load failed, falling back to client default:", err);
       setConfigError(err.message);
       // Offline fallback: a neutral local config so the admin UI still renders.
-      // No tenant is special-cased — the live config is the only source of a
+      // No tenant is special-cased - the live config is the only source of a
       // tenant's real settings, and "Apply default settings" (Step 5) is how a
       // template is pulled in deliberately.
       setTenantConfig({ ...buildLocalDefaultConfig(), _tenantId: tenantId, _isBlank: true });
@@ -133,7 +133,7 @@ function PasswordGate({ tenantId, onSuccess }) {
   const [error, setError] = useState(null);
   // Company name for the gate chip, read from the live tenant config (public
   // GET, no auth) so the gate reflects the brand set in Admin / Super-Admin
-  // rather than the raw tenant id. Live API only — no fallback — so it never
+  // rather than the raw tenant id. Live API only - no fallback - so it never
   // shows a hardcoded/stale name or the internal id; if it can't resolve, the
   // chip is hidden. Full tenant-id rename is tracked separately (Production
   // Readiness Register).
@@ -150,7 +150,7 @@ function PasswordGate({ tenantId, onSuccess }) {
           setGateCompanyName(name.trim());
         }
       } catch (_) {
-        // Leave gateCompanyName empty — the gate chip stays hidden.
+        // Leave gateCompanyName empty - the gate chip stays hidden.
       }
     })();
     return () => { cancelled = true; };

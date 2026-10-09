@@ -3,7 +3,7 @@
 // Live band-resolution endpoint (Section B server seam). Called when the
 // applicant returns/refreshes after the Didit check AND the flag is on. It
 // re-pulls the Didit decision, maps it to canonical IN MEMORY, and runs the band
-// pipeline on that fresh identity map — it does NOT re-read the Vault (the dev
+// pipeline on that fresh identity map - it does NOT re-read the Vault (the dev
 // synthetic Vault isn't durable across invocations; see BACKLOG IDV-2). The Vault
 // still holds the reference for audit. Idempotent: if a decision already exists
 // for the attempt it is returned without re-running.
@@ -78,7 +78,7 @@ async function resolveAttempt(attemptId, deps = {}) {
   const mapped = map(decision);
 
   // Didit returns the extracted document fields as soon as the document step
-  // finishes — BEFORE the applicant completes liveness/selfie. Pulling then would
+  // finishes - BEFORE the applicant completes liveness/selfie. Pulling then would
   // render the cells early and the applicant could close the Didit session
   // thinking they're done. Only treat the session as ready when its overall
   // status is TERMINAL (the whole flow, selfie included, has completed); until
@@ -108,7 +108,7 @@ async function resolveAttempt(attemptId, deps = {}) {
     } catch (err) {
       // Surface it: without a Vault reference the confirm step can't store extras.
       vaultError = true;
-      console.error("[idv-match resolve] VAULT WRITE FAILED — extras cannot be confirmed:", err && err.message);
+      console.error("[idv-match resolve] VAULT WRITE FAILED - extras cannot be confirmed:", err && err.message);
     }
   }
 
@@ -116,7 +116,7 @@ async function resolveAttempt(attemptId, deps = {}) {
 
   // Auto-match (one-click): the attempt froze the WHOLE candidate list instead of
   // one selected officer. Pick the officer the document belongs to from data we
-  // already have — the applicant never chose from a dropdown. A plausible match
+  // already have - the applicant never chose from a dropdown. A plausible match
   // becomes the comparison target (the pipeline then decides Band A/B/C exactly as
   // if they'd been selected); no plausible match means they aren't a registered
   // officer -> route to the LOA path (unless the document itself is unreadable, in
@@ -130,7 +130,7 @@ async function resolveAttempt(attemptId, deps = {}) {
       if (!nameReadable) {
         return { enabled: true, band: null, needsRetry: true, reasons: ["missing_required_data"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
       }
-      // Screen the verified identity even though no officer matched — a real person
+      // Screen the verified identity even though no officer matched - a real person
       // being onboarded (via the LOA path) must still be AML-screened. Uses the same
       // shared screeningGate() as the matched/verify_only paths (fail-closed hold on
       // pending/unavailable; screen-once is idempotent).
@@ -145,7 +145,7 @@ async function resolveAttempt(attemptId, deps = {}) {
           decision: { band: "C", outcomeType: "unresolved_to_review", resolvedBy: "reviewer", requiresReview: true, escalate: true, reasons: ["no_officer_match", "screening_hit"] },
         }, deps);
         // route: null overrides the "loa_path" that recordBandOutcome sets for any
-        // Band C decision — this is a review outcome (Fix 1 hard-stops the applicant
+        // Band C decision - this is a review outcome (Fix 1 hard-stops the applicant
         // on requiresReview), so it must not also carry a route the UI could read as
         // "still on the LOA path".
         return { enabled: true, band: "C", outcomeType: "unresolved_to_review", ...recorded, route: null, screeningHit: true, requiresReview: true, applicantView: COPY.IN_REVIEW, verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined };
@@ -161,15 +161,15 @@ async function resolveAttempt(attemptId, deps = {}) {
 
   // Screen the verified document identity once IDV is terminal (decision (3):
   // screen the proven identity). Shared by the auto_match/pipeline path AND the
-  // verify_only path below — same fail-closed gate either way; an identity proven
+  // verify_only path below - same fail-closed gate either way; an identity proven
   // by the provider must never onboard without an AML screen. Idempotent: only
-  // starts if no screening row exists for this attempt. ComplyCube is async — a
+  // starts if no screening row exists for this attempt. ComplyCube is async - a
   // pending result holds (client keeps polling; the webhook re-resolves).
   //
   // Both reads below are wrapped: this is an AML screening control, and a control
   // must never let the caller proceed when its status is unknown. A transient DB
   // failure on read must not 500 (crash) and must not let the caller fall through
-  // unscreened (pass silently) — it fails CLOSED, holding with the same shape as a
+  // unscreened (pass silently) - it fails CLOSED, holding with the same shape as a
   // genuine pending result (client retries; a normal empty/complete read is
   // unaffected and behaves exactly as before).
   //
@@ -181,12 +181,12 @@ async function resolveAttempt(attemptId, deps = {}) {
     try {
       existingScreening = await listScreening(attemptId);
     } catch (err) {
-      console.error("[idv-match resolve] screening list read failed — holding (fail closed):", err && err.message);
+      console.error("[idv-match resolve] screening list read failed - holding (fail closed):", err && err.message);
       return { hold: { enabled: true, needsRetry: true, pending: true, reasons: ["screening_unavailable"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined } };
     }
     // ponytail: two near-simultaneous first resolves can both read existingScreening
     // as empty and each start a screening check (duplicate paid ComplyCube call).
-    // Harmless to correctness — hasScreeningHit aggregates all rows for the attempt,
+    // Harmless to correctness - hasScreeningHit aggregates all rows for the attempt,
     // so a duplicate is just wasted spend, not a wrong verdict. Upgrade path: a
     // unique index on idv_screening_checks(attempt_id) to make the guard atomic.
     let screeningStartAttempted = false;
@@ -202,7 +202,7 @@ async function resolveAttempt(attemptId, deps = {}) {
         } catch (err) {
           // Never THROW on a screening-start failure: logged and continues to the
           // verdict read below. That read is what actually decides fail-open vs.
-          // fail-closed — see the screeningStartAttempted check just after it.
+          // fail-closed - see the screeningStartAttempted check just after it.
           console.error("[idv-match resolve] screening start failed:", err && err.message);
         }
       }
@@ -217,13 +217,13 @@ async function resolveAttempt(attemptId, deps = {}) {
     try {
       screening = await screeningHitFor(attemptId);
     } catch (err) {
-      console.error("[idv-match resolve] screening verdict read failed — holding (fail closed):", err && err.message);
+      console.error("[idv-match resolve] screening verdict read failed - holding (fail closed):", err && err.message);
       return { hold: { enabled: true, needsRetry: true, pending: true, reasons: ["screening_unavailable"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined } };
     }
     // A screening start was attempted above but no row exists for this attempt
     // (count === 0): the start failed (outage / store write error) before it could
     // even create a pending row. Reading that as "clear" would silently onboard an
-    // unscreened applicant — fail CLOSED instead, same shape as the read failures.
+    // unscreened applicant - fail CLOSED instead, same shape as the read failures.
     if (screeningStartAttempted && screening.count === 0) {
       return { hold: { enabled: true, needsRetry: true, pending: true, reasons: ["screening_unavailable"], verifiedFields: toVerifiedFields(identity), vaultError: vaultError || undefined } };
     }
@@ -234,7 +234,7 @@ async function resolveAttempt(attemptId, deps = {}) {
   }
 
   // Verify-only (unlisted applicant): no officer to compare against, so skip band
-  // assignment entirely — this is identity proof, not a match. The applicant
+  // assignment entirely - this is identity proof, not a match. The applicant
   // proceeds if the provider verified them AND the screen comes back clear;
   // otherwise it goes to review.
   if (officerSnapshot && officerSnapshot.mode === "verify_only") {
@@ -252,7 +252,7 @@ async function resolveAttempt(attemptId, deps = {}) {
       // must not duplicate the ticket) and best-effort (the hit is already persisted in
       // idv_screening_checks; a task-write blip must not drop the review hold).
       const tasks = deps.reviewTaskStore || reviewTaskStore;
-      // ponytail: read-then-write race — two concurrent first resolves can both see
+      // ponytail: read-then-write race - two concurrent first resolves can both see
       // zero tasks and both create a ticket; harmless dup, not a wrong verdict.
       // Upgrade path: unique index on idv_review_tasks(attempt_id, task_type).
       try {

@@ -1,15 +1,15 @@
 /**
- * dialogueContent.js — the capture-mode dialogue, as DATA + small pure
+ * dialogueContent.js - the capture-mode dialogue, as DATA + small pure
  * derivations. No React here, no I/O, no routing decisions.
  *
- * The QUESTIONS do not depend on the (still-unratified) policy rows — they are
+ * The QUESTIONS do not depend on the (still-unratified) policy rows - they are
  * the same regardless of how the engine eventually routes. The engine owns the
  * OUTCOME; this file owns the wording and the per-field-class question plan.
  *
  * Field-class + verifiability derivation lives here too: the Confirm-page mount
  * passes a raw research row (fieldId/value/source/sourceTier), and the component
  * needs the engine-vocabulary metadata to drive the dialogue. We derive it from
- * the row rather than asking App.js to compute it — that keeps the App.js
+ * the row rather than asking App.js to compute it - that keeps the App.js
  * footprint to a single mount line.
  */
 
@@ -103,13 +103,13 @@ export const REGISTRY_QUESTION = {
 const REGISTRY_CLASSES = ['director', 'ubo', 'address'];
 
 /**
- * planSteps — the ordered list of question keys this field will ask.
+ * planSteps - the ordered list of question keys this field will ask.
  *
  *  - intent:   only classes with an INTENT_QUESTION (director/ubo/structural).
  *  - registry: only director/ubo/address, AND only when the field is a
  *              structured registry source. Per the verifiability guard, a
  *              non-structured source routes to analyst review regardless of the
- *              answer — so there is nothing to confirm against and we skip it.
+ *              answer - so there is nothing to confirm against and we skip it.
  *
  * An empty plan (factualId, generic, pep, or a non-structured address) means the
  * dialogue finalises immediately: capture the event, show the neutral notice.
@@ -123,11 +123,11 @@ export function planSteps(fieldClass, verifiability) {
 }
 
 /**
- * toEngineChangeType — map the captured intent to the engine's CHANGE_TYPE enum
+ * toEngineChangeType - map the captured intent to the engine's CHANGE_TYPE enum
  * (add|remove|correct|update). On the Confirm page a found field being unchecked
  * is a 'changed' value (the final form lands at Fill Gaps), which the caller must
  * split into 'correct' (ai_correction) or 'update' (genuine_update) before the
- * engine sees it — the engine never receives the literal 'changed'.
+ * engine sees it - the engine never receives the literal 'changed'.
  *
  * Classes whose rules don't key on changeType (address/generic) get a harmless
  * concrete value; factualId rules accept correct|update identically.

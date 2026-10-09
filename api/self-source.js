@@ -1,6 +1,6 @@
 /**
  * api/self-source.js
- * Vercel serverless endpoint — runs the registry self-sourcing agent.
+ * Vercel serverless endpoint - runs the registry self-sourcing agent.
  *
  * Called in parallel with /api/doc-search from App.js when the Documents
  * step is entered. Returns registry-sourced field values ready to merge
@@ -10,7 +10,7 @@
  * Evidence = HTML snapshot + AI extraction + metadata JSON stored in /tmp.
  * See PR-028 for the production screenshot path (Option B).
  *
- * CommonJS — matches api/doc-search.js pattern.
+ * CommonJS - matches api/doc-search.js pattern.
  */
 
 const { enforceRateLimit } = require("../lib/rateLimit");
@@ -27,7 +27,7 @@ module.exports = async function handler(req, res) {
     entityType,
     ownershipType,
     niumEntityType,
-    companyRegistrationNumber, // optional — improves second-pass on BR/JP/ID/CN
+    companyRegistrationNumber, // optional - improves second-pass on BR/JP/ID/CN
     tenantId,                  // reserved
   } = req.body || {};
 
@@ -56,7 +56,7 @@ module.exports = async function handler(req, res) {
     const { mapSelfSourcedFields, getManualReviewItems } = require("../agents/selfSourceFieldMapper");
 
     // ── Derive DRS checklist server-side (Option B) ────────────────────────
-    // No need to pass the checklist over the wire — recompute from params.
+    // No need to pass the checklist over the wire - recompute from params.
     const checklist = getRequirements({
       incorporationCountry,
       entityType,

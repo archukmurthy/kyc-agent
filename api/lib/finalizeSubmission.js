@@ -6,7 +6,7 @@
 // half-written. Idempotent on payload.submissionId: onboarding_sessions upserts on
 // submission_id and every child table is DELETE-by-parent-then-INSERT, so the
 // worker can retry safely without duplicating. Throws on ANY failure after
-// ROLLBACK — the caller keeps the inbox row pending for a later retry.
+// ROLLBACK - the caller keeps the inbox row pending for a later retry.
 const { getPool } = require("./neonPool");
 const { deriveScalarProvenance } = require("../../src/utils/fieldProvenance");
 
@@ -63,7 +63,7 @@ async function finalizeSubmission(payload, deps = {}) {
   try {
     await client.query("BEGIN");
 
-    // 1. Ensure tenant row exists — port api/submit.js:424-428
+    // 1. Ensure tenant row exists - port api/submit.js:424-428
     await client.query(
       `INSERT INTO tenants (id, name, slug)
        VALUES ($1, $2, $3)
@@ -72,7 +72,7 @@ async function finalizeSubmission(payload, deps = {}) {
     );
 
     // 2. Upsert client record (no updated_at column on this table)
-    //    — port api/submit.js:431-453
+    //    - port api/submit.js:431-453
     const clientResult = await client.query(
       `INSERT INTO clients (
         tenant_id, legal_name, country_code, entity_type, ownership_type
@@ -88,7 +88,7 @@ async function finalizeSubmission(payload, deps = {}) {
     const clientId = clientResult.rows[0].id;
 
     // 3. Create onboarding session with full cost breakdown, keyed idempotently
-    //    on submission_id — port api/submit.js:459-564 (+ submission_id column
+    //    on submission_id - port api/submit.js:459-564 (+ submission_id column
     //    and ON CONFLICT (submission_id) upsert so re-finalize returns the SAME id)
     const sessionResult = await client.query(
       `INSERT INTO onboarding_sessions ( submission_id,
@@ -247,7 +247,7 @@ async function finalizeSubmission(payload, deps = {}) {
     }
 
     // 4. Write individual field values (DELETE-then-insert so a re-run rewrites)
-    //    — port api/submit.js:566-600
+    //    - port api/submit.js:566-600
     await client.query(`DELETE FROM field_values WHERE session_id = $1`, [sessionId]);
     const allFields = { ...(fieldValues || {}) };
     const fieldEntries = Object.entries(allFields).filter(
@@ -267,7 +267,7 @@ async function finalizeSubmission(payload, deps = {}) {
     }
 
     // 4b. Applicant override events to session_timeline (audit trail).
-    //     DELETE-then-insert so a re-run rewrites — port api/submit.js:602-644
+    //     DELETE-then-insert so a re-run rewrites - port api/submit.js:602-644
     await client.query(
       `DELETE FROM session_timeline WHERE session_id = $1 AND event_type = 'applicant_field_overridden'`,
       [sessionId]
@@ -295,7 +295,7 @@ async function finalizeSubmission(payload, deps = {}) {
       );
     }
 
-    // 5. Journey-model writes (migration 003 tables) — port api/submit.js:71-368
+    // 5. Journey-model writes (migration 003 tables) - port api/submit.js:71-368
     const journeyId = await persistJourneyModel(client, {
       tenantId,
       company,
@@ -327,10 +327,10 @@ async function finalizeSubmission(payload, deps = {}) {
 
 // Writes the journey-model tables on the SAME pooled client / transaction.
 // Returns the journey_id. Cost is recomputed from the pricing table; provenance
-// rules are verbatim from api/submit.js — only the call form (client.query with
+// rules are verbatim from api/submit.js - only the call form (client.query with
 // $-placeholders) and the removal of per-insert try/catch swallows differ.
 async function persistJourneyModel(client, d) {
-  // 1. Journey — one per legacy onboarding_sessions row (bridge via session_id)
+  // 1. Journey - one per legacy onboarding_sessions row (bridge via session_id)
   const journeyResult = await client.query(
     `INSERT INTO journeys (
       tenant_id, session_id, entity_type, jurisdiction, segment, current_step, status, updated_at
@@ -366,7 +366,7 @@ async function persistJourneyModel(client, d) {
     [journeyId, mapMethod(d.journeyType), null, chosenAt]
   );
 
-  // 3. Declaration — pulled out of the declaration JSON block
+  // 3. Declaration - pulled out of the declaration JSON block
   const dec = d.declaration || {};
   const consentAt =
     toTimestamp(dec.agreedAt) || toTimestamp(dec.certifiedAt) ||
@@ -399,7 +399,7 @@ async function persistJourneyModel(client, d) {
     ]
   );
 
-  // 4. api_usage — one row per cost phase. Cost is RECOMPUTED from the pricing
+  // 4. api_usage - one row per cost phase. Cost is RECOMPUTED from the pricing
   // table (by pricing_version), not taken from the payload's hardcoded figure.
   await client.query(`DELETE FROM api_usage WHERE journey_id = $1`, [journeyId]);
   if (cs && cs.breakdown) {
@@ -444,7 +444,7 @@ async function persistJourneyModel(client, d) {
     }
   }
 
-  // 5. field_provenance — never overwrite agent_value. Baseline rows from scalar
+  // 5. field_provenance - never overwrite agent_value. Baseline rows from scalar
   // fields (layer heuristic; the body lacks per-field metadata) + rich rows from
   // stakeholders (which DO carry agent_value via full_name_original + source*).
   await client.query(`DELETE FROM field_provenance WHERE journey_id = $1`, [journeyId]);
@@ -468,7 +468,7 @@ async function persistJourneyModel(client, d) {
     const val = typeof v === "object" ? JSON.stringify(v) : String(v);
     const meta = metaByField.get(k);
     // agent_value is ALWAYS the AI/registry original, never the customer's
-    // value — see src/utils/fieldProvenance.js for the rule and its tests.
+    // value - see src/utils/fieldProvenance.js for the rule and its tests.
     const { agentValue, customerAction } = deriveScalarProvenance(meta);
     await client.query(
       `INSERT INTO field_provenance (
@@ -537,7 +537,7 @@ async function persistJourneyModel(client, d) {
     );
   }
 
-  // Applicant identity provenance — rich rows carrying agent_value + the
+  // Applicant identity provenance - rich rows carrying agent_value + the
   // customer's action (accepted / overridden / provided).
   for (const prov of applicantProv) {
     const layer = prov.agentValue ? "L3_ai" : "L4_customer";
@@ -557,7 +557,7 @@ async function persistJourneyModel(client, d) {
     );
   }
 
-  // AMENDMENT DOCUMENTS — only SATISFIED requests are written. DELETE-then-insert
+  // AMENDMENT DOCUMENTS - only SATISFIED requests are written. DELETE-then-insert
   // so a re-run rewrites, never duplicates.
   await client.query(`DELETE FROM documents WHERE journey_id = $1`, [journeyId]);
   for (const doc of Array.isArray(d.amendmentDocuments) ? d.amendmentDocuments : []) {

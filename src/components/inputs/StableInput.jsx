@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { normaliseDate } from "../../pipeline";
 
 // Module-scoped input that keeps its own local state and only writes through
-// to the parent's gap ref via onUpdate — the form has 20+ fields and lifting
+// to the parent's gap ref via onUpdate - the form has 20+ fields and lifting
 // values into parent React state caused re-renders that lost focus while
 // typing. See AGENTS.md / CLAUDE.md: do not lift these values into useState.
 export function StableInput({ id, label, type, value, onUpdate, required, options, placeholder }) {

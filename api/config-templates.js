@@ -1,8 +1,8 @@
 // Named configuration templates for the admin "Apply default settings" action
 // and for super-admin tenant creation.
 //
-// GET                       — list available templates (admin-authed)
-// GET ?id=<templateId>      — build that template for the resolved tenant
+// GET                       - list available templates (admin-authed)
+// GET ?id=<templateId>      - build that template for the resolved tenant
 //
 // Admin-authed because a template response is configuration shaped: it is not
 // secret, but it is not public surface either. CommonJS, mirroring api/config.js.
@@ -14,7 +14,7 @@ const { getTenantIdFromRequest } = require("../lib/tenant");
 const { listTemplates, buildTemplateConfig } = require("../lib/configTemplates");
 const { applyCors } = require("../lib/routeAuth");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { storage, registry: tenantRegistry };
 
 

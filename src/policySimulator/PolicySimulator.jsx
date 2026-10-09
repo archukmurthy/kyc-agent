@@ -238,7 +238,7 @@ function LoadingView() {
     <div role="status" className="mx-auto max-w-lg rounded-xl border border-slate-200 bg-white px-8 py-16 text-center shadow-sm">
       <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-800" />
       <h2 className="mt-6 text-xl font-semibold text-slate-900">Generating your KYB Policy document...</h2>
-      <p className="mt-2 text-sm text-slate-500">This usually takes 20–30 seconds.</p>
+      <p className="mt-2 text-sm text-slate-500">This usually takes 20-30 seconds.</p>
     </div>
   );
 }

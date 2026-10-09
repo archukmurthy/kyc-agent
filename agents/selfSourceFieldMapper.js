@@ -1,15 +1,15 @@
 /**
  * selfSourceFieldMapper.js
- * PR-026 — Maps selfSourceAgent extracted fields → dossier schema field IDs
+ * PR-026 - Maps selfSourceAgent extracted fields → dossier schema field IDs
  *
  * Field IDs verified directly against lib/seedSchemas.js (June 15, 2026).
- * Two schemas in use — field IDs differ between them:
+ * Two schemas in use - field IDs differ between them:
  *
- *   FI flow    (UK_FI_SCHEMA / SG_FI_SCHEMA) — uses fiResearchFields
+ *   FI flow    (UK_FI_SCHEMA / SG_FI_SCHEMA) - uses fiResearchFields
  *              e.g. business_name, registration_number, incorporation_date,
  *                   registered_address_line1, registered_address_city, etc.
  *
- *   Corporate flow (UK_SCHEMA / SG_SCHEMA) — uses inline researchFields
+ *   Corporate flow (UK_SCHEMA / SG_SCHEMA) - uses inline researchFields
  *              e.g. businessType, businessRegistrationNumber, registeredDate,
  *                   addressLine1, city, postcode, etc.
  *
@@ -22,7 +22,7 @@
  *
  *   const selfSourcedFields = mapSelfSourcedFields(
  *     orchestratorResult.registry.results,
- *     flow   // "fi" | "corporate"  — read from tenantConfig or niumEntityType
+ *     flow   // "fi" | "corporate"  - read from tenantConfig or niumEntityType
  *   );
  *   const mergedResearch = mergeResearchResults(researchResults, selfSourcedFields);
  *   setResearchResults(mergedResearch);
@@ -35,9 +35,9 @@ const FI_REQUIREMENT_FIELD_MAP = {
   "Legal existence": [
     { extractedField: "registeredName",     fieldId: "business_name" },
     { extractedField: "registrationNumber", fieldId: "registration_number" },
-    { extractedField: "status",             fieldId: null },           // no direct field — goes to notes only
+    { extractedField: "status",             fieldId: null },           // no direct field - goes to notes only
     { extractedField: "incorporationDate",  fieldId: "incorporation_date" },
-    // Address is split — the agent returns a single string; we parse it below
+    // Address is split - the agent returns a single string; we parse it below
     // using parseAddress(). Each component maps to its own field.
     { extractedField: "_addressLine1",      fieldId: "registered_address_line1" },
     { extractedField: "_addressLine2",      fieldId: "registered_address_line2" },
@@ -48,7 +48,7 @@ const FI_REQUIREMENT_FIELD_MAP = {
   ],
 
   "Constitution": [
-    // No scalar fields — evidence file only, no form pre-population
+    // No scalar fields - evidence file only, no form pre-population
   ],
 
   "Regulatory status": [
@@ -61,7 +61,7 @@ const FI_REQUIREMENT_FIELD_MAP = {
   ],
 
   "UK signatory authority evidence": [
-    // Evidence only — no direct dossier field to pre-fill
+    // Evidence only - no direct dossier field to pre-fill
   ],
 
   "Indonesia entity address evidence": [
@@ -77,10 +77,10 @@ const FI_REQUIREMENT_FIELD_MAP = {
 const CORPORATE_REQUIREMENT_FIELD_MAP = {
 
   "Legal existence": [
-    { extractedField: "registeredName",     fieldId: "tradeName" },       // closest match — legal name shows as tradeName in corporate flow
+    { extractedField: "registeredName",     fieldId: "tradeName" },       // closest match - legal name shows as tradeName in corporate flow
     { extractedField: "registrationNumber", fieldId: "businessRegistrationNumber" },
     { extractedField: "incorporationDate",  fieldId: "registeredDate" },
-    // Address split — same parse pattern, different field IDs
+    // Address split - same parse pattern, different field IDs
     { extractedField: "_addressLine1",      fieldId: "addressLine1" },
     { extractedField: "_addressLine2",      fieldId: "addressLine2" },
     { extractedField: "_addressCity",       fieldId: "city" },
@@ -163,7 +163,7 @@ function getSourceLabel(sourceUrl) {
 // ─── Address parser ────────────────────────────────────────────────────────────
 // The AI extraction returns registeredAddress as a single string.
 // We need to split it into components for the schema's individual address fields.
-// This is a best-effort heuristic — works well for UK, SG, AU, NL, CA.
+// This is a best-effort heuristic - works well for UK, SG, AU, NL, CA.
 // For complex cases the analyst confirms on the Confirm page.
 function parseAddress(addressString) {
   if (!addressString) return {};
@@ -267,7 +267,7 @@ function mapSelfSourcedFields(registryResults = [], flow = "fi") {
         source:       "registry-self-source",
         sourceLabel,
         sourceUrl:    result.searchUrl || result.sourceUrl,
-        // Point-in-time evidence — metadata JSON path
+        // Point-in-time evidence - metadata JSON path
         // Before production: upload to Vercel Blob and replace with Blob URL
         evidenceRef:  result.metadataPath || null,
         retrievedAt:  result.retrievedAt,
@@ -283,7 +283,7 @@ function mapSelfSourcedFields(registryResults = [], flow = "fi") {
 
 // ─── Manual review items ──────────────────────────────────────────────────────
 /**
- * getManualReviewItems — items the analyst must retrieve manually.
+ * getManualReviewItems - items the analyst must retrieve manually.
  * Surface as a banner on the Confirm page.
  */
 function getManualReviewItems(registryResults = []) {
@@ -300,29 +300,29 @@ function getManualReviewItems(registryResults = []) {
 // ─── CONFIRM PAGE PATCH NOTES (for App.js developer) ─────────────────────────
 //
 // selfSourcedFields flows into researchResults via mergeResearchResults().
-// No changes needed to the Confirm page field render loop — fields appear
+// No changes needed to the Confirm page field render loop - fields appear
 // pre-filled exactly as AI-researched fields do.
 //
 // TWO additions needed in the Confirm page render:
 //
-// 1. SOURCE LABEL — where you currently show "tier-1 / tier-2 / tier-3":
+// 1. SOURCE LABEL - where you currently show "tier-1 / tier-2 / tier-3":
 //    if (field.source === "registry-self-source") {
 //      show: field.sourceLabel   e.g. "Companies House"
 //      link: field.evidenceRef   opens the metadata JSON (point-in-time proof)
 //    }
 //
-// 2. MANUAL REVIEW BANNER — at top of Confirm page:
+// 2. MANUAL REVIEW BANNER - at top of Confirm page:
 //    if (manualReviewItems.length > 0) {
 //      show yellow banner:
 //      "⚠ The following documents require manual sourcing before submission:"
 //      [list of requirement names, each linking to registry sourceUrl]
 //    }
 //
-// 3. EVIDENCE LINK — before production:
+// 3. EVIDENCE LINK - before production:
 //    Upload metadata JSON + screenshot to Vercel Blob.
 //    Replace result.metadataPath with the Blob URL in selfSourceAgent.
 //    The evidenceRef in each mapped field then becomes the Blob URL.
-//    This is critical — the live registry URL changes; the Blob is frozen.
+//    This is critical - the live registry URL changes; the Blob is frozen.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 

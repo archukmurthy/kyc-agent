@@ -62,7 +62,7 @@ function scoreEquivalence(chName, docName) {
   const docF = dropParticles(docName.forenames);
   const forename = scoreToken(chF.tokens[0], docF.tokens[0]);
   // A dropped patronymic particle that enabled the forename match is itself the
-  // explanation — record the rule.
+  // explanation - record the rule.
   if ((chF.dropped || docF.dropped) && forename.score >= 0.85 && !forename.ruleIds.includes(PATRONYMIC.id)) {
     forename.ruleIds = [...forename.ruleIds, PATRONYMIC.id];
   }

@@ -1,5 +1,5 @@
 /**
- * analystSignals.js — read-only interpretation of what the change engine
+ * analystSignals.js - read-only interpretation of what the change engine
  * ALREADY decided, for the build-time analyst view (commit 5).
  *
  * This module invents nothing. Every value it returns is lifted from the
@@ -11,12 +11,12 @@
  *
  * The two categories come from the backend investigation:
  *
- *   TYPE 1 — a real outcome the engine produced. Often invisible to the
+ *   TYPE 1 - a real outcome the engine produced. Often invisible to the
  *            customer by design (analyst-only), but genuinely computed:
  *            a required document, an escalation, an EDD flag, or the plain
  *            fact that the customer's value differs from the registry's.
  *
- *   TYPE 2 — no machinery behind it. classifyFieldClass covers only
+ *   TYPE 2 - no machinery behind it. classifyFieldClass covers only
  *            director/ubo/address/factualId/pep/structural, so anything else
  *            lands on `generic`; and the verifiability guard routes any
  *            non-registry-sourced field to a silent analyst_review with no
@@ -102,7 +102,7 @@ export function signalLines(signal) {
     lines.push(
       `No automated consequence for this field class (${signal.fieldClass} → ${signal.workflow}, no document). This is expected - surfaced for testing.`
     );
-    // A type-2 outcome is still a recorded decision the customer never sees —
+    // A type-2 outcome is still a recorded decision the customer never sees -
     // say so explicitly, naming the rule that fired (GENERIC,
     // VERIFIABILITY-GUARD, or none at all when the engine didn't decide).
     if (signal.silent) {

@@ -1,5 +1,5 @@
 /**
- * highRiskCountries.js — the injectable high-risk country check (CD-03 EDD).
+ * highRiskCountries.js - the injectable high-risk country check (CD-03 EDD).
  *
  * The real list is PENDING from the MLRO. This module is the socket it drops
  * into: the membership check is wired and tested, and it matches NOTHING until
@@ -7,11 +7,11 @@
  *
  * DO NOT wire this to documentRequirements.js's RESTRICTED_COUNTRIES. That list
  * ("China, India, Japan, Malaysia, South Africa") is an ONBOARDING-restriction
- * list — where Nium can onboard from — not an AML high-risk list. Treating Japan
+ * list - where Nium can onboard from - not an AML high-risk list. Treating Japan
  * as AML high-risk would be a compliance error.
  *
  * KNOWN GAP (flagged, not papered over): the values this is asked about come in
- * three different vocabularies —
+ * three different vocabularies -
  *   nationality          is a DEMONYM      ("British")
  *   residential_country  is a country NAME ("United Kingdom")
  *   countryCode          is ISO            ("GB")
@@ -51,7 +51,7 @@ function personHasHighRiskCountry(person = {}) {
 }
 
 // ── Company-level country fields (commit 8) ─────────────────────────────────
-// Same list, same membership test as the person path above — isHighRiskCountry
+// Same list, same membership test as the person path above - isHighRiskCountry
 // is the one check both call. This section only widens WHICH fields are asked;
 // it introduces no second mechanism and no new rule.
 
@@ -61,8 +61,8 @@ function personHasHighRiskCountry(person = {}) {
  * LIMITATION, flagged rather than papered over: schema field defs are
  * `{ field, label, tier, section }` (+ `inputType` on gap fields) and carry NO
  * marker for "this value is a country". Detection is therefore by id/label
- * token. That buys the property commit 8 asked for — a schema that adds a new
- * country field is covered without touching this code — but it is a heuristic
+ * token. That buys the property commit 8 asked for - a schema that adds a new
+ * country field is covered without touching this code - but it is a heuristic
  * over naming, not a declared type. The proper fix is a country type on the
  * field def; until then, a country field named without the word "country"
  * (e.g. "jurisdictionOfIncorporation") would be missed.
@@ -85,7 +85,7 @@ function isCountryField(field = {}) {
 
 /**
  * Split a field value into candidate country tokens. Country fields are not
- * all scalar — "Countries of Operation" arrives as "UK, US, SG" or an array —
+ * all scalar - "Countries of Operation" arrives as "UK, US, SG" or an array -
  * so a single-value check would miss every country but the first.
  * Structured/object values (uboAnalysis and friends) are not country lists and
  * yield nothing rather than a stringified guess.
@@ -113,7 +113,7 @@ function containsHighRiskCountry(value) {
  * Person attributes never reach here: they are classified through the
  * person-scoped path under composite fieldIds (`<type>::<sh_id>::<attribute>`),
  * which carry no "country" token, so there is no double-flagging by
- * construction — asserted in the tests.
+ * construction - asserted in the tests.
  */
 function fieldHasHighRiskCountry(field = {}, value) {
   if (!isCountryField(field)) return false;

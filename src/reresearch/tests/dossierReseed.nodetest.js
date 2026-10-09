@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * dossierReseed.nodetest.js — exercises the api/dossier-reseed.js handler, which
+ * dossierReseed.nodetest.js - exercises the api/dossier-reseed.js handler, which
  * runs the REAL dossierLifecycle state machine (no DB) for the only two
  * transitions this slice wires: full re-research vs re-derive-only.
  */

@@ -1,12 +1,12 @@
-# Phase 4 — Comparison hygiene (Spec)
+# Phase 4 - Comparison hygiene (Spec)
 
-**Goal:** Turn the raw verified identity (Didit document) and the frozen Companies House officer snapshot into a **clean, structured comparison** that band assignment (Phase 5) consumes — applying the doc's hygiene rules first so false alarms never reach band logic. **Pure functions only** — no DB, no external calls, fully unit-tested. Behind the flag; wired to nothing live yet.
+**Goal:** Turn the raw verified identity (Didit document) and the frozen Companies House officer snapshot into a **clean, structured comparison** that band assignment (Phase 5) consumes - applying the doc's hygiene rules first so false alarms never reach band logic. **Pure functions only** - no DB, no external calls, fully unit-tested. Behind the flag; wired to nothing live yet.
 
 ## Why (doc Step 3)
 These rules run before any band is assigned:
 - **DOB: month/year only.** CH gives month + year for officers. Compare only month + year; never invent or compare a day. "May 1985" vs "24 May 1985" is **consistent**.
 - **MRZ-first name comparison.** The passport MRZ is checksummed and more reliable than visually-extracted text. If the MRZ agrees with CH but the visual text does not → **extraction error**: correct it (`extraction_error_corrected`, treated as Band A).
-- **Ignore address, nationality, gender** — they never feed the comparison.
+- **Ignore address, nationality, gender** - they never feed the comparison.
 - **Normalize presentation away silently:** case, diacritics, punctuation, name-order conventions, and a middle name present in one source but absent in the other are presentation differences. Different spellings, missing surname components, or different surnames are **substantive**.
 
 ## In scope (module: `api/idv-match/matching/`)
@@ -42,11 +42,11 @@ These rules run before any band is assigned:
 
 ## Out of scope (later phases)
 - **Band assignment** (Phase 5 consumes this output).
-- **Name-similarity scoring / transliteration / phonetic** (Phase 6 engine) — Phase 4 only decides normalized-exact-match + extraction-error + supplies the `comparable` name.
+- **Name-similarity scoring / transliteration / phonetic** (Phase 6 engine) - Phase 4 only decides normalized-exact-match + extraction-error + supplies the `comparable` name.
 - No DB writes, no UI, no journey wiring.
 
 ## Security / correctness
-- Pure, deterministic, side-effect-free — trivially testable and auditable (the doc requires decisions be reconstructable).
+- Pure, deterministic, side-effect-free - trivially testable and auditable (the doc requires decisions be reconstructable).
 - No PII leaves these functions; they operate on already-extracted server-side data.
 - The "missing/unreadable ≠ match" rule is enforced here (`notMatchable`) so Phase 5 can route to retry rather than a false Band A.
 
@@ -54,7 +54,7 @@ These rules run before any band is assigned:
 - Exact match → `exactMatch true`, `dob.consistent true`.
 - Case / diacritics / punctuation / **middle-name-in-one-source** → normalized → `exactMatch true`.
 - CH "1985-05" vs document "1985-05-24" → `dob.consistent true` (no conflict on the day).
-- **Never fabricate a day** — assert a default-day comparison cannot occur (day is never read).
+- **Never fabricate a day** - assert a default-day comparison cannot occur (day is never read).
 - MRZ agrees with CH, visual differs → `extractionErrorCorrected true`, `exactMatch true`.
 - Different surname / different spelling / missing surname component → `exactMatch false` (substantive).
 - Month or year differs → `dob.conflict true`.

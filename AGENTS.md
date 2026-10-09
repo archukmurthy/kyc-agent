@@ -4,10 +4,10 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## Commands
 
-- `npm install` — install dependencies (Create React App + react-scripts).
-- `npm start` — run the React dev server on `http://localhost:3000`. `src/setupProxy.js` auto-mounts `/api/research` on the dev server with the same logic as `api/research.js`, so the full app (frontend + backend) works under `npm start` alone — no `vercel dev` needed.
-- `npm run build` — production build into `build/` (the directory Vercel serves).
-- `npm test` — runs the CRA Jest test runner. There are currently no tests.
+- `npm install` - install dependencies (Create React App + react-scripts).
+- `npm start` - run the React dev server on `http://localhost:3000`. `src/setupProxy.js` auto-mounts `/api/research` on the dev server with the same logic as `api/research.js`, so the full app (frontend + backend) works under `npm start` alone - no `vercel dev` needed.
+- `npm run build` - production build into `build/` (the directory Vercel serves).
+- `npm test` - runs the CRA Jest test runner. There are currently no tests.
 
 The `ANTHROPIC_API_KEY` lives in two places: locally in `.env.local` at the repo root (gitignored) for `npm start`, and in the Vercel project settings for production. Changes to `.env.local` only take effect after a dev-server restart, not on hot reload.
 
@@ -25,7 +25,7 @@ Resolution is strict: there is no `TENANT_ID` environment fallback and no
 default tenant. A request that resolves to no tenant gets the no-tenant
 landing (browser) or `400 tenant_required` (server); a tenant that isn't in
 the registry gets `404 tenant_not_found` and the browser renders the same
-no-tenant surface — a typo never conjures a tenant into being.
+no-tenant surface - a typo never conjures a tenant into being.
 
 ### URLs
 
@@ -53,14 +53,14 @@ Preview: customer flow at `/?tenant={tenantId}&preview=true` shows the amber
   `lib/seedConfig.js#buildDefaultConfig` on first read. Every other tenant
   seeds blank via `buildBlankConfig`.
 - `POST /api/config?tenant=nium` refuses publishes that have zero licences or
-  zero active entity types — guards against an accidental wipe.
+  zero active entity types - guards against an accidental wipe.
 - Reads of the Nium config self-heal: if the stored config has no licences
   (corrupted / accidentally cleared) it's re-seeded from defaults and the
   customer flow is never left broken.
 
 ### Env vars
 
-- `ADMIN_PASSWORD=...` — shared across all tenants for now (per-tenant
+- `ADMIN_PASSWORD=...` - shared across all tenants for now (per-tenant
   passwords are a future change). As a login fallback it is accepted only for
   the static platform tenant list in `lib/tenantRegistry.js`.
 - There is no `TENANT_ID` variable: the env fallback was removed when tenant
@@ -72,8 +72,8 @@ This is a single-page React app (Create React App) with one Vercel serverless fu
 
 ### Two-piece structure
 
-- **`src/App.js`** — the heart of the frontend: the `KYCAgent` component owns all state, effects, step routing and page rendering (styling is inline; there are no CSS files and no router; `src/index.js` just mounts it). Pure constants, prompts, demo fixtures, small shared components and stateless workflow helpers live in dedicated modules under `src/constants/`, `src/utils/`, `src/config/`, `src/demo/`, `src/components/` and `src/workflows/` — see the FRONTEND MODULE MAP section below.
-- **`api/research.js`** — Vercel serverless function that proxies the frontend's prompt to `https://api.anthropic.com/v1/messages` using `Codex-sonnet-4-5` with the `web_search_20250305` tool. Its sole purpose is to keep `ANTHROPIC_API_KEY` server-side; it does no business logic and does not transform the prompt.
+- **`src/App.js`** - the heart of the frontend: the `KYCAgent` component owns all state, effects, step routing and page rendering (styling is inline; there are no CSS files and no router; `src/index.js` just mounts it). Pure constants, prompts, demo fixtures, small shared components and stateless workflow helpers live in dedicated modules under `src/constants/`, `src/utils/`, `src/config/`, `src/demo/`, `src/components/` and `src/workflows/` - see the FRONTEND MODULE MAP section below.
+- **`api/research.js`** - Vercel serverless function that proxies the frontend's prompt to `https://api.anthropic.com/v1/messages` using `Codex-sonnet-4-5` with the `web_search_20250305` tool. Its sole purpose is to keep `ANTHROPIC_API_KEY` server-side; it does no business logic and does not transform the prompt.
 
 The frontend calls `POST /api/research` with `{ prompt }`, then parses the model's text response as JSON (stripping ```` ```json ```` fences and slicing from the first `{` to the last `}`).
 
@@ -81,9 +81,9 @@ The frontend calls `POST /api/research` with `{ prompt }`, then parses the model
 
 The core domain concept: Nium holds licences in some markets but not others. `LICENSED_MARKETS` in `App.js` lists country codes Nium is licensed in (currently just `"GB"`). Country selection determines:
 
-1. **Which schema is used** — `UK_SCHEMA` for licensed UK customers, `SG_SCHEMA` (Singapore) as the default for everywhere else. `getSchema(code)` and `getApplicableLicence(code)` encode this rule.
-2. **The research prompt** — `buildPrompt(name, country, schema)` injects the schema's `researchFields` (what Codex should search for) and `gapFields` (what the user must fill in) directly into the prompt as a JSON template. Codex is instructed to return ONLY a JSON object matching that template.
-3. **The form rendered to the user** — `gapFields` are grouped by `section` (`applicant`, `nature`, `account`, `bank`, plus a synthetic `corrections` section for fields the user unchecked) and rendered via `renderGapSection`.
+1. **Which schema is used** - `UK_SCHEMA` for licensed UK customers, `SG_SCHEMA` (Singapore) as the default for everywhere else. `getSchema(code)` and `getApplicableLicence(code)` encode this rule.
+2. **The research prompt** - `buildPrompt(name, country, schema)` injects the schema's `researchFields` (what Codex should search for) and `gapFields` (what the user must fill in) directly into the prompt as a JSON template. Codex is instructed to return ONLY a JSON object matching that template.
+3. **The form rendered to the user** - `gapFields` are grouped by `section` (`applicant`, `nature`, `account`, `bank`, plus a synthetic `corrections` section for fields the user unchecked) and rendered via `renderGapSection`.
 
 **To add a new licensed market:** add the country to `LICENSED_MARKETS`, define a new `XX_SCHEMA`, and update `getSchema` / `getApplicableLicence` to route to it. Anything not in `LICENSED_MARKETS` automatically falls through to `SG_SCHEMA`.
 
@@ -95,7 +95,7 @@ The core domain concept: Nium holds licences in some markets but not others. `LI
 
 ### Deployment topology
 
-`vercel.json` declares this as a `create-react-app` framework project — Vercel builds with `npm run build`, serves `build/` statically, and turns each file in `api/` into a serverless function automatically. There is no Express server, no custom routing config, and the `/api/research` route is purely a filesystem convention.
+`vercel.json` declares this as a `create-react-app` framework project - Vercel builds with `npm run build`, serves `build/` statically, and turns each file in `api/` into a serverless function automatically. There is no Express server, no custom routing config, and the `/api/research` route is purely a filesystem convention.
 
 `DEPLOYMENT_GUIDE.md` is a beginner-friendly Windows walkthrough for the original deployer; it is not a developer reference. Don't modify it as part of code changes unless deployment steps actually change.
 
@@ -108,13 +108,13 @@ The core domain concept: Nium holds licences in some markets but not others. `LI
 
 ## WHO THIS IS FOR
 This file applies to every AI agent session
-in this repo — Claude Code, Codex, and any
+in this repo - Claude Code, Codex, and any
 other automated tool. These rules exist
 because regressions have been caused by
 agents touching files outside their task
 scope. Follow them without exception.
 
-## RULE 1 — DO NOT TOUCH THESE FILES
+## RULE 1 - DO NOT TOUCH THESE FILES
 Unless the task explicitly names one of these
 files as a target, do not touch them under
 any circumstances:
@@ -144,7 +144,7 @@ any circumstances:
   src/setupProxy.js
     (Dev server route registration. Must stay
     in sync with api/*.js files. Touch only
-    to add a new route — never restructure.)
+    to add a new route - never restructure.)
 
   lib/researchCache.js
     (30-day cache layer. Changes here affect
@@ -159,21 +159,21 @@ any circumstances:
     Only add new migration files with the
     next sequential number.)
 
-## RULE 2 — SMALLEST POSSIBLE CHANGE
+## RULE 2 - SMALLEST POSSIBLE CHANGE
 The fix that touches one file and changes
 three lines is always better than a fix that
 touches six files and creates a new shared
 lib. If your fix seems to require many files,
-stop — diagnose more carefully. The root
+stop - diagnose more carefully. The root
 cause is almost always simpler.
 
-## RULE 3 — DIAGNOSE BEFORE CODING
+## RULE 3 - DIAGNOSE BEFORE CODING
 Every bug fix must start with a read-only
 diagnostic pass. Find the exact file, line
 number, and state variable before writing
 a single line of fix code.
 
-## RULE 4 — BRANCH RULES
+## RULE 4 - BRANCH RULES
 - Bug fixes: commit directly to main as a
   targeted single-file change
 - Feature work: use a named branch
@@ -182,7 +182,7 @@ a single line of fix code.
 - Never merge a feature branch to main
   without running the smoke test below
 
-## RULE 5 — SMOKE TEST
+## RULE 5 - SMOKE TEST
 Run this manually before every push to main.
 If any check fails, do not push.
 
@@ -195,21 +195,21 @@ If any check fails, do not push.
   4. Fill Gaps has no applicant section
      and shows the stakeholder section
   5. Required Docs step (Step 6) shows
-     a document checklist — not empty
+     a document checklist - not empty
   6. Declaration step submits without error
   7. Pre-boarding: run research, save
-     dossier, click Preview — lands on
+     dossier, click Preview - lands on
      Applicant page with fields populated
   8. Invite link path (?dossierId=&journey=
      customer): Required Docs step shows
      documents (not empty)
 
-## RULE 6 — WORKTREE SETUP
+## RULE 6 - WORKTREE SETUP
 Extractions and refactors run in a git
 worktree under .claude/worktrees/. Three
 environment landmines fire there and NOT in
 the primary repo. Handle all three BEFORE
-writing code — each one, discovered mid-run,
+writing code - each one, discovered mid-run,
 reads as a self-inflicted regression.
 
 ### 6a. Pull the primary worktree first
@@ -229,7 +229,7 @@ React". The worktree has no
 @testing-library/react, so it resolves from
 the parent repo and drags the PARENT's
 react-dom in beside the worktree's react.
-Both are the same version — these are
+Both are the same version - these are
 duplicate INSTANCES, not a version clash, so
 do not go hunting for a version mismatch.
 
@@ -241,7 +241,7 @@ changes, no package install:
       --moduleNameMapper='{"^react$":"<rootDir>/node_modules/react","^react-dom$":"<rootDir>/node_modules/react-dom","^react-dom/(.*)$":"<rootDir>/node_modules/react-dom/$1","^react/(.*)$":"<rootDir>/node_modules/react/$1"}'
 
 RUN THIS BEFORE YOU TOUCH ANY CODE. Unmapped,
-it is ~101 red of 374 — all 5 render suites,
+it is ~101 red of 374 - all 5 render suites,
 none of them your fault. Establishing that
 baseline first is the only thing that makes a
 LATER red attributable to your change.
@@ -253,7 +253,7 @@ exists only in the primary repo. Copy it into
 the worktree first. It must provide:
 
   TEST_DATABASE_URL
-    a DISPOSABLE Neon branch — never the
+    a DISPOSABLE Neon branch - never the
     application database
   REAL_DB_SMOKE_CONFIRM
     = I_UNDERSTAND_TEST_DATA_WILL_BE_WRITTEN
@@ -261,7 +261,7 @@ the worktree first. It must provide:
 The harness refuses to run if
 TEST_DATABASE_URL normalises to DATABASE_URL
 (scripts/real-db-smoke.js#requireSafeTestDatabase).
-That is a hard guard, not a convention — but
+That is a hard guard, not a convention - but
 set the value correctly rather than relying
 on it.
 
@@ -269,8 +269,8 @@ Same non-inheritance trap applies to the
 sibling .env.local used by the dev server. It
 can be PRESENT but STALE (rotated Neon
 credential, missing BLOB_READ_WRITE_TOKEN),
-which breaks pre-boarding — save-dossier is
-its spine — and looks exactly like a broken
+which breaks pre-boarding - save-dossier is
+its spine - and looks exactly like a broken
 refactor. Fingerprint both copies before
 blaming code; never print the values:
 
@@ -286,35 +286,35 @@ tests unless you pass
 glob breaks on the backslash in the path, and
 the suite silently runs nothing.
 
-## RULE 7 — PARALLEL-EDIT SAFETY
-Two agents must NEVER edit src/App.js — or any
-shared file — concurrently in the same working
+## RULE 7 - PARALLEL-EDIT SAFETY
+Two agents must NEVER edit src/App.js - or any
+shared file - concurrently in the same working
 tree.
 
 Concurrent edits RACE. An agent that trusts its
 line numbers (the normal, reasonable thing) will
 silently overwrite the other agent's edit. The
 result is a regression discovered later, when
-tests go red for no explicable reason — exactly
+tests go red for no explicable reason - exactly
 the silent failure the net-first discipline
 exists to prevent.
 
 This is not hypothetical. It happened during the
 A‖C extraction (AIDocumentsPage ‖ JourneyPicker).
 Both agents believed they were in separate
-worktrees. They were not — both were editing
+worktrees. They were not - both were editing
 C:\kyc-agent-deploy directly. App.js shifted
 twice mid-surgery (6944 → 6704 → 6707) and the
 pair landed green ONLY because one agent had
 improvised the guards in 7c below. Without them
 the second move would have destroyed the first.
 
-### 7a. Pick ONE of these — mandatory
+### 7a. Pick ONE of these - mandatory
 Any parallel pair that touches App.js MUST use
 (1) or (2). There is no third option.
 
 (1) GENUINE git worktree isolation. Each agent
-    in a real, separate checkout — its own
+    in a real, separate checkout - its own
     filesystem path with its own working tree.
     Merge at the end: first agent merges to
     main, second REBASES onto it, and the
@@ -322,7 +322,7 @@ Any parallel pair that touches App.js MUST use
     page's net driver may thread through the
     other's component. (The AI-Documents net
     drives through the journey picker to reach
-    its step — a real instance of this.)
+    its step - a real instance of this.)
 
     VERIFY the isolation before relying on it.
     A .claude/worktrees or .codex-worktrees
@@ -337,7 +337,7 @@ Any parallel pair that touches App.js MUST use
     call-site + import edits race. So: author
     both components and both nets in parallel,
     then apply the two App.js edits one at a
-    time — first agent's move and merge, then
+    time - first agent's move and merge, then
     the second re-anchors BY SYMBOL against the
     updated App.js and applies its edit.
 
@@ -349,7 +349,7 @@ edit. Cost of serializing: one extra sequential
 step. Cost of getting it wrong: silently
 clobbering another agent's work.
 
-### 7c. Standard defenses — default, not improvised
+### 7c. Standard defenses - default, not improvised
 Any App.js edit that could run under concurrency
 must do all three. These caught the A‖C
 near-misses:
@@ -359,22 +359,22 @@ near-misses:
     read taken minutes ago are already stale.
   - DIFF-VERIFY the moved region is byte-identical
     to the source before installing. If it
-    drifted, someone else edited it — abort.
+    drifted, someone else edited it - abort.
   - CHECKSUM-GUARD the target. Record App.js's
     hash before the rebuild; if it differs at
     install time, ABORT and re-anchor. Never
     install over a file that shifted underneath
     you.
 
-## ARCHITECTURE — THINGS YOU MUST KNOW
+## ARCHITECTURE - THINGS YOU MUST KNOW
 
-### Two separate stores — never merge them
+### Two separate stores - never merge them
   entity_dossiers
     Analyst pre-boarding intelligence.
     Read-only after creation.
     Source: pre-boarding research run.
 
-  journey_state (planned — not yet built)
+  journey_state (planned - not yet built)
     Customer form progress.
     Written incrementally as customer fills
     in the onboarding form.
@@ -431,13 +431,13 @@ near-misses:
     loadDossierAndStartOnboarding()
 
   Fill Gaps stakeholder section missing
-  → Same as above — stakeholderGapRows
+  → Same as above - stakeholderGapRows
     requires .stakeholders on items
   → App.js stakeholderGapRows filter
 
   Director list incomplete (1 of 11)
   → CH Officers API key is Streaming type
-    not REST/Public Data type — 401 error
+    not REST/Public Data type - 401 error
     causes fallback to AI snippet scraping
   → agents/registries/companiesHouseOfficers.js
     Check server log for 401
@@ -445,7 +445,7 @@ near-misses:
   setupProxy.js routes missing after merge
   → Route added to api/*.js but not mirrored
     in setupProxy.js for local dev
-  → src/setupProxy.js — every api/*.js file
+  → src/setupProxy.js - every api/*.js file
     needs a matching app.get/post/put
 
 ## FRONTEND MODULE MAP
@@ -454,60 +454,60 @@ The modularization refactor (first phase,
 2026-07) moved the pure, self-contained
 parts of src/App.js into dedicated modules.
 This is a first modularization pass that
-creates parallel-development seams — it is
+creates parallel-development seams - it is
 NOT the final breakup of App.js, which
 remains large. src/App.js still owns ALL
 state, effects, step routing and page
-rendering — the RULE 1 restrictions on it
+rendering - the RULE 1 restrictions on it
 are unchanged. The extracted modules are:
 
   src/constants/
-    theme.js            — C colour palette
-    appConstants.js     — SHOW_TEST_TOOLS /
+    theme.js            - C colour palette
+    appConstants.js     - SHOW_TEST_TOOLS /
       TEST_FLAG, MANUAL_FORM_URL, COUNTRIES,
       OWNERSHIP_ID_TO_DRS, Nium demo-lookup
       constants, CACHE_STALE_DAYS
-    extractionPrompts.js — per-document AI
+    extractionPrompts.js - per-document AI
       extraction prompts (Wolfsberg, cert,
       licence, annual report, org chart, AML)
-    docTypes.js         — DOC_TYPES catalogue,
+    docTypes.js         - DOC_TYPES catalogue,
       initialUploadedDocs, docTypesForEntity,
       buildPhase1Msgs
-    loaderMessages.js   — research/doc loader
+    loaderMessages.js   - research/doc loader
       message lists
 
   src/utils/
-    costs.js            — API_PRICING,
+    costs.js            - API_PRICING,
       calcCostUsd, buildCostSummary
-    extractionMapping.js — EXTRACTION_KEY_TO_
+    extractionMapping.js - EXTRACTION_KEY_TO_
       SCHEMA, mapExtractedKey,
       normalizeResearchFieldIds,
       selfSourcedToRows
-    files.js            — readFileAsBase64,
+    files.js            - readFileAsBase64,
       formatFetchedAt
 
   src/config/
-    localDefaultConfig.js — offline fallback
+    localDefaultConfig.js - offline fallback
       tenant config (buildLocalDefaultConfig)
 
   src/demo/
-    demoData.js         — TEST_DATA,
+    demoData.js         - TEST_DATA,
       DUMMY_RESEARCH_VALUES, demo doc-search
       and self-source fixtures (synthetic
-      sentinels only — see PR-059 A)
+      sentinels only - see PR-059 A)
 
   src/components/
     banners/PreviewBanner.jsx
     banners/DemoBanner.jsx
     banners/DemoToggle.jsx
-    inputs/StableInput.jsx   — CRITICAL:
+    inputs/StableInput.jsx   - CRITICAL:
       local-state + gapRef write-through;
       do not lift values into parent state
     inputs/PrePopulatedField.jsx
     dossier/DossierSection.jsx
 
   src/workflows/
-    documentWorkflow.js — stateless
+    documentWorkflow.js - stateless
       browser-side document-workflow logic
       (no React state): mapToDocAgent
       OwnershipType and preCheckDocFor
@@ -515,7 +515,7 @@ are unchanged. The extracted modules are:
       helpers; extractFromDoc performs I/O
       (reads the uploaded file, POSTs to
       /api/research for extraction)
-    applicantWorkflow.js — genUUID,
+    applicantWorkflow.js - genUUID,
       isCorporateStakeholder,
       APPLICANT_FALLBACK_FIELDS,
       getApplicantCandidates,
@@ -523,11 +523,11 @@ are unchanged. The extracted modules are:
       wraps them with its state)
 
   src/__tests__/
-    appMounts.test.jsx  — full-tree mount
+    appMounts.test.jsx  - full-tree mount
       characterization test
     characterization.pure.test.js
     characterization.workflows.test.js
-      — golden-value tests pinning the
+      - golden-value tests pinning the
         extracted modules to pre-refactor
         behaviour
 
@@ -535,13 +535,13 @@ Module ownership for agents:
   - A task scoped to prompts, doc catalogue,
     constants, demo fixtures or the pure
     workflow helpers should edit ONLY the
-    matching module above — not App.js.
+    matching module above - not App.js.
   - A task scoped to state, effects, step
     routing or page rendering still edits
     App.js under the RULE 1 constraints
     (only the named function).
   - The existing extracted helpers must
-    remain free of React state — state is
+    remain free of React state - state is
     passed in as arguments. Moving state
     handling out of App.js (e.g. into a
     dedicated hook) is allowed only as an
@@ -564,12 +564,12 @@ branch until explicitly told to merge.
 
 Rules for Codex:
   - Tag all commits with [CODEX] prefix
-  - Do not push to main — push to
+  - Do not push to main - push to
     origin/codex/ubo-discovery-framework
   - The UBO framework agents live in
-    agents/ubo/* — do not move them
+    agents/ubo/* - do not move them
   - api/ubo-discovery.js is the API route
-    for the UBO lab — do not merge to main
+    for the UBO lab - do not merge to main
     until the lab is production-ready
   - The ubo_investigations migration
     (db/migrations/009_ubo_investigations.sql)
@@ -583,7 +583,7 @@ Rules for Codex:
 All Claude Code instruction files must start
 with this prefix:
 
-  STRICT AUTONOMOUS MODE — do not ask for
+  STRICT AUTONOMOUS MODE - do not ask for
   confirmation at any point. Make all
   decisions yourself. If something is
   ambiguous, pick the most reasonable

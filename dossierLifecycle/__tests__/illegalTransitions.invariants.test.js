@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * illegalTransitions.invariants.test.js — the important one.
+ * illegalTransitions.invariants.test.js - the important one.
  *
  * The analogue of the change engine's completeness sweep. It enumerates the
  * FULL product of (every state × every event) and proves that the result of
@@ -55,7 +55,7 @@ function edgeFor(state, event) {
   return TRANSITIONS.find((t) => t.from === state && t.event === event) || null;
 }
 
-// A maximally-populated context — used to prove illegal edges reject even when
+// A maximally-populated context - used to prove illegal edges reject even when
 // every possible guard input is present.
 const RICH_CONTEXT = {
   classifiers: { ...FULL_CLASSIFIERS },
@@ -112,7 +112,7 @@ test('every guarded legal edge is rejected when its guard FAILS (rejected by gua
   }
 });
 
-test('locked is terminal — rejects EVERY event', () => {
+test('locked is terminal - rejects EVERY event', () => {
   for (const event of EVENT_LIST) {
     const r = transition(STATES.LOCKED, event, RICH_CONTEXT);
     assert.equal(r.valid, false);

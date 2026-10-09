@@ -3,7 +3,7 @@
 // Pure interpretation of a ComplyCube screening check into the signal the band
 // logic needs. ComplyCube grades outcomes as "clear" | "attention" |
 // "not_processed"; "attention" is a potential match (a HIT). "not_processed"
-// means a category/list was NOT screened — it is never treated as clear.
+// means a category/list was NOT screened - it is never treated as clear.
 // Categories come from result.breakdown.summary.
 
 function anyAttention(summarySection) {

@@ -6,7 +6,7 @@
 // by claimPending on claim (start of attempt, not on failure) so a hard-crashing
 // process still counts toward the retry ceiling via stale-processing reclaim. A row
 // that fails is marked failed and retried on the next tick until it succeeds or hits
-// the attempts ceiling — the submission is never lost (or, past the ceiling,
+// the attempts ceiling - the submission is never lost (or, past the ceiling,
 // abandoned and dead-lettered for manual triage).
 const store = require("./lib/submissionInboxStore");
 const { finalizeSubmission } = require("./lib/finalizeSubmission");
@@ -42,7 +42,7 @@ async function runWorker(deps = {}) {
   const deadLettered = await countDeadLettered();
   if (deadLettered > 0) {
     console.error(
-      `[finalize-submissions] ${deadLettered} submission(s) dead-lettered (attempts >= ${store.MAX_ATTEMPTS}) — manual triage required`
+      `[finalize-submissions] ${deadLettered} submission(s) dead-lettered (attempts >= ${store.MAX_ATTEMPTS}) - manual triage required`
     );
   }
 

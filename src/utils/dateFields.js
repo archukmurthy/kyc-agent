@@ -1,14 +1,14 @@
 /**
- * dateFields.js — is this field a date, and what input should edit it?
+ * dateFields.js - is this field a date, and what input should edit it?
  *
  * WHY A HEURISTIC. Most schema fields carry no `inputType` at all: research
  * fields are declared as `{ field, label, tier, section }`, so "Date of
  * Incorporation" had nothing marking it as a date and every editor fell back to
- * a free-text box — while the person's Date of birth, which IS declared, got a
+ * a free-text box - while the person's Date of birth, which IS declared, got a
  * real date picker. Same kind of value, two different controls on one page.
  *
  * Declaring inputType on every date field in the schema would fix the fields we
- * ship, but not the ones a tenant defines in the admin — those are authored
+ * ship, but not the ones a tenant defines in the admin - those are authored
  * without inputType too. Detecting the field is what covers both.
  *
  * The same trade-off `isCountryField` makes in changeIntelligence: a documented
@@ -34,7 +34,7 @@ export const isIsoDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || "").trim(
 
 /**
  * `fieldDef` may be a real schema def or a stand-in like { field, label }.
- * `value` is optional — a stored ISO date is corroborating evidence when the
+ * `value` is optional - a stored ISO date is corroborating evidence when the
  * name says nothing.
  */
 export function isDateField(fieldDef = {}, value = undefined) {

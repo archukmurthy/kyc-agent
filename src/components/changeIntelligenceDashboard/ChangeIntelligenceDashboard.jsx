@@ -1,10 +1,10 @@
 /**
- * ChangeIntelligenceDashboard.jsx — standalone, READ-ONLY dashboard over
+ * ChangeIntelligenceDashboard.jsx - standalone, READ-ONLY dashboard over
  * change_events. Two reading depths on one page: a headline strip anyone can read
  * in five seconds, and detail beneath for Archana.
  *
  * It only fetches /api/change-intelligence-metrics and renders. ALL aggregation
- * lives server-side in src/changeIntelligence/dashboardMetrics.js — this
+ * lives server-side in src/changeIntelligence/dashboardMetrics.js - this
  * component computes no metrics. No writes, no journey data, no charting library
  * (bars are plain divs, matching the rest of the app).
  *

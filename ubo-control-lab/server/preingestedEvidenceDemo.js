@@ -394,7 +394,7 @@ function startPreingestedEvidenceDemo({ sessionId } = {}) {
       persistedHistoricalIdentity: false,
     },
     fixtureId: FIXTURE_ID,
-    fixtureLabel: "BETTERCOMMS — SOURCE-BACKED REVIEWED OWNERSHIP CHART",
+    fixtureLabel: "BETTERCOMMS - SOURCE-BACKED REVIEWED OWNERSHIP CHART",
     sessionOnly: true,
     productionAuthorized: false,
     stage: "EVIDENCE_REQUIRED",
@@ -413,7 +413,7 @@ function startPreingestedEvidenceDemo({ sessionId } = {}) {
     decisionAudit: [],
     entityDirectory: [entity(SUBJECT_ID, "Better Comms VOIP Ltd")],
     labels: [
-      "REAL SOURCE IMAGE — MANUALLY REVIEWED FIXTURE",
+      "REAL SOURCE IMAGE - MANUALLY REVIEWED FIXTURE",
       "Historical Evidence-store linkage not yet revalidated",
       "No fresh automated interpretation performed in this demonstration",
     ],

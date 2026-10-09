@@ -11,13 +11,13 @@ import {
 } from "../utils/schemaExcel";
 
 // Four-stage modal:
-//   upload  — drop/browse for the file (auto-advances on parse success)
-//   preview — validation summary + field tables (research/gap tabs)
-//   mode    — replace vs merge (only shown when there's an existing schema)
-//   done    — success + back-to-editor button
+//   upload  - drop/browse for the file (auto-advances on parse success)
+//   preview - validation summary + field tables (research/gap tabs)
+//   mode    - replace vs merge (only shown when there's an existing schema)
+//   done    - success + back-to-editor button
 //
 // Inline editing of preview rows is intentionally not supported (admins fix
-// the Excel and re-upload). Column-mapping confirmation step is also cut —
+// the Excel and re-upload). Column-mapping confirmation step is also cut -
 // the rule-based mapper handles template format + most common variants;
 // anything unmappable surfaces as a validation error.
 export default function SchemaImportModal({
@@ -599,7 +599,7 @@ function Spinner() {
   );
 }
 
-// keep linter happy — VALID_FIELD_TYPES is re-exported in case consumers want
+// keep linter happy - VALID_FIELD_TYPES is re-exported in case consumers want
 // the same list; not used in render path.
 // eslint-disable-next-line no-unused-vars
 const _unused = VALID_FIELD_TYPES;

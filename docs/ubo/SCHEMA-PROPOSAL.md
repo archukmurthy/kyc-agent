@@ -1,4 +1,4 @@
-# UBO database — proposal
+# UBO database - proposal
 
 > **Status, 2026-09-25.** Sections 1-7 below were written on 2026-09-22, before the
 > Production Readiness Solution Guide arrived. They are narrower than the guide:
@@ -19,7 +19,7 @@ field, the contract is named.
 
 ---
 
-## 0. The decision this schema must honour — taken 2026-09-25
+## 0. The decision this schema must honour - taken 2026-09-25
 
 **UBO gets its own tables. It refers to other modules by plain text, never by a
 database link.**
@@ -85,7 +85,7 @@ product.
 ## 1. What exists today
 
 **One table: `public.ubo_investigations`** (migration 009). Twenty-one columns,
-seven of them JSON blobs — `ownership_graph`, `evidence`, `resolutions`,
+seven of them JSON blobs - `ownership_graph`, `evidence`, `resolutions`,
 `determination`, `search_events`, `investigation_log`, `missing_information`.
 
 Three facts about it:
@@ -113,13 +113,13 @@ migration.
 
 **No foreign keys cross the line.** Nothing in `ubo.*` references `public.*`, and
 nothing in `public.*` references `ubo.*`. If the platform needs to associate one
-of its cases with a UBO case, the platform keeps that mapping on its own side —
+of its cases with a UBO case, the platform keeps that mapping on its own side -
 UBO stores nothing about the platform at all.
 
 ## 3. Identity: two tables everything else points at
 
 Clerk tells us who someone is. It does not tell us what they may see, and its
-user ids are not stable across instances — moving from a development instance to
+user ids are not stable across instances - moving from a development instance to
 a production one gives every person a new id, and Clerk does not migrate them.
 
 So UBO keeps its own identity, and Clerk's id is a lookup column rather than a
@@ -252,7 +252,7 @@ CREATE TABLE ubo.extractions (
 ```
 
 **Why:** the diagnosis put "uploaded chart and its extraction" at the top of the
-list of things most painful to lose — it is the expensive, manual step. Today it
+list of things most painful to lose - it is the expensive, manual step. Today it
 lives in `ubo-demo.customer-ownership-chart.v1` and its library key, capped at
 twelve records in one browser.
 
@@ -286,13 +286,13 @@ CREATE TABLE ubo.research_runs (
 CREATE INDEX ON ubo.research_runs (case_id, started_at DESC);
 ```
 
-**Why these exact columns:** they mirror what a capability port returns —
+**Why these exact columns:** they mirror what a capability port returns -
 `contractVersion, requestId, outcome, candidateFacts, operationEvidenceReferences,
 issues` (`ARCHITECTURE.md:105`). `cost_units` exists because the engine already
 limits runs by "call, concurrency, elapsed-time and cost-unit limits", and
 because a trial budget needs something to count.
 
-**Evidence references are provider-neutral** — `system`, `namespace`,
+**Evidence references are provider-neutral** - `system`, `namespace`,
 `referenceType`, `referenceId`, optional `locator` and `integrity`
 (`contracts/evidenceReference.js:14-29`). They point at evidence; they never
 contain it.
@@ -328,7 +328,7 @@ only UBO must not receive the platform's onboarding queue.
 
 **`request_id UNIQUE` is what makes a retry safe.** The engine already promises
 that "stable operation/request identities make retries idempotent at the public
-product boundaries" — this column is where that promise is enforced.
+product boundaries" - this column is where that promise is enforced.
 
 ## 5. Retention
 
@@ -358,12 +358,12 @@ const RETENTION_YEARS = 7;
 
 1. **Does `ubo.cases` match your notion of a case**, or does your flow have a
    parent above it (an engagement, a customer) that these should hang from?
-2. **`revision_id` and `revision` on snapshots** — is a revision a property of
+2. **`revision_id` and `revision` on snapshots** - is a revision a property of
    the case that should be its own table, or metadata on the snapshot as here?
 3. **Are extractions always tied to one artifact**, or can one extraction span
    several uploaded documents?
 4. **Does a research run belong to exactly one case**, or can one run inform
    several?
-5. **Anything in your flow design that has no home above** — the gap will be in
+5. **Anything in your flow design that has no home above** - the gap will be in
    the questions and analyst review modules, which are not modelled here because
    they are still being designed.

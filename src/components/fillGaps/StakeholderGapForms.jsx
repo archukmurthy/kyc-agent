@@ -1,27 +1,27 @@
 /**
- * StakeholderGapForms.jsx — the per-person stakeholder forms and summaries on
+ * StakeholderGapForms.jsx - the per-person stakeholder forms and summaries on
  * the Fill Gaps page.
  *
  * EXTRACTED FROM App.js as a PURE MOVE, zero behaviour change. Nine render
  * functions, their two style constants, the three repeatable-position helpers
- * and the node-array build moved here VERBATIM — the bodies below are the same
+ * and the node-array build moved here VERBATIM - the bodies below are the same
  * text that ran in App.js. What changed is only how they get their data: they
  * used to close over App's scope, and now arrive through the prop interface.
  *
  * PROP NAMES DELIBERATELY MATCH THE OLD APP IDENTIFIERS, destructured back into
  * locals of the same name, so the moved bodies stay byte-identical. The oracle
  * is StakeholderGapForms.render.test.jsx (29 tests), which must stay green
- * UNCHANGED — if it goes red, the move is wrong, not the test.
+ * UNCHANGED - if it goes red, the move is wrong, not the test.
  *
  * THIS COMPONENT OWNS NO STATE, and it touches no ref. Every mutation routes
- * through the drilled App functions — updateStakeholderField / addStakeholder /
- * removeStakeholder — which call App's setStakeholders, which owns the
+ * through the drilled App functions - updateStakeholderField / addStakeholder /
+ * removeStakeholder - which call App's setStakeholders, which owns the
  * stakeholdersRef write AND fires setStakeholderVersion.
  *
  * DO NOT wire this component to setFormVersion. The page runs on TWO separate
  * render-invalidation counters by design: setFormVersion for the gap inputs
  * (backed by gapRef) and setStakeholderVersion for the people. Converging them
- * would re-render the gap form on every keystroke and lose input focus — see
+ * would re-render the gap form on every keystroke and lose input focus - see
  * CLAUDE.md.
  *
  * WHAT THE SHELL HANDS OVER. App used to precompute four values in its own body
@@ -87,7 +87,7 @@ export function StakeholderGapForms({
   // Each accepted/rejected/customer-added person renders as an accordion
   // card with name, role, nationality, DOB, residential country, ID type
   // & number, and PEP toggle + details. Reads/writes through the
-  // stakeholdersRef helpers — explicit re-render on every change so
+  // stakeholdersRef helpers - explicit re-render on every change so
   // completion badges and the conditional PEP-details textarea stay
   // synced with the underlying data.
 
@@ -103,7 +103,7 @@ export function StakeholderGapForms({
     justifyContent: "space-between",
   };
 
-  // Next-page (Fill Gaps) body for a CORPORATE stakeholder — KYB fields plus a
+  // Next-page (Fill Gaps) body for a CORPORATE stakeholder - KYB fields plus a
   // repeatable positions list. A found field stays verified while its Confirm
   // green tick is on; unticking opens it for edit (same as the person form).
   const renderStakeholderCardCorporateBody = (fieldId, s) => {
@@ -583,7 +583,7 @@ export function StakeholderGapForms({
   // renderStakeholderForms  → only people who need customer input (rendered
   //   in the "additional details needed" section, near the other gap inputs).
   // renderStakeholderSummary → read-only confirmed info / "no action required"
-  //   (rendered in the "verified — for reference" section at the bottom).
+  //   (rendered in the "verified - for reference" section at the bottom).
   // Both return null when they have nothing to show, so the caller can hide
   // the section divider when a field contributes no content.
 
@@ -616,8 +616,8 @@ export function StakeholderGapForms({
 
   // Light, identify-only replacement card (PR-057 interim). Shown ONLY on Fill
   // Gaps for a listed-company person the customer unticked on Confirm. Collects
-  // just enough to identify the replacement — full legal name (required) + role
-  // — NOT the full UBO/EDD set (no nationality/DOB/PEP/residence). Writes through
+  // just enough to identify the replacement - full legal name (required) + role
+  // - NOT the full UBO/EDD set (no nationality/DOB/PEP/residence). Writes through
   // the same stakeholdersRef helpers as every other person card.
   const renderLightReplacementCard = (fieldId, s) => {
     const named = !!(s.full_name && s.full_name.trim());
@@ -752,14 +752,14 @@ export function StakeholderGapForms({
     }
   };
 
-  // KEPT, not dead by accident — see the note above renderCorrectionField.
+  // KEPT, not dead by accident - see the note above renderCorrectionField.
   // Unreachable via any current UI path (stkHasCorrections can't survive to
   // Fill Gaps); retained for a possible seeded/resumed-dossier load that
   // arrives mid-correction. Delete-vs-keep decision pending.
   //
   // Field-level correction card for a listed-company person the customer did
   // NOT remove but whose AI-returned value(s) they unticked on Confirm. Renders
-  // ONLY the unticked fields as editable — correction, not collection. Mirrors
+  // ONLY the unticked fields as editable - correction, not collection. Mirrors
   // the private per-field edit; the person-level removal path is the separate
   // light replacement card above.
   const renderFieldCorrectionCard = (fieldId, s, ubo) => {
@@ -816,7 +816,7 @@ export function StakeholderGapForms({
     const heading = fieldDef?.label || (ubo ? "Beneficial Owners / Shareholders" : "Directors / Officers");
     const list = getStakeholders(fieldId);
 
-    // Drop registry exemption notices — never real people / EDD forms.
+    // Drop registry exemption notices - never real people / EDD forms.
     const validStakeholders = list.filter((s) => !isRegistryExemptionNotice(s));
     const needingDetails = validStakeholders.filter((s) => needsStakeholderDetails(s, fieldId, effectivelyListed));
 
@@ -829,11 +829,11 @@ export function StakeholderGapForms({
       : [];
 
     // Listed-company field-level corrections: a person the customer kept but
-    // whose AI-returned value(s) they unticked on Confirm. Correction-only —
+    // whose AI-returned value(s) they unticked on Confirm. Correction-only -
     // these people return false from needsStakeholderDetails so they'd otherwise
     // sit in the read-only summary with no way to edit. People needing full EDD
     // (>=25% UBOs) already correct fields inside renderStakeholderCard, and
-    // private-company people flow through needingDetails — so this list is
+    // private-company people flow through needingDetails - so this list is
     // listed-only, not-rejected, not-EDD. (Private corrections are unchanged.)
     const fieldCorrections = effectivelyListed
       ? validStakeholders.filter(
@@ -929,7 +929,7 @@ export function StakeholderGapForms({
     const list = getStakeholders(fieldId);
     const validStakeholders = list.filter((s) => !isRegistryExemptionNotice(s));
     // Read-only "verified" reference: people needing no input. Exclude listed
-    // people the customer is actively correcting (a field unticked) — they now
+    // people the customer is actively correcting (a field unticked) - they now
     // render as an editable correction card in the forms section above, so
     // showing them here too would duplicate them with the stale value.
     const confirmedOnly = validStakeholders.filter(
@@ -938,7 +938,7 @@ export function StakeholderGapForms({
         !(effectivelyListed && !s.customer_rejected && stkHasCorrections(s, ubo))
     );
 
-    // Listed company with no real owners (e.g. PSC-exempt — only an exemption
+    // Listed company with no real owners (e.g. PSC-exempt - only an exemption
     // notice): clean "No action required" reference card.
     if (validStakeholders.length === 0 && effectivelyListed) {
       return (
@@ -963,7 +963,7 @@ export function StakeholderGapForms({
       );
     }
 
-    // Nothing read-only to show (e.g. a private company — everyone is in the
+    // Nothing read-only to show (e.g. a private company - everyone is in the
     // forms section above, so no duplicate rendering here).
     if (confirmedOnly.length === 0) return null;
 

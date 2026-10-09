@@ -1,5 +1,5 @@
 /**
- * Step2DynamicForm.test.jsx — covers the persistence lift (App.js drives
+ * Step2DynamicForm.test.jsx - covers the persistence lift (App.js drives
  * `uploads` via initialUploads/onUploadsChange so it survives this component
  * unmounting on navigation) and the Continue-button relocation
  * (renderOwnContinue / onExposeContinue), both added alongside the Confirm

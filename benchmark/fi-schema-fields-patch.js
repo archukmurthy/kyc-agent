@@ -19,7 +19,7 @@
 // -----------------------------------------------------------------------------
 
 // ----------------------------------------------------------------------------
-// GROUP 1 — RESEARCHABLE (tier 1/2, agent attempts fill)
+// GROUP 1 - RESEARCHABLE (tier 1/2, agent attempts fill)
 // ----------------------------------------------------------------------------
 
 const researchableFields = [
@@ -28,7 +28,7 @@ const researchableFields = [
     label: "VAT Number",
     tier: 2,
     searchHint:
-      "VAT / tax registration number. Check the company website footer, terms and invoicing pages. Validate format against HMRC VAT checker (GB) or EU VIES (vies.ec.europa.eu). This is distinct from the company registration number — do not reuse the Companies House / registry number here.",
+      "VAT / tax registration number. Check the company website footer, terms and invoicing pages. Validate format against HMRC VAT checker (GB) or EU VIES (vies.ec.europa.eu). This is distinct from the company registration number - do not reuse the Companies House / registry number here.",
   },
   {
     field: "additional_urls",
@@ -49,71 +49,71 @@ const researchableFields = [
     label: "Has your business been subject to regulatory enforcement action?",
     tier: 1,
     searchHint:
-      "Check the relevant regulator's enforcement / final-notices pages (e.g. FCA fca.org.uk/news/enforcement-actions, MAS enforcement actions, ASIC, SEC) and reputable news for fines, monetary penalties, Voluntary Requirements (VREQs), business restrictions, censures or sanctions against the entity. Broader than licence suspension — capture monetary penalties and supervisory/enforcement actions even where the licence was not suspended. Yes/No, with detail where found.",
+      "Check the relevant regulator's enforcement / final-notices pages (e.g. FCA fca.org.uk/news/enforcement-actions, MAS enforcement actions, ASIC, SEC) and reputable news for fines, monetary penalties, Voluntary Requirements (VREQs), business restrictions, censures or sanctions against the entity. Broader than licence suspension - capture monetary penalties and supervisory/enforcement actions even where the licence was not suspended. Yes/No, with detail where found.",
   },
   {
     field: "individual_customer_pct",
     label: "Individual Customers %",
     tier: 2,
     searchHint:
-      "Estimate the retail/individual vs corporate customer mix from segment reporting in the annual report (Retail/Personal Banking vs Commercial/Corporate & Institutional divisions). NOTE this is a revenue/asset split, not a customer-count split — flag the basis. Digital retail banks skew heavily individual; wholesale-tilted banks skew corporate. Mark indicative; pair with corporate_customer_pct so the two sum to ~100.",
+      "Estimate the retail/individual vs corporate customer mix from segment reporting in the annual report (Retail/Personal Banking vs Commercial/Corporate & Institutional divisions). NOTE this is a revenue/asset split, not a customer-count split - flag the basis. Digital retail banks skew heavily individual; wholesale-tilted banks skew corporate. Mark indicative; pair with corporate_customer_pct so the two sum to ~100.",
   },
   {
     field: "corporate_customer_pct",
     label: "Corporate Customers %",
     tier: 2,
     searchHint:
-      "See individual_customer_pct — derive the complementary figure from the same annual-report segment reporting. Revenue/asset basis, not customer count; flag the basis. Mark indicative.",
+      "See individual_customer_pct - derive the complementary figure from the same annual-report segment reporting. Revenue/asset basis, not customer count; flag the basis. Mark indicative.",
   },
   {
     field: "top_corporate_industries",
     label: "Top 5 industries your corporate customers operate in (multi)",
     tier: 2,
     searchHint:
-      "For large disclosed banks, use the credit-risk / loan-exposure-by-industry-sector breakdown in the annual report risk-management notes or the Pillar 3 report (often NACE/SIC groupings) as a ranked proxy. Strategy decks naming 'focus sectors' are marketing, not exposure data — prefer the risk disclosures. Not findable for smaller or private FIs; leave blank if no disclosure. Mark indicative.",
+      "For large disclosed banks, use the credit-risk / loan-exposure-by-industry-sector breakdown in the annual report risk-management notes or the Pillar 3 report (often NACE/SIC groupings) as a ranked proxy. Strategy decks naming 'focus sectors' are marketing, not exposure data - prefer the risk disclosures. Not findable for smaller or private FIs; leave blank if no disclosure. Mark indicative.",
   },
   {
     field: "deals_virtual_currencies",
     label: "Do you deal with virtual currencies (crypto, points, rewards)?",
     tier: 2,
     searchHint:
-      "Check annual report, strategy sections and press/news for digital-asset activity (custody, exchange, tokenisation, stablecoins). NOTE the field conflates crypto, loyalty points and rewards — answer the crypto sub-question from public sources and add a note on which sense is being affirmed; a card-rewards programme is 'rewards' but not 'crypto'. Consider splitting into crypto vs rewards (see schema note). Mark indicative.",
+      "Check annual report, strategy sections and press/news for digital-asset activity (custody, exchange, tokenisation, stablecoins). NOTE the field conflates crypto, loyalty points and rewards - answer the crypto sub-question from public sources and add a note on which sense is being affirmed; a card-rewards programme is 'rewards' but not 'crypto'. Consider splitting into crypto vs rewards (see schema note). Mark indicative.",
   },
   {
     field: "accepts_cash",
     label: "Do you accept cash?",
     tier: 2,
     searchHint:
-      "Infer from the business model: digital-only / branchless entities typically do not accept cash; branch-network banks and money-services businesses typically do. Check product pages and branch/ATM information. Mark indicative — this is a model-based inference, not a stated fact.",
+      "Infer from the business model: digital-only / branchless entities typically do not accept cash; branch-network banks and money-services businesses typically do. Check product pages and branch/ATM information. Mark indicative - this is a model-based inference, not a stated fact.",
   },
 ];
 
 // ----------------------------------------------------------------------------
-// GROUP 2 — RESEARCHABLE LIST, % SPLIT IS CUSTOMER-SUPPLIED
+// GROUP 2 - RESEARCHABLE LIST, % SPLIT IS CUSTOMER-SUPPLIED
 // Agent fills the country list; the percentage split is NOT public.
 // ----------------------------------------------------------------------------
 
 const researchableListFields = [
   {
     field: "top_countries_payin",
-    label: "Top Transaction Countries — Payin (multi, with % split)",
+    label: "Top Transaction Countries - Payin (multi, with % split)",
     tier: 2,
     splitIsCustomerSupplied: true,
     searchHint:
-      "Populate the COUNTRY LIST only, from operating_countries and any corridor disclosures in the annual report / corporate site. Leave the % split BLANK — transaction-volume percentages by country are not publicly disclosed and must come from the customer. Do not estimate percentages.",
+      "Populate the COUNTRY LIST only, from operating_countries and any corridor disclosures in the annual report / corporate site. Leave the % split BLANK - transaction-volume percentages by country are not publicly disclosed and must come from the customer. Do not estimate percentages.",
   },
   {
     field: "top_countries_payout",
-    label: "Top Transaction Countries — Payout (multi, with % split)",
+    label: "Top Transaction Countries - Payout (multi, with % split)",
     tier: 2,
     splitIsCustomerSupplied: true,
     searchHint:
-      "Populate the COUNTRY LIST only, from operating_countries / payout_transaction_countries and corridor disclosures. Leave the % split BLANK — not publicly disclosed; customer-supplied. Do not estimate percentages.",
+      "Populate the COUNTRY LIST only, from operating_countries / payout_transaction_countries and corridor disclosures. Leave the % split BLANK - not publicly disclosed; customer-supplied. Do not estimate percentages.",
   },
 ];
 
 // ----------------------------------------------------------------------------
-// GROUP 3 — CUSTOMER-SUPPLIED (no searchHint; excluded from researchable denominator)
+// GROUP 3 - CUSTOMER-SUPPLIED (no searchHint; excluded from researchable denominator)
 // Forward-looking projections, private counterparties, and declarations.
 // No public document contains these. customerSupplied:true keeps them out of
 // the researchable-field coverage denominator.
@@ -121,14 +121,14 @@ const researchableListFields = [
 
 const customerSuppliedFields = [
   // --- intended flow mix (declarative) ---
-  { field: "payout_c2c_pct",     label: "Payout — C2C %",     customerSupplied: true },
-  { field: "payout_b2b_pct",     label: "Payout — B2B %",     customerSupplied: true },
-  { field: "payout_b2c_pct",     label: "Payout — B2C %",     customerSupplied: true },
-  { field: "payout_c2b_pct",     label: "Payout — C2B %",     customerSupplied: true },
-  { field: "collections_c2c_pct", label: "Collections — C2C %", customerSupplied: true },
-  { field: "collections_b2b_pct", label: "Collections — B2B %", customerSupplied: true },
-  { field: "collections_b2c_pct", label: "Collections — B2C %", customerSupplied: true },
-  { field: "collections_c2b_pct", label: "Collections — C2B %", customerSupplied: true },
+  { field: "payout_c2c_pct",     label: "Payout - C2C %",     customerSupplied: true },
+  { field: "payout_b2b_pct",     label: "Payout - B2B %",     customerSupplied: true },
+  { field: "payout_b2c_pct",     label: "Payout - B2C %",     customerSupplied: true },
+  { field: "payout_c2b_pct",     label: "Payout - C2B %",     customerSupplied: true },
+  { field: "collections_c2c_pct", label: "Collections - C2C %", customerSupplied: true },
+  { field: "collections_b2b_pct", label: "Collections - B2B %", customerSupplied: true },
+  { field: "collections_b2c_pct", label: "Collections - B2C %", customerSupplied: true },
+  { field: "collections_c2b_pct", label: "Collections - C2B %", customerSupplied: true },
 
   // --- expected activity projections (forward-looking) ---
   { field: "expected_monthly_credit_volume",  label: "Expected Monthly Credit Volume",            customerSupplied: true },
@@ -143,8 +143,8 @@ const customerSuppliedFields = [
   { field: "top_beneficiaries", label: "Top Beneficiaries", customerSupplied: true },
 
   // --- the percentage portion of the payin/payout country fields ---
-  { field: "top_countries_payin_split",  label: "Top Transaction Countries — Payin (% split)",  customerSupplied: true },
-  { field: "top_countries_payout_split", label: "Top Transaction Countries — Payout (% split)", customerSupplied: true },
+  { field: "top_countries_payin_split",  label: "Top Transaction Countries - Payin (% split)",  customerSupplied: true },
+  { field: "top_countries_payout_split", label: "Top Transaction Countries - Payout (% split)", customerSupplied: true },
 
   // --- DECLARATION: explicitly do NOT auto-research ---
   {
@@ -153,7 +153,7 @@ const customerSuppliedFields = [
     customerSupplied: true,
     doNotAutoResearch: true,
     note:
-      "Self-declaration only. Do NOT auto-research criminal-conviction status of named individuals via news scraping — accuracy, fairness and data-protection risk; false positives on a named person are a serious harm. PEP / adverse-media screening is a SEPARATE governed process with its own controls and must not be wired into this auto-fill field.",
+      "Self-declaration only. Do NOT auto-research criminal-conviction status of named individuals via news scraping - accuracy, fairness and data-protection risk; false positives on a named person are a serious harm. PEP / adverse-media screening is a SEPARATE governed process with its own controls and must not be wired into this auto-fill field.",
   },
 ];
 

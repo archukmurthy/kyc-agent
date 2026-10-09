@@ -1,18 +1,18 @@
 /**
- * InlineCorrectionEditor.jsx — Option B commit 3: the inline value-capture
+ * InlineCorrectionEditor.jsx - Option B commit 3: the inline value-capture
  * input that opens beneath a crossed (disputed) Confirm row once its
  * ChangeDialogue has classified the change.
  *
  * CONTROLLED + PRESENTATIONAL: it owns only the transient draft (local state,
- * so typing never re-renders the Confirm table — same rationale as
+ * so typing never re-renders the Confirm table - same rationale as
  * StableInput). The saved value lives in App.js's gapRef under
- * `corrected_<field>` — the exact key Fill Gaps renders — committed via
+ * `corrected_<field>` - the exact key Fill Gaps renders - committed via
  * onSave; this component never touches refs and never emits events itself.
  * Save-button semantics (not write-on-keystroke) are what make "one logical
  * edit = one superseding change-event" hold upstream.
  *
  * Field fidelity: inputType/options come from the schema field def
- * (findFieldDef), so a dropdown field edits as a dropdown — mirroring how
+ * (findFieldDef), so a dropdown field edits as a dropdown - mirroring how
  * Fill Gaps renders `corrected_<field>` today.
  */
 
@@ -37,7 +37,7 @@ export function InlineCorrectionEditor({
     Array.isArray(fieldDef.options) &&
     fieldDef.options.length > 0;
   const options = isSelect ? fieldDef.options.map(normaliseOption) : [];
-  // A select's draft must be a real option value or "" — a free-text prefill
+  // A select's draft must be a real option value or "" - a free-text prefill
   // that matches no option would leave the dropdown stuck on nothing.
   const validInitial = (v) =>
     isSelect ? (options.some((o) => String(o.value) === String(v)) ? v : "") : v;
@@ -71,7 +71,7 @@ export function InlineCorrectionEditor({
         </select>
       ) : (
         <input
-          // Detected, not just declared — most research fields carry no
+          // Detected, not just declared - most research fields carry no
           // inputType, so "Date of Incorporation" used to edit as free text
           // while the person's Date of birth got a picker.
           type={isDateField(fieldDef, initialValue) ? "date" : "text"}

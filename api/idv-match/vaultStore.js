@@ -30,7 +30,7 @@ function keyProvider() {
 // The DEK is wrapped once per record (bound to the reference); each attribute is
 // encrypted with that shared DEK under its own nonce + AAD binding it to
 // (reference, concept) so a value can't be relabelled or moved. This means ONE
-// key-wrap call per store (not one per attribute) — important with a real KMS.
+// key-wrap call per store (not one per attribute) - important with a real KMS.
 function recordAad(reference) { return Buffer.from(JSON.stringify({ reference }), "utf8"); }
 function attrAad(reference, concept) { return Buffer.from(JSON.stringify({ reference, concept }), "utf8"); }
 

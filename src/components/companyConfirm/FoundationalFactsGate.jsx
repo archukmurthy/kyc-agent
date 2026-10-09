@@ -1,5 +1,5 @@
 /**
- * FoundationalFactsGate.jsx — the five foundational facts used to research the
+ * FoundationalFactsGate.jsx - the five foundational facts used to research the
  * company, shown at the TOP of the Applicant page (NOT a new step), each with a
  * confirm checkbox (checked by default). The applicant section below is
  * revealed by the parent only once all five are confirmed.

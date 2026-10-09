@@ -11,7 +11,7 @@
  *
  * Returns:
  *   - results[]        Array of matching companies (may be empty)
- *   - noResults: true  If no match found — KYC agent should fall back to manual KYB
+ *   - noResults: true  If no match found - KYC agent should fall back to manual KYB
  *
  * Each result includes publicDetailsId which must be passed to /api/nium/exhaustive-details
  */
@@ -21,7 +21,7 @@ const { applyCors, requireAdmin } = require("../../lib/routeAuth");
 
 // TODO(step1-mapping): `type` and `region` are hardcoded to the verified
 // working preprod test values for now. They must be derived from the Step 1
-// company-search logic (entity type + searching region) and passed through —
+// company-search logic (entity type + searching region) and passed through -
 // at which point these defaults become fallbacks only.
 const DEFAULT_TYPE = "PUBLIC_COMPANY";
 const DEFAULT_REGION = "GB";

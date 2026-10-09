@@ -53,7 +53,7 @@ test("declining the confirmation leaves the draft untouched", async () => {
   fireEvent.click(screen.getByRole("button", { name: /Apply default settings/i }));
 
   // The draft is untouched and no template was requested. Asserting on
-  // /api/config-templates specifically — rather than on fetch as a whole —
+  // /api/config-templates specifically - rather than on fetch as a whole -
   // is what the component actually promises: VersionHistory fetches
   // /api/config-versions on mount, which has nothing to do with this action.
   expect(onChange).not.toHaveBeenCalled();

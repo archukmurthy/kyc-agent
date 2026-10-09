@@ -2,8 +2,8 @@
   "contractVersion": "ubo-control-lab-review-profiles-v1",
   "profiles": [
     {
-      "label": "ASDA — SYSTEM COVERAGE AVAILABLE",
-      "warning": "LAB REVIEW PROFILE — NOT PRODUCTION APPROVED",
+      "label": "ASDA - SYSTEM COVERAGE AVAILABLE",
+      "warning": "LAB REVIEW PROFILE - NOT PRODUCTION APPROVED",
       "profile": {
         "contractVersion": "ubo-registry-capability-profile-v1",
         "profileId": "asda-wave-9-further-coverage",
@@ -40,8 +40,8 @@
       }
     },
     {
-      "label": "ASDA — DISCOVERY EXHAUSTED / GOVERNANCE EVIDENCE REQUIRED",
-      "warning": "LAB REVIEW PROFILE — NOT PRODUCTION APPROVED",
+      "label": "ASDA - DISCOVERY EXHAUSTED / GOVERNANCE EVIDENCE REQUIRED",
+      "warning": "LAB REVIEW PROFILE - NOT PRODUCTION APPROVED",
       "profile": {
         "contractVersion": "ubo-registry-capability-profile-v1",
         "profileId": "asda-wave-9-predictable-opacity",

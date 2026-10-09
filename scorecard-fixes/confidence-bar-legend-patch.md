@@ -4,7 +4,7 @@ The medium/probable band is ~0.7% in the pilot, so its label is crushed inside a
 ~3px segment. Fix: suppress in-bar labels for thin segments and print an explicit
 legend with all three numbers underneath.
 
-## 1. Replace the bar block (lines ~376–381)
+## 1. Replace the bar block (lines ~376-381)
 
 FIND:
 ```js
@@ -46,6 +46,6 @@ Add after the `.bar` rule:
 
 ## Result
 - Wide segments (High, Low) keep their in-bar % label.
-- The thin Medium sliver no longer tries to print inside itself — its value
+- The thin Medium sliver no longer tries to print inside itself - its value
   (e.g. 0.7%) is read from the legend below, where all three numbers always show.
 - Hovering any segment also shows its exact value via the `title` tooltip.

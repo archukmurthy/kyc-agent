@@ -1,5 +1,5 @@
 /**
- * peopleHelpers.js — the PURE helpers behind the Confirm People section.
+ * peopleHelpers.js - the PURE helpers behind the Confirm People section.
  *
  * Moved VERBATIM out of App.js in slice 2 of the Confirm extraction. Every
  * function here is a plain input→output function that closes over nothing:
@@ -7,7 +7,7 @@
  * StakeholderConfirmSection component AND the App-side consumers that stay
  * behind (personConfirmItems, buildStakeholderAttributeTrail).
  *
- * The IMPURE helpers of the same family deliberately did NOT move —
+ * The IMPURE helpers of the same family deliberately did NOT move -
  * personWithEdits reads stakeholdersRef, isPersonAttributeCorrected reads
  * research, isPersonAttributeSettled composes those with two state maps.
  * They stay in App.js and are handed to the component as props, so there is
@@ -59,7 +59,7 @@ export const stkFieldDisplay = (s, key) => {
   return s[key] != null ? String(s[key]) : "";
 };
 
-/** Tier of a person's data — their own if present, else the row that carried
+/** Tier of a person's data - their own if present, else the row that carried
  *  them, which is what the person card's source badge already displays. */
 export const isPersonLowConfidence = (s, item) =>
   isLowConfidence({ sourceTier: (s && s.sourceTier) || (item && item.sourceTier) });

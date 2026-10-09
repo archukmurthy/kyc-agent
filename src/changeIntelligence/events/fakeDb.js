@@ -1,15 +1,15 @@
 /**
- * fakeDb.js — TEST-ONLY in-memory stand-in for the neon HTTP client.
+ * fakeDb.js - TEST-ONLY in-memory stand-in for the neon HTTP client.
  *
  * It lives at the events/ root (not under __tests__/) on purpose: Create React
  * App's Jest collects EVERY *.js under __tests__/ as a suite, so a helper there
  * would fail with "must contain at least one test". It is not imported by any
- * production module — only by the DAL test files.
+ * production module - only by the DAL test files.
  *
  * It is coupled ONLY to the `-- @qid:<name>` markers the DAL emits, not to the
  * SQL text, so the tests exercise the DAL's real query routing without a live
  * Postgres. It enforces the shape the DAL relies on (BIGSERIAL ids, JSONB
- * columns round-tripping as JS values) and offers NO update/delete entry point —
+ * columns round-tripping as JS values) and offers NO update/delete entry point -
  * the only way a row changes is a fresh insert, mirroring the append-only table.
  */
 

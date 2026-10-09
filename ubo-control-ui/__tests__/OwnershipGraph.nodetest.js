@@ -40,7 +40,7 @@ function graphProjection(entityIds, relationshipDefinitions) {
   return base;
 }
 
-test("UI01–UI12 committed projection fixtures render without error", () => {
+test("UI01-UI12 committed projection fixtures render without error", () => {
   fixtures.fixtures.forEach((fixture) => fixture.states.forEach((state) => {
     const rendered = renderGraph(state.projection, { detailLevel: DETAIL_LEVEL.EXPLAIN });
     try {
@@ -114,11 +114,11 @@ test("economic, voting, appointment and trust relationships remain visibly disti
 
 test("EXACT, RANGE and UNKNOWN displays preserve projection semantics", () => {
   assert.equal(formatMeasurement({ type: "EXACT", value: 40 }, true), "40%");
-  assert.equal(formatMeasurement({ type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }), "25–50%");
+  assert.equal(formatMeasurement({ type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }), "25-50%");
   assert.equal(formatMeasurement({ type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }, true), "(25%, 50%]");
   assert.equal(formatMeasurement({ type: "UNKNOWN", reason: "NOT_ESTABLISHED" }, true), "Unknown");
   const ranged = renderGraph(projection("UI04"));
-  try { assert.match(ranged.container.textContent, /25–50%/); } finally { ranged.cleanup(); }
+  try { assert.match(ranged.container.textContent, /25-50%/); } finally { ranged.cleanup(); }
   const unknown = renderGraph(projection("UI07"));
   try { assert.match(unknown.container.textContent, /Unknown/); } finally { unknown.cleanup(); }
 });
@@ -401,7 +401,7 @@ test("generic non-percentage control does not invent director semantics", () => 
     assert.equal(rendered.container.querySelector(".ug-edge-label").textContent, "Formal control right");
     rendered.click(rendered.container.querySelector("[data-relationship-id='generic-control']"));
     const details = rendered.container.querySelector(".ug-detail-panel").textContent;
-    assert.match(details, /Formal control right reported — details not available in this result/);
+    assert.match(details, /Formal control right reported - details not available in this result/);
     assert.doesNotMatch(details, /appoint or remove directors/i);
   } finally { rendered.cleanup(); }
 });

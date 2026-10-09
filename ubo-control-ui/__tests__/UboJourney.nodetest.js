@@ -31,7 +31,7 @@ test("host composition may expose a taller graph and its reusable selection deta
 test("confirmation preserves established information and does not request re-entry", () => {
   const rendered = render("CUI02");
   try {
-    assert.match(rendered.container.querySelector(".uj-known").textContent, /Alice Morgan — 40% ownership/);
+    assert.match(rendered.container.querySelector(".uj-known").textContent, /Alice Morgan - 40% ownership/);
     assert.equal(rendered.container.querySelectorAll(".uj-field input[type='text']").length, 0);
     assert.equal(rendered.container.querySelectorAll("input[type='radio']").length, 2);
   } finally { rendered.cleanup(); }

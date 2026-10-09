@@ -5,7 +5,7 @@
 // Builds an Evidence envelope of REFERENCES + PROVENANCE ONLY and appends it to
 // the append-only outbox. The envelope carries the opaque Vault reference, the
 // external-evidence references (external custody), the non-PII observations and
-// provider-decision refs, IDs and timestamps — never plaintext identity, never
+// provider-decision refs, IDs and timestamps - never plaintext identity, never
 // biometrics, never scores. There is deliberately NO consumer here: nothing
 // reads the outbox or calls the Evidence Platform until the Evidence Control
 // Room approves the contract (BACKLOG EVID-1).
@@ -67,7 +67,7 @@ function buildEvidenceEnvelope({ attemptId, secureIdentityReference, verificatio
     external_evidence_references: vr.externalReferences || [],
     timestamps: vr.timestamps || {},
     officer_reference: officerReference || null,
-    // Provider outcome only — NOT a KYC approval.
+    // Provider outcome only - NOT a KYC approval.
     provider_verified: vr.providerVerified === true,
     idempotency_key: idempotencyKey || defaultIdempotencyKey(attemptId, vr),
   };

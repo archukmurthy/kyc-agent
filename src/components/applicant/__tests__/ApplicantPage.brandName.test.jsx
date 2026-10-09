@@ -1,15 +1,15 @@
 /**
- * ApplicantPage.brandName.test.jsx — Part A gap #4 (task 14).
+ * ApplicantPage.brandName.test.jsx - Part A gap #4 (task 14).
  *
  * ApplicantPage reuses DocumentUploadCard (exported by Step2DynamicForm.jsx)
  * at three call sites without passing brandName, so those cards fall back to
- * generic "we"/"Auto-sourced" copy instead of the tenant's brand — the same
+ * generic "we"/"Auto-sourced" copy instead of the tenant's brand - the same
  * convention App.js already applies when it renders Step2DynamicForm itself
  * (brandName={companyName_}). This test isolates just that prop hand-off: it
  * stubs DocumentUploadCard so it can observe exactly what brandName each call
  * site receives, independent of the isSelfSourced/badge logic inside the real
  * component (the signatoryIdItem/authorityToActItem docs are always
- * client-provided today, so the badge text itself never changes — the prop
+ * client-provided today, so the badge text itself never changes - the prop
  * threading is what this guards).
  */
 
@@ -79,6 +79,6 @@ test("the Signatory ID upload card receives the tenant's brand name", async () =
   await driveToApplicant();
   const card = screen.getByTestId("doc-card-Signatory ID");
   // Offline fallback config has no tenant company name, so brandName falls
-  // back to the tenant id ("nium") — either way it must NOT be empty/"(none)".
+  // back to the tenant id ("nium") - either way it must NOT be empty/"(none)".
   expect(card.textContent).not.toBe("brandName:(none)");
 });

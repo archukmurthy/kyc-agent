@@ -1,5 +1,5 @@
 /**
- * JourneyPicker.render.test.jsx — CHARACTERISATION of the journey-selection
+ * JourneyPicker.render.test.jsx - CHARACTERISATION of the journey-selection
  * screen ("How would you like to complete your application?") while it is still
  * inline JSX in App.js, at {step === STEPS.input && journeyOpen}.
  *
@@ -12,13 +12,13 @@
  * means a broken move.
  *
  * SCOPE: the PICKER only. This drives THROUGH Company Lookup to reach it, but
- * asserts nothing about the lookup screen's own behaviour — that screen gets its
+ * asserts nothing about the lookup screen's own behaviour - that screen gets its
  * own net in C slice 2. The only lookup facts touched here are the four required
  * fields the driver must fill to unlock Continue.
  *
  * The screen cannot be rendered in isolation (it closes over App's journey
  * state, the search-cap policy and the research kickoff functions), so this
- * drives the REAL app, the same harness ApplicantPage/FillGapsPage use —
+ * drives the REAL app, the same harness ApplicantPage/FillGapsPage use -
  * deliberately mirrored rather than reinvented.
  *
  * ROUTING IS THE POINT. A picker that renders perfectly but routes card B to the
@@ -37,7 +37,7 @@
  *   no ?demo / no storage→ demoMode starts FALSE, so card D (registry) is ABSENT
  *   jsdom host localhost → demoToggleVisible === true, so the DemoToggle IS
  *                          mounted and demo mode is reachable by clicking it
- *                          (a user-facing control — no production flag is
+ *                          (a user-facing control - no production flag is
  *                          flipped to reach the demo assertions below).
  *   SHOW_NIUM_REG_PANEL  → false, pinned as a NEGATIVE so a flag flip becomes a
  *                          visible test change rather than a silent one.
@@ -46,14 +46,14 @@
  *   The locked search-cap state, from this driver. seededBy only becomes
  *   "customer" after a foundational-fact correction on the Applicant page, and
  *   searchAttempts is then set from the server's count (/api/search-attempt or
- *   /api/research-attempt) — this net never corrects a fact, so it stays 0 and
+ *   /api/research-attempt) - this net never corrects a fact, so it stays 0 and
  *   evaluateSearchCap never returns locked/isSecondAttempt here (the cap is
  *   covered by the correction tests). The unlocked state is characterised instead, as a
  *   positive assertion that NEITHER banner renders and NO card is disabled.
  *
  * CHARACTERISATION, not specification: these assert what the picker does TODAY.
  * A surprising assertion is a recorded fact. After the extraction this file must
- * stay green UNCHANGED — editing it to make the move pass defeats the point.
+ * stay green UNCHANGED - editing it to make the move pass defeats the point.
  */
 
 import React from "react";
@@ -69,7 +69,7 @@ let openSpy;
 beforeEach(() => {
   // /api/config, track-event and ipify fire on mount. Rejecting them makes the
   // app fall back to buildLocalDefaultConfig(), which ships the Corporate:GB
-  // schema — deterministic, no network. The rejection is also what drives the
+  // schema - deterministic, no network. The rejection is also what drives the
   // research-failure path the B/E routing assertions land on.
   global.fetch = jest.fn(() => Promise.reject(new Error("offline test")));
   // Card C opens the manual form in a new tab; jsdom's window.open is a stub
@@ -106,7 +106,7 @@ const settle = async (ms = 5000) => {
  * Company Lookup → Continue → STOP on the journey picker.
  *
  * This is driveToApplicant's opening, but it clicks the real "Continue →"
- * instead of the Dummy Research shortcut — that shortcut is precisely what has
+ * instead of the Dummy Research shortcut - that shortcut is precisely what has
  * kept this screen uncovered, so using it here would defeat the net.
  */
 async function driveToPicker() {
@@ -124,7 +124,7 @@ async function driveToPicker() {
   });
   pickOption("🏛 Corporate");
 
-  // SearchableSelect opens on FOCUS, not click — fireEvent.click does not focus
+  // SearchableSelect opens on FOCUS, not click - fireEvent.click does not focus
   // in jsdom.
   fireEvent.focus(screen.getByPlaceholderText(/Select ownership type/i));
   pickOption("Private Limited Company");
@@ -160,7 +160,7 @@ const CARD_E = "Run for max prefill";
 // Task 13: Card C only renders when the tenant configured its own manual
 // application form URL (App.js manualFormUrl_ / JourneyPicker's manualFormUrl
 // prop). The suite's default fetch mock (see beforeEach above) falls back to
-// buildLocalDefaultConfig(), which ships an empty manualFormUrl by design —
+// buildLocalDefaultConfig(), which ships an empty manualFormUrl by design -
 // so by default Card C is ABSENT. Tests that exercise Card C's own behaviour
 // opt in via this helper, which makes only /api/config resolve (with a
 // manual form URL configured), leaving every other endpoint rejecting exactly
@@ -315,7 +315,7 @@ describe("Continue with nothing selected", () => {
     fireEvent.click(continueBtn());
     await settle(0);
     expect(screen.getByText("Please choose an option to continue.")).toBeInTheDocument();
-    // Still on the picker — no routing happened.
+    // Still on the picker - no routing happened.
     expect(
       screen.getByRole("heading", {
         name: /How would you like to complete your application\?/,
@@ -412,7 +412,7 @@ describe("routing - card B (AI research only)", () => {
 });
 
 describe("routing - card C (manual form)", () => {
-  // Card C only renders once the tenant has configured a manual form URL —
+  // Card C only renders once the tenant has configured a manual form URL -
   // see withManualFormUrlConfigured() above.
   beforeEach(() => {
     withManualFormUrlConfigured();
@@ -493,7 +493,7 @@ describe("demo-mode short-circuit", () => {
     await settle(5000);
 
     // doDummyResearch("ai_documents") synthesises the result and jumps straight
-    // to the Applicant step — the Documents step is never rendered.
+    // to the Applicant step - the Documents step is never rendered.
     expect(screen.getByText("Tell us about yourself")).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { level: 2, name: "Upload your documents" })
@@ -645,7 +645,7 @@ describe("SHOW_NIUM_REG_PANEL is false - the reg-resolver panel must not render"
     await enableDemoMode();
     // The panel is gated `SHOW_NIUM_REG_PANEL && (demoMode || ?test=1)`. Demo
     // mode satisfies the second half; the flag alone keeps it hidden. If this
-    // goes green-to-red, someone flipped the flag — which is the point.
+    // goes green-to-red, someone flipped the flag - which is the point.
     expect(
       screen.queryByRole("button", { name: /Find from name/i })
     ).not.toBeInTheDocument();

@@ -2,7 +2,7 @@
 
 // Versioned name-equivalence rule tables (Phase 6). Each rule carries a stable
 // ID so a resolved case can record exactly which rule (and version) explained
-// it — the doc requires decisions to be reconstructable. Pure data + helpers.
+// it - the doc requires decisions to be reconstructable. Pure data + helpers.
 
 const RULE_TABLE_VERSION = "name-rules-1.0.0";
 

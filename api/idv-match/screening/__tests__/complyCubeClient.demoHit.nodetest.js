@@ -1,7 +1,7 @@
 "use strict";
 
 // DEMO-ONLY force-hit affordance: proves the sandbox trigger word CAN be
-// injected under mode=test + the flag, and — the safety-critical case —
+// injected under mode=test + the flag, and - the safety-critical case -
 // CANNOT fire when mode=live, even with the flag set.
 const { test, afterEach } = require("node:test");
 const assert = require("node:assert");
@@ -45,7 +45,7 @@ test("demoHit: mode=test + flag unset leaves lastName untouched", async () => {
   assert.strictEqual(calls.clientReq.personDetails.lastName, "Smith");
 });
 
-test("demoHit: mode=live + flag=1 is IGNORED — override never fires in live mode", async () => {
+test("demoHit: mode=live + flag=1 is IGNORED - override never fires in live mode", async () => {
   process.env.SCREENING_RUNTIME_MODE = "live";
   process.env.SCREENING_DEMO_FORCE_HIT = "1";
   const { cc, calls } = stubClient();

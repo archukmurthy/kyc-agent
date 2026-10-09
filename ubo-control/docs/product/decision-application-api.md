@@ -32,7 +32,7 @@ Customer ownership/control statements become customer-originated candidate facts
 
 A confirmation records `confirmationDoesNotReplaceIndependentEvidence: true` and an `independentEvidenceRequirementState` of `SATISFIED`, `OPEN`, `NOT_APPLICABLE`, or `REVIEW_REQUIRED`. That state is a direct mapping of the pinned Snapshot v2 `UBO-R08` RequirementResolution v2 record; `applyCustomerInput` performs no evidence-sufficiency recalculation. Confirmation never changes R08 and does not falsely request evidence when R08 is already satisfied or not applicable.
 
-`EVIDENCE_ACTION_REQUESTED` records no fact. It returns a correlated external handoff containing semantic evidence types and case/bundle/action/need/requirement/subject references—never a file, Blob URL, bytes or invented Artifact ID.
+`EVIDENCE_ACTION_REQUESTED` records no fact. It returns a correlated external handoff containing semantic evidence types and case/bundle/action/need/requirement/subject references-never a file, Blob URL, bytes or invented Artifact ID.
 
 `evaluate` accepts current state, host-neutral case context, explicit evaluation time, checkpoint/reference, and approved Gate 2 `resolutionInputs`. V3 additionally accepts an optional date-only `assessmentDate`; evaluation time remains the actual evaluation/snapshot time. A recorded accepted review affects only covered relationships when its supported date exactly matches the requested assessment date. A later date never inherits continuity automatically. V2 merges recorded customer answers and preparatory data as authoritative application inputs. Evaluation rejects undecided candidate parties or claims, privately restores the case, builds the graph, derives calculations, runs the fresh reasoning pipeline, and returns only:
 

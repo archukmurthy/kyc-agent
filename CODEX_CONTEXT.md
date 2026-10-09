@@ -1,4 +1,4 @@
-CODEX SESSION CONTEXT — Intelligence-Led KYC/KYB Onboarding Platform
+CODEX SESSION CONTEXT - Intelligence-Led KYC/KYB Onboarding Platform
 Read this before starting any work. Do not skip it.
 
 ═══════════════════════════════════════
@@ -13,7 +13,7 @@ collects remaining information from the
 customer.
 
 Stack:
-  React/Vite frontend (src/App.js — 4000+ lines)
+  React/Vite frontend (src/App.js - 4000+ lines)
   Vercel Serverless Functions (api/*.js)
   Neon Postgres (22 tables)
   Anthropic Claude API (claude-sonnet-4-20250514)
@@ -23,7 +23,7 @@ Live URL: https://kyc-agent-deploy.vercel.app
 Repo: archukmurthy-3271s-projects/kyc-agent-deploy
 
 ═══════════════════════════════════════
-WORKTREE SETUP — DO THIS FIRST
+WORKTREE SETUP - DO THIS FIRST
 ═══════════════════════════════════════
 
 Extractions and refactors run in a git
@@ -45,7 +45,7 @@ reads as a self-inflicted regression.
 
 2. BASELINE THE RENDER SUITE BEFORE EDITING
    In a worktree the JSX render suites fail
-   with "Invalid hook call — more than one
+   with "Invalid hook call - more than one
    copy of React". The worktree has no
    @testing-library/react, so it resolves
    from the parent repo and drags the
@@ -53,7 +53,7 @@ reads as a self-inflicted regression.
    worktree's react. Both are the same
    version: duplicate INSTANCES, not a
    version clash. Do not hunt for a version
-   mismatch — there isn't one.
+   mismatch - there isn't one.
 
    Pin them at run time. No committed file
    change, no package install:
@@ -63,7 +63,7 @@ reads as a self-inflicted regression.
        --moduleNameMapper='{"^react$":"<rootDir>/node_modules/react","^react-dom$":"<rootDir>/node_modules/react-dom","^react-dom/(.*)$":"<rootDir>/node_modules/react-dom/$1","^react/(.*)$":"<rootDir>/node_modules/react/$1"}'
 
    RUN IT BEFORE TOUCHING ANY CODE. Unmapped
-   it is ~101 red of 374 — all 5 render
+   it is ~101 red of 374 - all 5 render
    suites, none of it your doing. That
    baseline is the only thing that makes a
    LATER red attributable to your change.
@@ -75,7 +75,7 @@ reads as a self-inflicted regression.
    it into the worktree first. It must give:
 
      TEST_DATABASE_URL
-       a DISPOSABLE Neon branch — never the
+       a DISPOSABLE Neon branch - never the
        application database
      REAL_DB_SMOKE_CONFIRM
        = I_UNDERSTAND_TEST_DATA_WILL_BE_WRITTEN
@@ -84,12 +84,12 @@ reads as a self-inflicted regression.
    TEST_DATABASE_URL normalises to
    DATABASE_URL (requireSafeTestDatabase in
    scripts/real-db-smoke.js). A hard guard,
-   not a convention — still set it correctly
+   not a convention - still set it correctly
    rather than leaning on it.
 
    The sibling .env.local (dev server) has the
    same non-inheritance trap, and can be
-   PRESENT but STALE — rotated Neon credential,
+   PRESENT but STALE - rotated Neon credential,
    missing BLOB_READ_WRITE_TOKEN. That breaks
    pre-boarding, because save-dossier is its
    spine, and it looks exactly like a broken
@@ -106,43 +106,43 @@ reads as a self-inflicted regression.
    nothing.
 
 ═══════════════════════════════════════
-PARALLEL-EDIT SAFETY — TWO AGENTS, SHARED FILES
+PARALLEL-EDIT SAFETY - TWO AGENTS, SHARED FILES
 ═════════════════════
 
-Two agents must NEVER edit src/App.js — or any
-shared file — concurrently in the same working
+Two agents must NEVER edit src/App.js - or any
+shared file - concurrently in the same working
 tree.
 
 Concurrent edits RACE. An agent that trusts its
 line numbers (the normal, reasonable thing) will
 silently overwrite the other agent's edit. The
 result is a regression found later, when tests
-go red for no explicable reason — exactly the
+go red for no explicable reason - exactly the
 silent failure the net-first discipline exists
 to prevent.
 
 Not hypothetical. During the A‖C extraction
 (AIDocumentsPage ‖ JourneyPicker) both agents
 believed they were in separate worktrees. They
-were not — both edited C:\kyc-agent-deploy
+were not - both edited C:\kyc-agent-deploy
 directly. App.js shifted twice mid-surgery
 (6944 → 6704 → 6707). The pair landed green
 ONLY because one agent had improvised the
 guards below. Without them the second move
 would have destroyed the first.
 
-PICK ONE — MANDATORY for any parallel pair
+PICK ONE - MANDATORY for any parallel pair
 that touches App.js. There is no third option.
 
 1. GENUINE git worktree isolation. Each agent
-   in a real, separate checkout — its own path
+   in a real, separate checkout - its own path
    with its own working tree. Merge at the end:
    first agent merges to main, second REBASES
    onto it, and the SECOND agent runs BOTH
    nets, because one page's net driver may
    thread through the other's component. (The
    AI-Documents net drives through the journey
-   picker to reach its step — a real instance.)
+   picker to reach its step - a real instance.)
 
    VERIFY the isolation before relying on it. A
    .claude/worktrees or .codex-worktrees path
@@ -156,7 +156,7 @@ that touches App.js. There is no third option.
    Only the App.js call-site + import edits
    race. So author both components and nets in
    parallel, then apply the two App.js edits
-   one at a time — first agent's move and
+   one at a time - first agent's move and
    merge, then the second re-anchors BY SYMBOL
    against the updated App.js.
 
@@ -167,7 +167,7 @@ App.js edit. Cost of serializing: one extra
 sequential step. Cost of getting it wrong:
 silently clobbering another agent's work.
 
-STANDARD DEFENSES — default, not improvised.
+STANDARD DEFENSES - default, not improvised.
 Any App.js edit that could run under
 concurrency must do all three:
 
@@ -176,7 +176,7 @@ concurrency must do all three:
     a read taken minutes ago are already stale.
   - DIFF-VERIFY the moved region is
     byte-identical to source before installing.
-    If it drifted, someone else edited it —
+    If it drifted, someone else edited it -
     abort.
   - CHECKSUM-GUARD the target. Record App.js's
     hash before the rebuild; if it differs at
@@ -188,7 +188,7 @@ concurrency must do all three:
 THE TWO AGENTS
 ═══════════════════════════════════════
 
-ONBOARDING AGENT (main flow — fully built)
+ONBOARDING AGENT (main flow - fully built)
   Customer journey:
   Company → Research → Applicant →
   Confirm → Fill Gaps → Required Docs →
@@ -198,23 +198,23 @@ ONBOARDING AGENT (main flow — fully built)
   page where the customer identifies themselves
   from a dropdown of known directors/UBOs.
 
-PRE-BOARDING AGENT (analyst tool — built)
+PRE-BOARDING AGENT (analyst tool - built)
   Analyst runs research on a company before
   the customer is invited. Saves a dossier.
   Analyst sends an invite link. Customer
   clicks the link and starts at the Applicant
-  step — the dossier pre-populates everything.
+  step - the dossier pre-populates everything.
 
   Access: /preboarding?tenant=<id>
   The analyst password is checked
   server-side only, from the
-  PREBOARDING_PASSWORD env var — it is
+  PREBOARDING_PASSWORD env var - it is
   never in the client bundle or in this
   file. The tenant must exist, be active
   and have pre-boarding switched on.
 
 ═══════════════════════════════════════
-THE DATABASE — TWO SEPARATE STORES
+THE DATABASE - TWO SEPARATE STORES
 ═══════════════════════════════════════
 
 entity_dossiers
@@ -232,7 +232,7 @@ session_timeline
   Written during and after onboarding.
 
 journey_state
-  NOT YET BUILT — planned for week of
+  NOT YET BUILT - planned for week of
   28 Jun 2026. Will store customer form
   progress for save-and-resume.
 
@@ -240,7 +240,7 @@ NEVER merge entity_dossiers and journey_state.
 They are intentionally separate.
 
 ═══════════════════════════════════════
-CRITICAL FUNCTION — loadDossierAndStartOnboarding()
+CRITICAL FUNCTION - loadDossierAndStartOnboarding()
 ═══════════════════════════════════════
 
 This function runs when a customer clicks
@@ -276,7 +276,7 @@ ON THIS BRANCH (codex/ubo-discovery-framework):
 
 1. Companies House Officers API (commit 047878c)
    BUILT BUT NOT WORKING YET.
-   Requires a REST/Public Data API key —
+   Requires a REST/Public Data API key -
    the current COMPANIES_HOUSE_API_KEY is
    a Streaming key and returns 401.
    When the correct key is provided, this
@@ -289,7 +289,7 @@ ON THIS BRANCH (codex/ubo-discovery-framework):
           src/pipeline.js on this branch)
 
 2. UBO Discovery Framework
-   BUILT — not yet merged to main.
+   BUILT - not yet merged to main.
    Full agent package for beneficial ownership
    analysis. Separate from the main KYC flow.
    Files: agents/ubo/*
@@ -321,13 +321,13 @@ See AGENTS.md in the repo root for the
 full DO NOT TOUCH list and all build rules.
 
 Key ones for Codex specifically:
-  src/App.js — touch ONLY the function
+  src/App.js - touch ONLY the function
     named in your task
-  api/research.js — changes here affect
+  api/research.js - changes here affect
     the entire research pipeline
-  src/pipeline.js — prompt builder,
+  src/pipeline.js - prompt builder,
     director validation, schema definitions
-  db/migrations/*.sql — never modify
+  db/migrations/*.sql - never modify
     existing migrations
 
 ═══════════════════════════════════════

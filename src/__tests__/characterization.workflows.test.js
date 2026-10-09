@@ -1,5 +1,5 @@
 /**
- * characterization.workflows.test.js — pins the Phase 3 workflow modules to
+ * characterization.workflows.test.js - pins the Phase 3 workflow modules to
  * the pre-refactor behaviour captured from App.js.
  */
 import {

@@ -8,12 +8,12 @@ import SchemaImportModal from "./SchemaImportModal";
 // edit offline and re-upload). The Import side opens the multi-stage modal.
 //
 // Props:
-//   existingSchema     — codebase-shape schema (or null) for the active cell
-//   entityTypeName     — used for the export filename
-//   licenceName        — used for the export filename
-//   onImport(schema, mode) — apply callback; mode is "replace" | "merge"
-//   variant            — "full" (default, both buttons) | "importOnly"
-//   buttonStyle        — additional CSS overrides for both buttons
+//   existingSchema     - codebase-shape schema (or null) for the active cell
+//   entityTypeName     - used for the export filename
+//   licenceName        - used for the export filename
+//   onImport(schema, mode) - apply callback; mode is "replace" | "merge"
+//   variant            - "full" (default, both buttons) | "importOnly"
+//   buttonStyle        - additional CSS overrides for both buttons
 export default function SchemaImportButton({
   existingSchema,
   entityTypeName = "",

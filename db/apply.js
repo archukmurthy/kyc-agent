@@ -44,7 +44,7 @@ async function apply() {
   // fragments and left the audit ledger unprotected (review).
   const statements = statementsOf(content);
 
-  console.log(`Applying ${file} — ${statements.length} statement(s)\n`);
+  console.log(`Applying ${file} - ${statements.length} statement(s)\n`);
 
   let n = 0;
   for (const stmt of statements) {

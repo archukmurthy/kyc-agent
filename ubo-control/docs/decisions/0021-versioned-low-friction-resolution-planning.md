@@ -1,4 +1,4 @@
-# Decision 0021 — Versioned low-friction resolution planning
+# Decision 0021 - Versioned low-friction resolution planning
 
 **Status:** Proposed for G5.2B acceptance.
 

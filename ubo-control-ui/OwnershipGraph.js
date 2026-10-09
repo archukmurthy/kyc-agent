@@ -183,7 +183,7 @@
     if (!measurement || measurement.type === "UNKNOWN") return "Unknown";
     if (measurement.type === "EXACT") return `${measurement.value}%`;
     if (measurement.type === "RANGE") {
-      if (!detailed) return `${measurement.lowerBound}–${measurement.upperBound}%`;
+      if (!detailed) return `${measurement.lowerBound}-${measurement.upperBound}%`;
       return `${measurement.lowerInclusive ? "[" : "("}${measurement.lowerBound}%, ${measurement.upperBound}%${measurement.upperInclusive ? "]" : ")"}`;
     }
     return "Unknown";
@@ -194,7 +194,7 @@
     const sourceNature = String(relationship.qualifiers?.sourceNatureOfControl || "").toLowerCase();
     if (sourceNature.includes("right-to-appoint-and-remove-directors")) return "Right to appoint or remove directors";
     if (sourceNature.includes("right-to-appoint-and-remove-person")) return "Right to appoint or remove persons";
-    if (relationship.relationshipType === "FORMAL_CONTROL_RIGHT" && !relationship.measurement) return "Formal control right reported — details not available in this result";
+    if (relationship.relationshipType === "FORMAL_CONTROL_RIGHT" && !relationship.measurement) return "Formal control right reported - details not available in this result";
     return relationshipLabel(relationship.relationshipType);
   }
 
@@ -572,7 +572,7 @@
     const registry = node.registryContext || null;
     return h(React.Fragment, null,
       h("p", { className: "ug-selection-context" }, node.entityId === projection.subject.entityId
-        ? "Customer under review — showing relationships that reach this entity"
+        ? "Customer under review - showing relationships that reach this entity"
         : `Showing this entity's relationships and route to ${projection.subject.displayName}`),
       h("div", { className: "ug-detail-heading" }, h("span", { className: `ug-detail-icon ${category.css}` }, category.icon), h("div", null,
         h("p", { className: "ug-eyebrow" }, category.label), h("h3", null, node.displayName),
@@ -910,7 +910,7 @@
           projection.relationships.length === 0 && h("div", { className: "ug-empty-overlay", role: "status" }, h("strong", null, "Ownership/control unresolved"), h("span", null, "No safe relationship is established yet; the customer subject remains visible.")),
           stateButtons.length > 0 && h("div", { className: "ug-state-strip", "aria-label": "Conflict and review states" }, stateButtons.map((item) => h("button", { type: "button", key: `${item.kind}:${item.id}`, className: item.css, onClick: () => select({ kind: item.kind, id: item.id }) }, item.label)))),
         (!collapseIdleInspector || selection) && h(DetailPanel, { selection, projection, detailLevel, onSelect: select, onClear: clearSelection, panelRef })),
-      h("div", { className: "ug-sr-only" }, h("h3", null, "Text description of ownership and control graph"), h("p", null, `${projection.subject.displayName} is the customer subject. ${projection.qualifications.length} qualifying people are recorded. ${projection.unresolved.length} ownership or control items remain unresolved.`), h("ul", null, projection.relationships.map((relationship) => h("li", { key: relationship.relationshipId }, `${nodesById.get(relationship.sourceEntityId)?.displayName} — ${relationshipBasis(relationship)}, ${relationshipValue(relationship, true)} — ${nodesById.get(relationship.targetEntityId)?.displayName}`)))));
+      h("div", { className: "ug-sr-only" }, h("h3", null, "Text description of ownership and control graph"), h("p", null, `${projection.subject.displayName} is the customer subject. ${projection.qualifications.length} qualifying people are recorded. ${projection.unresolved.length} ownership or control items remain unresolved.`), h("ul", null, projection.relationships.map((relationship) => h("li", { key: relationship.relationshipId }, `${nodesById.get(relationship.sourceEntityId)?.displayName} - ${relationshipBasis(relationship)}, ${relationshipValue(relationship, true)} - ${nodesById.get(relationship.targetEntityId)?.displayName}`)))));
   }
 
   return Object.freeze({ CONTRACT_VERSION, REVIEW_CONTRACT_VERSION, DETAIL_LEVEL, VIEW_MODE, OwnershipGraph, assertProjection, basisLabel, computeLayout, entityRelationshipContext, fitScale, fitWidthScale, formatMeasurement, normalizeReviewProjection, parallelRelationshipOffset, pathExpression, relationshipBasis, relationshipEdgeLabel, relationshipLabel, relationshipValue, roleLabel });

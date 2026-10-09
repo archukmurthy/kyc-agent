@@ -40,7 +40,7 @@ const req = (submissionId) => ({ method: "GET", query: { submissionId }, headers
 test("a read failure reports a fixed code, never the raw error text", async () => {
   handler.__setDeps({
     neon: () => () => Promise.resolve([]),
-    getEventsBySubmission: async () => { throw new Error("connection terminated unexpectedly — internal detail"); },
+    getEventsBySubmission: async () => { throw new Error("connection terminated unexpectedly - internal detail"); },
     deriveAmendmentDocuments: () => [],
     access: accessWith({ kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" }),
   });
@@ -66,7 +66,7 @@ test("a dossier's documents need a credential", async () => {
   assert.strictEqual(res.body.documents, undefined);
 });
 
-test("a soft-deleted dossier's id still requires a credential — it is not a fresh application", async () => {
+test("a soft-deleted dossier's id still requires a credential - it is not a fresh application", async () => {
   handler.__setDeps(deps({ ...ROW, status: "deleted" }, { kind: "none", tenantId: null, dossierId: null, reason: "unauthorized" }));
   const res = fakeRes();
   await handler(req("d-1"), res);

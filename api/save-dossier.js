@@ -2,18 +2,18 @@
 //
 // CommonJS (module.exports), not `export default`, so src/setupProxy.js can
 // require() it for local `npm start` (mirrors api/submit.js, api/track-event.js).
-// Always returns 200 on a database failure — a save failure must never block
-// the analyst — but authorisation failures are proper 4xx.
+// Always returns 200 on a database failure - a save failure must never block
+// the analyst - but authorisation failures are proper 4xx.
 //
 // Callers must hold an analyst or customer credential (lib/dossierAccess.js).
-// The tenant comes from the credential only — a request body can no longer
+// The tenant comes from the credential only - a request body can no longer
 // name (or create) a tenant. A customer may only refresh its own dossier
 // (never create one, never touch another); its write flips `owned_by` to
 // 'customer', after which an analyst can no longer write that row.
 // Every UPDATE first appends the current row to entity_dossier_versions (migration 027).
 //
 // Upsert-by-id: a caller that already has a dossierId (a re-research / an
-// analyst "Update" re-save) must refresh THAT row, never insert a second one —
+// analyst "Update" re-save) must refresh THAT row, never insert a second one -
 // an invite link may already embed the original id, and a blind INSERT would
 // orphan it. `dossierId` is optional and additive; a caller that omits it (the
 // original contract) still gets a plain INSERT.
@@ -22,7 +22,7 @@ const { neon } = require("@neondatabase/serverless");
 const dossierAccess = require("../lib/dossierAccess");
 const { enforceRateLimit } = require("../lib/rateLimit");
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { neon, access: dossierAccess };
 
 module.exports = async function handler(req, res) {
@@ -32,7 +32,7 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Credential first. The tenant comes from the credential ONLY — a request
+  // Credential first. The tenant comes from the credential ONLY - a request
   // body can no longer name (or create) a tenant.
   const actor = await _deps.access.resolveDossierActor(req);
   if (actor.kind === "none") {
@@ -111,12 +111,12 @@ module.exports = async function handler(req, res) {
 
     const isCustomer = actor.kind === "customer";
 
-    // Why this version is being replaced — whitelisted, never free text.
+    // Why this version is being replaced - whitelisted, never free text.
     const SAVE_REASONS = ["customer_correction", "analyst_update", "customer_update"];
     const reason = SAVE_REASONS.includes(saveReason) ? saveReason : isCustomer ? "customer_update" : "analyst_update";
 
     // Ensure the Postgres tenants row exists (slug is NOT NULL). The tenant id
-    // here is the VERIFIED one from the credential — the historical hole was
+    // here is the VERIFIED one from the credential - the historical hole was
     // that it came from the request body, letting any caller create tenants.
     await sql`
       INSERT INTO tenants (id, name, slug)
@@ -132,13 +132,13 @@ module.exports = async function handler(req, res) {
       // ownership at write time: the permission check above ran against a
       // SELECT taken moments earlier, and an analyst's write can otherwise
       // race a concurrent customer write that flips owned_by in between
-      // (TOCTOU) — the analyst's UPDATE would then silently land on a
+      // (TOCTOU) - the analyst's UPDATE would then silently land on a
       // dossier the customer has just taken over.
 
       // One atomic statement: snapshot the row as it is NOW into the
       // append-only history, then update it. The versions INSERT is a
-      // data-modifying CTE — Postgres executes it exactly once even though
-      // the outer UPDATE never references `snap` — and it shares the exact
+      // data-modifying CTE - Postgres executes it exactly once even though
+      // the outer UPDATE never references `snap` - and it shares the exact
       // same id/tenant/ownership re-check as the UPDATE below, so a write
       // that will be refused normally leaves no history row. Under READ
       // COMMITTED the UPDATE re-checks the latest row version while the
@@ -219,7 +219,7 @@ module.exports = async function handler(req, res) {
 
       if (rows.length === 0) {
         // The permission check above found the row, but the UPDATE matched
-        // none — owned_by flipped to 'customer' between the SELECT and this
+        // none - owned_by flipped to 'customer' between the SELECT and this
         // write. Fail closed: never fall through to the INSERT branch below,
         // which would silently create a duplicate dossier row instead of
         // reporting the lock.
@@ -231,7 +231,7 @@ module.exports = async function handler(req, res) {
 
     if (!existing) {
       // The caller has no id yet (first save), or the id it sent didn't
-      // match a row for this tenant (stale/foreign id) — insert fresh rather
+      // match a row for this tenant (stale/foreign id) - insert fresh rather
       // than silently dropping the save.
       rows = await sql`
       INSERT INTO entity_dossiers (

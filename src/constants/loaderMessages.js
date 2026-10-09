@@ -22,7 +22,7 @@ export const LOADER_MSGS_WOLFSBERG_PHASE2 = [
   "Almost done, compiling results…",
 ];
 
-// Documents-step loading messages — cycled every 8s while the doc-search and
+// Documents-step loading messages - cycled every 8s while the doc-search and
 // registry agents run, so the ~30-40s wait has live feedback.
 export const DOC_LOADER_MSGS = [
   "Searching for Wolfsberg Questionnaire and Annual Report...",

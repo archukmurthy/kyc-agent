@@ -2,7 +2,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert");
 
-// Pure unit test with an injected fake `sql` tag function — no live DB. The store
+// Pure unit test with an injected fake `sql` tag function - no live DB. The store
 // accepts an optional deps.sql so tests can capture the query + args.
 const store = require("../lib/submissionInboxStore");
 

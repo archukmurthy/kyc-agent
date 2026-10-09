@@ -2,17 +2,17 @@
 //
 // All reads/writes are scoped to the tenant resolved from the request via
 // lib/tenant.js (?tenant= query param, then x-tenant-id header; there is no
-// env fallback — no resolvable tenant is a 400). Each tenant has fully
+// env fallback - no resolvable tenant is a 400). Each tenant has fully
 // isolated config in KV.
 //
-// GET    — returns the current config for the resolved tenant. Seeds on
+// GET    - returns the current config for the resolved tenant. Seeds on
 //          first read: Nium tenant gets the default config; any other tenant
 //          gets a blank template.
-// POST   — replaces the current config (admin-authed). Archives previous
+// POST   - replaces the current config (admin-authed). Archives previous
 //          version. Refuses to publish an empty config for the Nium tenant
 //          to protect the seed.
-// PUT    — admin-only versions list (last 5).
-// DELETE — admin-only reset to defaults (Nium re-seeds; others get a fresh
+// PUT    - admin-only versions list (last 5).
+// DELETE - admin-only reset to defaults (Nium re-seeds; others get a fresh
 //          blank).
 //
 // Auth (see authorizeAdmin): each tenant authenticates against its own hashed
@@ -29,7 +29,7 @@ const adminAuth = require("../lib/adminAuth");
 const { applyCors } = require("../lib/routeAuth");
 const { PLATFORM_TENANT_IDS, entryIsProtected } = tenantRegistry;
 
-// Injected deps (overridable in tests via __setDeps) — mirrors api/submit.js.
+// Injected deps (overridable in tests via __setDeps) - mirrors api/submit.js.
 let _deps = { storage, registry: tenantRegistry };
 
 function configKey(tenant) {
@@ -53,7 +53,7 @@ function authorizeAdmin(tenant, token) {
 
 // Seed a tenant that doesn't yet have a config. Only tenants that exist (a
 // registry entry, or a pre-existing config from before the registry) are ever
-// seeded — a typo must not conjure a tenant into being.
+// seeded - a typo must not conjure a tenant into being.
 async function seedTenant(tenant, entry) {
   const seeded = entryIsProtected(entry) ? buildDefaultConfig(tenant) : buildBlankConfig(tenant);
   seeded._tenantId = tenant;
@@ -75,20 +75,20 @@ async function readConfig(tenant) {
   }
 
   // Single registry read serves both the "exists" and "protected" answers
-  // below — GET /api/config is hit on every page load, so this must not
+  // below - GET /api/config is hit on every page load, so this must not
   // fan out into multiple storage reads.
   //
   // Strict read, not findTenant: findTenant answers null for both "no entry"
   // and "registry unreadable", and treating an outage as "no entry" would run
   // the back-fill below. The back-fill and self-heal are opportunistic, so on
   // an unreadable registry serve the stored config untouched and write
-  // nothing — a customer page load must not 500 on a registry blip.
+  // nothing - a customer page load must not 500 on a registry blip.
   let reg;
   try {
     reg = await _deps.registry.readRegistryStrict();
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.warn(`tenant-registry unreadable — serving stored config for "${tenant}" without back-fill/self-heal:`, err && err.message);
+    console.warn(`tenant-registry unreadable - serving stored config for "${tenant}" without back-fill/self-heal:`, err && err.message);
     return stored;
   }
   let entry = reg.find((t) => t && t.tenantId === tenant) || null;
@@ -96,7 +96,7 @@ async function readConfig(tenant) {
   // Legacy tenant: it has a config but predates the registry. Back-fill the
   // entry so every later existence/protection check agrees with reality.
   // Platform tenants (e.g. "nium") must come back protected from the very
-  // first back-fill — the self-heal check right below reads this same
+  // first back-fill - the self-heal check right below reads this same
   // entry, so the protection decision has to be correct before that read.
   if (!entry) {
     const patch = {
@@ -120,11 +120,11 @@ async function readConfig(tenant) {
     const hasLicences = Array.isArray(stored.licences) && stored.licences.length > 0;
     if (!hasLicences) {
       // eslint-disable-next-line no-console
-      console.warn(`Protected tenant "${tenant}" config missing licences — self-healing from the default template`);
+      console.warn(`Protected tenant "${tenant}" config missing licences - self-healing from the default template`);
       // Archive the broken config first: self-heal must never be the only
       // copy of what was there (it used to overwrite silently). An unversioned
       // config has no number to archive under, and plain v0 would let a second
-      // corruption overwrite the first archive — so those get a timestamped
+      // corruption overwrite the first archive - so those get a timestamped
       // key instead. The versions list only parses plain `:v<n>`, so these
       // never masquerade as a rollback target.
       const archiveKey = stored._version
@@ -184,7 +184,7 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: "Invalid request body" });
       }
 
-      // Protected-tenant protection — refuse empty publishes that would wipe
+      // Protected-tenant protection - refuse empty publishes that would wipe
       // the live schemas. Self-healing only catches reads; this catches writes.
       if (await _deps.registry.isProtectedTenant(tenant)) {
         const lic = Array.isArray(body.licences) ? body.licences.length : 0;
@@ -241,7 +241,7 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === "PUT") {
-      // Versions list — admin-only. Returns last 5 archived versions newest-first.
+      // Versions list - admin-only. Returns last 5 archived versions newest-first.
       const auth = req.headers.authorization || "";
       const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
       if (!(await authorizeAdmin(tenant, token))) {
@@ -274,7 +274,7 @@ module.exports = async function handler(req, res) {
 module.exports.__setDeps = (d) => { _deps = { ..._deps, ...d }; };
 
 // Shared reader for other server modules (api/benchmark.js, api/research.js).
-// Returns null for an unknown tenant — callers decide how to respond.
+// Returns null for an unknown tenant - callers decide how to respond.
 module.exports.readConfigForTenant = readConfig;
 
 // Shared admin check for other server modules (api/research.js draft preview,

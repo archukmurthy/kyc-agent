@@ -1,5 +1,5 @@
 /**
- * stakeholderHelpers.js — the PURE parts of the Fill Gaps stakeholder cluster.
+ * stakeholderHelpers.js - the PURE parts of the Fill Gaps stakeholder cluster.
  *
  * Split out during slice 1 of the Fill Gaps extraction for the same reason
  * companyConfirm/peopleHelpers.js exists: these close over nothing in App's
@@ -10,7 +10,7 @@
  * fillTestData (which straddles both halves of the page and therefore moves
  * into neither).
  *
- * One implementation of each rule, imported twice — never copied.
+ * One implementation of each rule, imported twice - never copied.
  */
 
 export const stakeholderRequiredKeys = (s) => {

@@ -247,7 +247,7 @@ module.exports = async function handler(req, res) {
     applicant: applicantCatalogue(),
     preingestedEvidence: {
       fixtureId: "AJV2-EVIDENCE-01",
-      label: "BETTERCOMMS — PRE-INGESTED OWNERSHIP CHART",
+      label: "BETTERCOMMS - PRE-INGESTED OWNERSHIP CHART",
       productionAuthorized: false,
     },
   });

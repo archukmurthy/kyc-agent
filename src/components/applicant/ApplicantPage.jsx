@@ -1,15 +1,15 @@
 /**
- * ApplicantPage.jsx — the Applicant step of the onboarding wizard.
+ * ApplicantPage.jsx - the Applicant step of the onboarding wizard.
  *
  * EXTRACTED FROM App.js as a PURE MOVE, zero behaviour change. The seven
- * render-cluster functions and the two upload handlers moved here VERBATIM —
+ * render-cluster functions and the two upload handlers moved here VERBATIM -
  * the bodies below are the same text that ran in App.js. What changed is only
  * how they get their data: they used to close over App's scope, and now arrive
  * through the prop interface declared on the component.
  *
  * PROP NAMES DELIBERATELY MATCH THE OLD APP IDENTIFIERS, destructured back into
  * locals of the same name, so the moved bodies stay byte-identical. That is what
- * makes "zero behaviour change" checkable rather than merely claimed — the
+ * makes "zero behaviour change" checkable rather than merely claimed - the
  * oracle is ApplicantPage.render.test.jsx, which must stay green UNCHANGED.
  *
  * THIS COMPONENT OWNS NO STATE. Everything is drilled, following the convention
@@ -17,9 +17,9 @@
  *
  *   - The seven Applicant useStates stay in App.js because resetAll and the
  *     submit path (deriveApplicantProvenance) read them. Values AND setters are
- *     drilled. Moving them would rewire resetAll — that is not a pure move.
+ *     drilled. Moving them would rewire resetAll - that is not a pure move.
  *   - The seven fact-dispute functions stay in App.js and are drilled. Their
- *     resolutions write document requirements into the Fill Gaps checklist — a
+ *     resolutions write document requirements into the Fill Gaps checklist - a
  *     cross-page write that must remain App-owned.
  *   - gapRef is drilled AS A REF and setFormVersion as a callback. The manual
  *     invalidation pattern (write gapRef.current, then bump setFormVersion) is
@@ -100,7 +100,7 @@ export function ApplicantPage({
   setAuthorityToActFile,
   signatoryIdFile,
   setSignatoryIdFile,
-  // ── shared gap machinery — gapRef AS A REF, setFormVersion as a callback ──
+  // ── shared gap machinery - gapRef AS A REF, setFormVersion as a callback ──
   gapRef,
   setFormVersion,
   getCombinedGaps,
@@ -215,7 +215,7 @@ export function ApplicantPage({
 
   // The applicant gap fields (first/last name, email, mobile, job title, DOB,
   // nationality, PEP) rendered as a standalone block. Same StableInput rendering
-  // the Fill Gaps applicant section used — extracted here now that Applicant is
+  // the Fill Gaps applicant section used - extracted here now that Applicant is
   // its own step.
   const renderApplicantFields = ({ exclude } = {}) => {
     const schemaItems = getCombinedGaps()
@@ -248,7 +248,7 @@ export function ApplicantPage({
   };
 
   // Testing-only: auto-complete the applicant form with sample data. Mirrors
-  // fillTestData (Fill Gaps) — pulls from TEST_DATA, keeps any value already
+  // fillTestData (Fill Gaps) - pulls from TEST_DATA, keeps any value already
   // entered, and falls back to sensible values for schema fields not in
   // TEST_DATA. Gated by SHOW_TEST_TOOLS at the button, so prod never sees it.
   const fillApplicantTestData = () => {
@@ -301,7 +301,7 @@ export function ApplicantPage({
   const renderApplicantPage = () => {
     // The five foundational facts used to research the company. Reg-number
     // provenance (G2) is gated on the EXPLICIT `regNumberSource` flag, never on
-    // `regNumber` truthiness — so a number restored from a loaded dossier (the
+    // `regNumber` truthiness - so a number restored from a loaded dossier (the
     // token link journey, which leaves the source null) is treated as
     // system-retrieved and stays verifiable, not locked as "you provided this".
     // A customer-typed number (source === "customer") is pre-confirmed and
@@ -356,7 +356,7 @@ export function ApplicantPage({
         label: "Ownership type",
         // After a genuine ownership change is resolved, reflect the NEW type the
         // customer selected (the stored `ownershipType` is intentionally left
-        // unchanged — reshaping the schema/questions off the new type is PR-049),
+        // unchanged - reshaping the schema/questions off the new type is PR-049),
         // and note that the supporting documents were added to Fill Gaps.
         value: ownershipChangeDeclared?.to
           ? ownershipChangeDeclared.to
@@ -377,7 +377,7 @@ export function ApplicantPage({
     const regNumberDisputed = factChecks.registrationNumber === false;
     const factsConfirmed = !fourDisputed && !ownershipDisputed && !regNumberDisputed && ownershipFork === null && regNumberFork === null;
 
-    // PR-044 — Authority-to-act, shown only when the applicant declares they are
+    // PR-044 - Authority-to-act, shown only when the applicant declares they are
     // NOT a listed director/officer. Content mirrors documentRequirements.js's
     // 'Authority to act' item (which is now removed from the Required Docs
     // checklist so it's asked exactly once, here). The card is the SAME reused
@@ -407,11 +407,11 @@ export function ApplicantPage({
     // Hard gate: when unlisted, Continue is blocked until the file is uploaded.
     const authorityGateBlocks = applicantUnlisted && !authorityToActFile;
 
-    // PR-072 — Signatory ID card, COPIED verbatim from the Required Docs section
+    // PR-072 - Signatory ID card, COPIED verbatim from the Required Docs section
     // (the DocumentUploadCard driven by the DRS "Signatory ID" checklist item)
     // onto the Applicant page. Shown for EVERY applicant (always), unlike
     // authority-to-act. App.js (src/) cannot import root documentRequirements.js
-    // (CRA ModuleScopePlugin), so — exactly as authorityToActItem does — the item
+    // (CRA ModuleScopePlugin), so - exactly as authorityToActItem does - the item
     // is reconstructed inline with the SAME content the DRS produces: title +
     // Required pill, the accepted-documents guidance (buildIdLocalEquivalent incl.
     // residency + UK/JMLSG onboarding-country overlay), the "Verify each
@@ -433,7 +433,7 @@ export function ApplicantPage({
         ? "https://www.legislation.gov.uk/id/uksi/2017/692"
         : "https://www.mas.gov.sg/regulation/notices/psn01-aml-cft-notice---specified-payment-services",
     };
-    // Hard gate: Signatory ID is always required — Continue is blocked until the
+    // Hard gate: Signatory ID is always required - Continue is blocked until the
     // file is uploaded, for every applicant. Combined with the conditional
     // authority-to-act gate below.
     // When the bands feature is on, Didit identity verification replaces the
@@ -444,7 +444,7 @@ export function ApplicantPage({
     // Auto-match (one-click): when research found candidate officers, the applicant
     // no longer picks themselves from a dropdown. We show the Didit QR immediately,
     // freeze the WHOLE candidate list on the attempt, and the backend picks the
-    // matching officer from the document — or routes to LOA if none match.
+    // matching officer from the document - or routes to LOA if none match.
     const applicantCandidates = getApplicantCandidates();
     const autoMatchActive = idvBandsEnabled && applicantCandidates.length > 0;
     // Unlisted applicants (research found NO candidate officers) verify identity
@@ -457,7 +457,7 @@ export function ApplicantPage({
     const personChosen = !!applicantSelectedPerson || applicantNotListed;
     const showApplicantBody = !idvBandsEnabled || personChosen || autoMatchActive;
 
-    // QR/verification flow showing but not yet resolved — drives the dynamic
+    // QR/verification flow showing but not yet resolved - drives the dynamic
     // title/subtitle below (Change 3/4).
     const scanning = (autoMatchActive || unlistedVerifyActive) && !idvResult;
 
@@ -484,7 +484,7 @@ export function ApplicantPage({
 
     // After the applicant confirms: write the DECLARED fields (name/DOB/nationality)
     // into the form (as today's applicant data), and report ONLY the opaque Vault
-    // reference up for the submission — the sensitive extras (document number, etc.)
+    // reference up for the submission - the sensitive extras (document number, etc.)
     // live in the Vault, never on the submission.
     const writeVerifiedFields = (fields) => {
       const toGap = { firstName: "applicantFirstName", lastName: "applicantLastName", dateOfBirth: "applicantDateOfBirth", nationality: "applicantNationality" };
@@ -721,7 +721,7 @@ export function ApplicantPage({
   };
 
 
-  // PR-034 / PR-044 — Authority-to-act upload. Upload to Vercel Blob on file
+  // PR-034 / PR-044 - Authority-to-act upload. Upload to Vercel Blob on file
   // selection and store the permanent URL rather than holding the raw File (an
   // ephemeral, non-persistable reference) in session state. A failed upload
   // still stores the file metadata with uploadFailed:true so the analyst is
@@ -748,10 +748,10 @@ export function ApplicantPage({
     setAuthorityToActFile({ name: filename, size: file.size, filename, blobUrl, uploadFailed });
   }
 
-  // PR-072 — Applicant-page Signatory ID upload. Mirrors
+  // PR-072 - Applicant-page Signatory ID upload. Mirrors
   // handleAuthorityToActUpload exactly (session-hold via /api/upload-document,
   // keep .name/.size so truthy = gate satisfied even on upload failure). This is
-  // a SEPARATE slot from the Required Docs Signatory ID upload — they do not
+  // a SEPARATE slot from the Required Docs Signatory ID upload - they do not
   // cross-satisfy. "One-upload-satisfies-both" is a possible later enhancement.
   async function handleSignatoryIdUpload(file) {
     if (!file) return;

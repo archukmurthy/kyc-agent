@@ -1,4 +1,4 @@
-// POST /api/research — every Claude call for the onboarding research flow.
+// POST /api/research - every Claude call for the onboarding research flow.
 //
 // The browser sends structured input (a mode plus company facts). This handler
 // resolves the tenant, rate-limits the caller, loads the tenant's stored
@@ -14,13 +14,13 @@
 // the one-time grant /api/search-attempt returned when it counted the search
 // (lib/researchGrant.js). `mode: "research"` burns it; gap recovery and
 // document extraction in the same run accept it while unexpired. Analysts and
-// anonymous callers need none — a fresh customer has no credential to bind a
+// anonymous callers need none - a fresh customer has no credential to bind a
 // grant to (RERES-2 scope limit, PLAT-7).
 //
 // This only caps the unmodified client: a link holder who strips their own
 // dossier-link credential (the Authorization bearer / dossierToken that makes
 // resolveDossierActor see them as a customer at all) is no longer identified
-// as a customer here, so no grant is required of them either — they fall back
+// as a customer here, so no grant is required of them either - they fall back
 // to the anonymous, IP-rate-limited tier like any other caller with no
 // credential.
 //
@@ -80,7 +80,7 @@ module.exports = async function handler(req, res) {
     console.error("[api/research] actor resolution failed:", err.message);
     return res.status(500).json({ error: "research_failed" });
   }
-  // Verified up front, before any I/O or spend — but NOT burned yet: a grant
+  // Verified up front, before any I/O or spend - but NOT burned yet: a grant
   // is only consumed once the request has actually earned it (see below).
   let grantPayload = null;
   if (actor && actor.kind === "customer") {
@@ -116,7 +116,7 @@ module.exports = async function handler(req, res) {
     }
 
     // Burn the grant only now that the rate limit, config read and request
-    // build have all succeeded — immediately before the request actually
+    // build have all succeeded - immediately before the request actually
     // spends (the cache lookup counts as spend: a hit still avoids the
     // Anthropic call, but not the customer's search budget).
     if (grantPayload && body.mode === "research") {
@@ -145,7 +145,7 @@ module.exports = async function handler(req, res) {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "Server API key not configured" });
 
-    // LAYER 1 — Companies House officers (deterministic) for the main research
+    // LAYER 1 - Companies House officers (deterministic) for the main research
     // call only; null on non-GB, missing key or failure, and injection is then
     // a no-op.
     const chOfficers = built.officers ? await _deps.officersLayer.fetchOfficersLayer(built.officers) : null;

@@ -1,7 +1,7 @@
 "use strict";
 
 // Screening provider registry. One entry today; a second provider (Refinitiv,
-// Onfido, sanctions.io) is added here + a new adapter — nothing else changes.
+// Onfido, sanctions.io) is added here + a new adapter - nothing else changes.
 const { ComplyCubeScreeningAdapter } = require("./providers/complyCubeScreeningAdapter");
 const { screeningConfig } = require("./config");
 

@@ -6,21 +6,21 @@
  * WHY THIS EXISTS: api/upload-document.js now writes with `access: "private"`
  * (the store is private; asking for public 500'd every upload). A private blob
  * is not fetchable by URL, so the one place in the app that links to a stored
- * document — the "View →" anchor on a manually-uploaded registry document,
- * src/App.js — can no longer be a bare <a href={blobUrl}>. It points here
+ * document - the "View →" anchor on a manually-uploaded registry document,
+ * src/App.js - can no longer be a bare <a href={blobUrl}>. It points here
  * instead, and this handler fetches the blob server-side with the store token
  * and pipes the bytes back.
  *
- * ACCESS CONTROL — read this before assuming there is any:
+ * ACCESS CONTROL - read this before assuming there is any:
  * There is none beyond possession of the blob URL. The blob URL is an
  * unguessable capability (put() uses addRandomSuffix), and it is handed out by
- * the same unauthenticated dossier context that already exposes it — so this
+ * the same unauthenticated dossier context that already exposes it - so this
  * endpoint is exactly as open as the dossier it belongs to, and no more. It is
  * deliberately not made *more* open: the host allowlist below stops it being
  * used as a general-purpose fetch proxy, which is a different problem from
- * authorisation. Real access control for KYC identity documents — session-bound
+ * authorisation. Real access control for KYC identity documents - session-bound
  * signed URLs (@vercel/blob 2.5.0 supports issueSignedToken + presignUrl) and
- * audited retrieval — arrives with the auth layer, which is tracked as a P1
+ * audited retrieval - arrives with the auth layer, which is tracked as a P1
  * go-live blocker. Do not describe this endpoint as access-controlled.
  *
  * Method: GET

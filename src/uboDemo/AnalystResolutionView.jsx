@@ -5,7 +5,7 @@ function humanize(value) { return String(value || "Not recorded").replaceAll("_"
 function measurement(value) {
   if (!value || value.type === "UNKNOWN") return "Not established";
   if (value.type === "EXACT") return `${value.value}%`;
-  if (value.type === "RANGE") return `${value.lowerBound ?? 0}%–${value.upperBound ?? 100}%`;
+  if (value.type === "RANGE") return `${value.lowerBound ?? 0}%-${value.upperBound ?? 100}%`;
   return humanize(value.type);
 }
 function factName(fact, side) { return fact?.[side]?.name || "Unknown party"; }
@@ -28,7 +28,7 @@ const completedLabel = (completion) => completion?.verificationLabel || "Complet
 function identityVerificationStatus(assessment, verificationSubject, completion) {
   if (verificationSubject?.verificationStatus === "COMPLETED") return completedLabel(completion);
   if (verificationSubject?.currentRequirementStatus === "REQUIRED") return "Required";
-  if (completion) return "No longer required — completed under an earlier assessment";
+  if (completion) return "No longer required - completed under an earlier assessment";
   return assessment.idvRequired ? "Required" : "Not required";
 }
 
@@ -48,7 +48,7 @@ function OwnershipFactReview({ item, companyName }) {
   // owner, so neither a link to follow nor part of anyone's aggregate.
   if (item.holderRemoved) return <article className="ubo-analyst-assessment-card"><header><div><span>Shareholder no longer current</span><h3>{factName(source, "subject")} → {factName(source, "object")}</h3></div><strong>Removed · evidence verified</strong></header><dl><div><dt>Customer chart</dt><dd>Not shown</dd></div><div><dt>Independent information</dt><dd>{measurement(item.independentAssertion?.measurement)}</dd></div><div><dt>Supporting evidence</dt><dd>{item.evidence?.length ? item.evidence.map(({ status }) => humanize(status)).join(", ") : "None"}</dd></div><div><dt>UBO consequence</dt><dd>No current ownership - excluded from the ownership chain and from any aggregate</dd></div></dl>{item.reason && <p>{item.reason}</p>}</article>;
   const legalEntity = item.holderPartyType === "LEGAL_ENTITY";
-  return <article className="ubo-analyst-assessment-card"><header><div><span>{legalEntity ? "Significant ownership link" : "Ownership fact"}</span><h3>{factName(source, "subject")} → {factName(source, "object")}</h3></div><strong>{legalEntity ? "Continue through ownership chain" : humanize(item.ownershipEstablishment)}</strong></header><dl><div><dt>Customer chart</dt><dd>{measurement(item.customerAssertion?.measurement)}</dd></div><div><dt>Independent information</dt><dd>{measurement(item.independentAssertion?.measurement)}</dd></div><div><dt>Relationship outcome</dt><dd>{humanize(item.ownershipLink?.outcome)}</dd></div><div><dt>Holder type</dt><dd>{legalEntity ? "Legal entity" : humanize(item.holderPartyType)}</dd></div><div><dt>UBO consequence</dt><dd>{legalEntity ? "Continue through ownership chain" : "Included in the person's aggregate assessment"}</dd></div>{legalEntity && <div><dt>Identity verification</dt><dd>Not applicable — legal entity</dd></div>}</dl>{item.reason && <p>{item.reason}</p>}</article>;
+  return <article className="ubo-analyst-assessment-card"><header><div><span>{legalEntity ? "Significant ownership link" : "Ownership fact"}</span><h3>{factName(source, "subject")} → {factName(source, "object")}</h3></div><strong>{legalEntity ? "Continue through ownership chain" : humanize(item.ownershipEstablishment)}</strong></header><dl><div><dt>Customer chart</dt><dd>{measurement(item.customerAssertion?.measurement)}</dd></div><div><dt>Independent information</dt><dd>{measurement(item.independentAssertion?.measurement)}</dd></div><div><dt>Relationship outcome</dt><dd>{humanize(item.ownershipLink?.outcome)}</dd></div><div><dt>Holder type</dt><dd>{legalEntity ? "Legal entity" : humanize(item.holderPartyType)}</dd></div><div><dt>UBO consequence</dt><dd>{legalEntity ? "Continue through ownership chain" : "Included in the person's aggregate assessment"}</dd></div>{legalEntity && <div><dt>Identity verification</dt><dd>Not applicable - legal entity</dd></div>}</dl>{item.reason && <p>{item.reason}</p>}</article>;
 }
 
 function AuditFact({ item, companyName }) {

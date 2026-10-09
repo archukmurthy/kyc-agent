@@ -1,4 +1,4 @@
-# Production Readiness — What We Fix Next, In Order
+# Production Readiness - What We Fix Next, In Order
 
 **Who this is for:** anyone on the team. No technical background needed.
 **Last updated:** 17 September 2026.
@@ -6,9 +6,9 @@
 **Where it comes from:** outside experts reviewed our platform and wrote a report (*Production & Investor Readiness Plan*, 4 September 2026) listing 34 things to fix. We went through our code and checked every one. We also found four more problems ourselves.
 
 **How to read this:** every item below has three lines.
-- **They said** — what the report asked for.
-- **What it means** — the same thing in plain words, and where we stand today.
-- **We will** — what we are going to do about it.
+- **They said** - what the report asked for.
+- **What it means** - the same thing in plain words, and where we stand today.
+- **We will** - what we are going to do about it.
 
 ---
 
@@ -44,29 +44,29 @@ Always   Hunt for bugs and slowness           during every batch
 
 These came after the report was written, so they are not in it. We found them by reading our own code.
 
-### H1 — One page hands out people's identity details with no login
+### H1 - One page hands out people's identity details with no login
 - **What it is:** the reviewer page (`api/idv-match/reviewer.js`) asks "who are you?" and simply believes whatever name is typed into the web address. Then it unlocks and shows that person's identity details.
 - **Why it matters:** anyone who knows the address can read real people's identity data. This is the most serious thing on this page.
 - **We will:** require a real login, and take the person's identity from that login instead of from the address.
 
-### H2 — Logging in as an admin gives back the password itself
+### H2 - Logging in as an admin gives back the password itself
 - **What it is:** when an admin logs in, the system hands the browser the password back as the "pass" it keeps (`api/admin-auth.js`, lines 122 and 134).
 - **Why it matters:** that pass never expires and cannot be cancelled. If it leaks from one person's computer, the only fix is changing the password for everybody.
 - **We will:** hand back a temporary pass that expires and can be switched off for one person, and never send the password back.
 
-### H3 — Pages that cost money, or show data, are open to anyone
+### H3 - Pages that cost money, or show data, are open to anyone
 - **What it is:** these have no login and no usage limit: the paid lookup pages (`nium/*`), `company-search`, `kyc-lookup`, the ownership lab pages, file upload and download, and the activity dashboard.
 - **Why it matters:** a stranger can run up our bill with paid lookups, download our files, or look at every customer's activity.
 - **We will:** put a login on each one and cap how many times it can be called in an hour.
 
-### H4 — Any website can call our system
+### H4 - Any website can call our system
 - **What it is:** our pages accept requests from any site on the internet (the setting is wide open everywhere).
 - **Why it matters:** another website can quietly use a logged-in user's browser to call our system as if it were them.
 - **We will:** keep a short list of our own web addresses and refuse everything else.
 
 ---
 
-## Batch 0 — Lock the open doors *(a few days)* — **DONE 18 September 2026**
+## Batch 0 - Lock the open doors *(a few days)* - **DONE 18 September 2026**
 
 Small changes, big effect. This closes the four problems above and the easy half
 of what the report asked for.
@@ -116,7 +116,7 @@ lands in Batch 3, once uploads record an owner.**
 
 ---
 
-## Batch 1 — Proper logins *(1-2 weeks)*
+## Batch 1 - Proper logins *(1-2 weeks)*
 
 Everything else rests on the system knowing who is calling and which customer they work for.
 
@@ -152,7 +152,7 @@ Everything else rests on the system knowing who is calling and which customer th
 
 ---
 
-## Batch 2 — Keep customers' data apart *(1-2 weeks)*
+## Batch 2 - Keep customers' data apart *(1-2 weeks)*
 
 ### 2.1 Label every table with the customer it belongs to
 - **They said:** *"Tenant foreign keys on all main tables."* (item 3.1)
@@ -181,7 +181,7 @@ Everything else rests on the system knowing who is calling and which customer th
 
 ---
 
-## Batch 3 — Save things honestly *(2 weeks)*
+## Batch 3 - Save things honestly *(2 weeks)*
 
 ### 3.1 Record a file the moment it is uploaded
 - **They said:** *"Upload bytes to storage and record an owner/case row at the moment of upload, not at final submit; store content hashes."* (item 2.3)
@@ -210,7 +210,7 @@ Everything else rests on the system knowing who is calling and which customer th
 
 ---
 
-## Batch 4 — Remember every decision *(1-2 weeks)*
+## Batch 4 - Remember every decision *(1-2 weeks)*
 
 ### 4.1 Write down every decision permanently
 - **They said:** *"Immutable decision record for every material outcome: evidence seen, policy version, configuration, model and prompt version, tool calls, human actions and overrides, final decision, actor, timestamps."* (item 4.1)
@@ -234,7 +234,7 @@ Everything else rests on the system knowing who is calling and which customer th
 
 ---
 
-## Batch 5 — Protect people's personal details *(2 weeks)*
+## Batch 5 - Protect people's personal details *(2 weeks)*
 
 **This is the gate. Once this is signed off, real customer data may enter the system.**
 
@@ -249,18 +249,18 @@ Everything else rests on the system knowing who is calling and which customer th
 - **We will:** keep drafts on the server instead, then sweep the browser and our logs to confirm nothing personal is left.
 
 ### 5.3 Make deletion actually work everywhere
-- **They said:** *"Retention, deletion, and legal-hold semantics across all stores — soft-delete with legal hold rather than hard delete."* (item 4.5)
+- **They said:** *"Retention, deletion, and legal-hold semantics across all stores - soft-delete with legal hold rather than hard delete."* (item 4.5)
 - **What it means:** people have a legal right to ask us to delete their data, but we also have to keep records for a period. Right now we have neither properly: data is spread across the database, the file store and caches with no way to find every copy. A "legal hold" means we mark data as kept on purpose, for a stated reason, instead of wiping it.
 - **We will:** build one deletion process across every place we store data, and prove it by deleting a test person and showing every copy is gone or held.
 
 ### 5.4 Settle the identity module question
 - **They said:** *"Integrate the existing IDV module into the main application, or apply its patterns to the live path. Do not run two parallel implementations."* (item 4.6)
 - **What it means:** we have a well-built identity module with encryption and deletion that is not connected to anything, sitting beside a weaker version that the app actually uses. Two versions means two places to fix every bug.
-- **We will:** pick one — connect the strong one, or take its good parts and retire it — so only one path for personal data exists.
+- **We will:** pick one - connect the strong one, or take its good parts and retire it - so only one path for personal data exists.
 
 ---
 
-## Batch 6 — Ready for an investor's reviewer *(3-4 weeks, can run alongside Batch 4 and 5)*
+## Batch 6 - Ready for an investor's reviewer *(3-4 weeks, can run alongside Batch 4 and 5)*
 
 None of these block a customer. All of them shape how an outside engineer judges us.
 
@@ -300,7 +300,7 @@ None of these block a customer. All of them shape how an outside engineer judges
 - **We will:** move to a maintained one and check the app still builds and runs.
 
 ### 6.8 Write the four business documents
-- **They said:** items 6.8, 6.9 and 6.10 — supplier register, AI-provider backup plan, cost per onboarding, and the evidence pack for reviewers.
+- **They said:** items 6.8, 6.9 and 6.10 - supplier register, AI-provider backup plan, cost per onboarding, and the evidence pack for reviewers.
 - **What it means:** an investor's reviewer will ask what happens if our AI provider goes down, what each onboarding costs us, and to see our security and data documents. We have none of these written.
 - **We will:** write all four and keep them current.
 
@@ -311,7 +311,7 @@ None of these block a customer. All of them shape how an outside engineer judges
 
 ---
 
-## Always on — hunting bugs and slowness
+## Always on - hunting bugs and slowness
 
 This is not a separate phase. It happens inside every batch.
 
@@ -342,10 +342,10 @@ These wait until a named customer or investor actually asks: handling large volu
 
 | Batch | Status | Merged |
 | --- | --- | --- |
-| 0 — Lock the open doors | Done, except the document owner check (moved to Batch 3, needs 3.1) | PR #14 |
-| 1 — Proper logins | Not started | — |
-| 2 — Keep customers' data apart | Not started | — |
-| 3 — Save things honestly | Not started | — |
-| 4 — Remember every decision | Not started | — |
-| 5 — Protect personal details | Not started | — |
-| 6 — Investor readiness | Not started | — |
+| 0 - Lock the open doors | Done, except the document owner check (moved to Batch 3, needs 3.1) | PR #14 |
+| 1 - Proper logins | Not started | - |
+| 2 - Keep customers' data apart | Not started | - |
+| 3 - Save things honestly | Not started | - |
+| 4 - Remember every decision | Not started | - |
+| 5 - Protect personal details | Not started | - |
+| 6 - Investor readiness | Not started | - |

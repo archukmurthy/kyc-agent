@@ -44,7 +44,7 @@ test("a valid token link loads the dossier through the token and sends it as a c
   await mountAt("/?tenant=nium&dossierToken=signed.tok&journey=customer");
   const call = calls.find((c) => c.url.includes("/api/get-dossier"));
   expect(call).toBeTruthy();
-  // The token travels ONLY in the Authorization header — never the query
+  // The token travels ONLY in the Authorization header - never the query
   // string, where it would land in server logs, browser history and Referer.
   expect(call.url).not.toContain("dossierToken=");
   expect(call.url).not.toContain("id=");
@@ -191,7 +191,7 @@ test("a link customer's correction whose save fails logs no correction event", a
 // I1: a link customer is a customer from the moment they land. Reaching the
 // documents step without the picker (e.g. Confirm's "Upload docs") and pressing
 // Continue must spend a dossier search BEFORE any research runs. The documents
-// step is reached here by resuming a saved draft on top of the link landing —
+// step is reached here by resuming a saved draft on top of the link landing -
 // driving the Applicant step's identity checks to Confirm is not practical here.
 const okJson = (body) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
 const researchJson = () => okJson({ content: [{ type: "text", text: "{\"found\":[]}" }], usage: { input_tokens: 1, output_tokens: 1 } });

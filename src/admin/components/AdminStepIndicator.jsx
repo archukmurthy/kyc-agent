@@ -12,8 +12,8 @@ const STEP_LABELS = [
 ];
 
 // Step indicator for AdminWizard / mini-wizards. Every bubble (and its label)
-// is clickable when an `onClick` handler is supplied — complete, current and
-// future steps alike — so users can freely jump in either direction.
+// is clickable when an `onClick` handler is supplied - complete, current and
+// future steps alike - so users can freely jump in either direction.
 export default function AdminStepIndicator({ currentStep, steps = STEP_LABELS, onClick }) {
   return (
     <div

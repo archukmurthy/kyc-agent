@@ -1,5 +1,5 @@
 /**
- * DossierView.jsx — the analyst dossier, the main pre-boarding screen.
+ * DossierView.jsx - the analyst dossier, the main pre-boarding screen.
  *
  * EXTRACTED FROM App.js as a PURE MOVE, zero behaviour change. Four bodies moved
  * together because they are one screen: the view itself plus its three sections
@@ -98,7 +98,7 @@ export function DossierView({
     />
   );
 
-  // Interactive Customer Request — each gap field carries an exclude checkbox
+  // Interactive Customer Request - each gap field carries an exclude checkbox
   // (strike-through + "✕ Excluded" badge when off), custom questions can be
   // removed, and "Ask for more" adds analyst questions inline. `allFields` is
   // the full candidate list (excluded or not); the live count reflects only
@@ -267,7 +267,7 @@ export function DossierView({
   const renderDossierDocuments = () => {
     const docs = (docSearchResults?.documents || []).filter((d) => d.status === "downloaded" || d.status === "url_found");
     // Registry documents retrieved by the self-source agent (Companies House /
-    // ACRA / etc.) — these were previously only shown on the Documents step.
+    // ACRA / etc.) - these were previously only shown on the Documents step.
     const registryDocs = (selfSourceResults?.results || []).filter(
       (r) => r.status === "retrieved" || r.status === "retrieved_unverified" || r.manualReviewFlag || r.status === "manual_retrieval_required"
     );
@@ -327,7 +327,7 @@ export function DossierView({
 
     return (
       <div style={{ maxWidth: 800, margin: "0 auto", padding: "24px 20px 60px", fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif", color: C.text }}>
-        {/* Save-failure banner — api/save-dossier.js always returns 200, so a
+        {/* Save-failure banner - api/save-dossier.js always returns 200, so a
             failed save otherwise looks identical to a successful one. Without
             this, the analyst has no idea the dossier only exists on this
             device, and the invite button being disabled below looks broken
@@ -335,7 +335,7 @@ export function DossierView({
         {dossierSaveError && (
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, marginBottom: 20, flexWrap: "wrap" }}>
             <span style={{ fontSize: 13, color: "#B91C1C", fontWeight: 600, flex: 1, minWidth: 220 }}>
-              ⚠ This dossier hasn't been saved — {dossierSaveError} Your work is only on this device until it saves.
+              ⚠ This dossier hasn't been saved - {dossierSaveError} Your work is only on this device until it saves.
             </span>
             <button
               onClick={() => onRetrySave && onRetrySave()}
@@ -383,7 +383,7 @@ export function DossierView({
                   <button
                     onClick={() => {
                       // Re-save must UPDATE this same row (saveDossier now
-                      // sends the existing dossierId) — clearing it first
+                      // sends the existing dossierId) - clearing it first
                       // would force a fresh INSERT and orphan this id if an
                       // invite link already embeds it.
                       setDossierSaved(false);
@@ -443,7 +443,7 @@ export function DossierView({
                 // The dossier is the source of truth: always fetch fresh from the
                 // DB and reconstruct full research state (raw_research.found,
                 // schema, coverage, stakeholders) rather than relying on in-memory
-                // state — whether Preview is clicked immediately or hours later.
+                // state - whether Preview is clicked immediately or hours later.
                 // loadDossierAndStartOnboarding handles agentType/step/navigation.
                 if (!dossierId) {
                   // eslint-disable-next-line no-console
@@ -515,7 +515,7 @@ export function DossierView({
               // Start a genuinely fresh dossier. Clearing research is essential:
               // the auto-save effect watches research?.found, so leaving it
               // populated would immediately re-save and bounce back here.
-              // (preboardingUnlocked is left intact — no re-prompting the gate.)
+              // (preboardingUnlocked is left intact - no re-prompting the gate.)
               setShowDossierView(false);
               setDossierId(null);
               setDossierSaved(false);

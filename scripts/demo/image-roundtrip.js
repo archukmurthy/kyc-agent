@@ -19,7 +19,7 @@ if (!mediaId) { console.error("usage: image-roundtrip.js <mediaId>"); process.ex
   const out = await media.retrieveDocumentImage({ mediaId, authorization: { actorId: "demo-viewer", purpose: "AUDIT_REVIEW" } });
   if (!out) { console.error("media not found:", mediaId); process.exit(1); }
   const ext = (out.contentType || "").includes("png") ? "png" : (out.contentType || "").includes("jpeg") ? "jpg" : "bin";
-  const dir = path.join(__dirname, "..", "..", "scratch"); // gitignored — decrypted PII never committed
+  const dir = path.join(__dirname, "..", "..", "scratch"); // gitignored - decrypted PII never committed
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `decrypted-${mediaId}.${ext}`);
   fs.writeFileSync(file, out.bytes);

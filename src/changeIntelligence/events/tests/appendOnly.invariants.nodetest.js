@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * appendOnly.invariants.nodetest.js — locks the constraint the whole slice
+ * appendOnly.invariants.nodetest.js - locks the constraint the whole slice
  * exists to protect: change_events is APPEND-ONLY. No update, no delete, no lost
  * history. If any of these fail, the audit trail can be silently corrupted.
  */

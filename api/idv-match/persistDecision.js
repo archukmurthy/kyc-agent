@@ -39,7 +39,7 @@ async function persistDecision({ attempt, decision, receivedAt = new Date(), las
     providerReportId: mapped.providerReportId,
     providerStatus,
     canonicalStatus: mapped.providerDecision.canonical_status,
-    // Provider outcome, NOT a KYC approval — the band layer decides KYC.
+    // Provider outcome, NOT a KYC approval - the band layer decides KYC.
     providerVerified: mapped.providerVerified,
     observations: mapped.observations,
     providerDecision: mapped.providerDecision,

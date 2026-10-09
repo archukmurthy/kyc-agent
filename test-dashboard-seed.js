@@ -16,13 +16,13 @@ function mockRes() { return { body: null, status() { return this; }, json(d) { t
   const sql = neon(process.env.DATABASE_URL);
   const base = { changeType: "changed", jurisdiction: "GB" };
 
-  // SUB1 — a spread of outcomes
+  // SUB1 - a spread of outcomes
   await writeEvent(sql, { ...base, submissionId: SUB1, fieldId: "director.0.name", fieldClass: "director", workflow: "doc_required", customerIntent: "ai_correction", sourceProvider: "Companies House" });
   await writeEvent(sql, { ...base, submissionId: SUB1, fieldId: "address.reg", fieldClass: "address", workflow: "ops_review", customerIntent: "genuine_update" });
   await writeEvent(sql, { ...base, submissionId: SUB1, fieldId: "pep.status", fieldClass: "pep", workflow: "escalation", escalation: true, escalationReason: "PEP review" });
   await writeEvent(sql, { ...base, submissionId: SUB1, fieldId: "ubo.0.name", fieldClass: "ubo", workflow: "UNDECIDED", decided: false, customerIntent: "ai_correction" });
 
-  // SUB2 — a correction that is REVERTED (superseded), plus a failure fallback
+  // SUB2 - a correction that is REVERTED (superseded), plus a failure fallback
   const e5 = await writeEvent(sql, { ...base, submissionId: SUB2, fieldId: "director.0.name", fieldClass: "director", workflow: "doc_required", customerIntent: "ai_correction" });
   await writeEvent(sql, { ...base, submissionId: SUB2, fieldId: "director.0.name", fieldClass: "director", workflow: "ops_review", customerIntent: "genuine_update", supersedesId: e5.id });
   await writeEvent(sql, { ...base, submissionId: SUB2, fieldId: "reresearch.fallback", fieldClass: "structural", workflow: "ops_review", matchedRule: "RERESEARCH-FALLBACK-MANUAL", afterValue: { fellBackTo: "manual", stage: "re_research", reason: "registry_timeout" } });
@@ -41,7 +41,7 @@ function mockRes() { return { body: null, status() { return this; }, json(d) { t
   console.log(`Back-and-forth pre-empted : ${h.rfiPreempted.value}   (based on ${h.rfiPreempted.sampleSize} onboardings)`);
   console.log(`Escalations flagged : ${h.escalationsFlagged.value}   (based on ${h.escalationsFlagged.sampleSize} onboardings)`);
   console.log("early-data note showing?", m.meta.earlyData, `(onboardings ${m.meta.onboardings} < threshold ${m.meta.earlyDataThreshold})`);
-  console.log("any % accuracy rate in headline?", JSON.stringify(h).match(/percent|rate|accuracy/i) ? "YES" : "NO — counts only");
+  console.log("any % accuracy rate in headline?", JSON.stringify(h).match(/percent|rate|accuracy/i) ? "YES" : "NO - counts only");
   console.log("=== DETAIL spot-check ===");
   console.log("intent split overall:", JSON.stringify(m.detail.intentSplit.overall));
   console.log("undecided:", JSON.stringify(m.detail.undecided));

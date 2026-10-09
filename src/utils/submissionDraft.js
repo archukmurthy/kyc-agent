@@ -16,7 +16,7 @@ export function saveDraft(state, scope) {
       agentType: (scope && scope.agentType) || "",
       state,
     }));
-  } catch (_) { /* quota/serialization — ignore, draft is a convenience not a guarantee */ }
+  } catch (_) { /* quota/serialization - ignore, draft is a convenience not a guarantee */ }
 }
 
 export function loadDraft(scope) {
@@ -27,7 +27,7 @@ export function loadDraft(scope) {
     if (!parsed || typeof parsed !== "object" || !parsed.state) return null;
     const wantTenant = (scope && scope.tenantId) || "";
     const wantAgent = (scope && scope.agentType) || "";
-    // Legacy drafts (written before scoping) carry no tenant — ignore them
+    // Legacy drafts (written before scoping) carry no tenant - ignore them
     // rather than guess which tenant they belonged to.
     if (!parsed.tenantId || parsed.tenantId !== wantTenant) return null;
     if (parsed.agentType !== wantAgent) return null;

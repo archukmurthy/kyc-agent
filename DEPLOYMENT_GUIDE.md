@@ -1,8 +1,8 @@
-# KYC Agent Deployment Guide — Complete Beginner, Windows
+# KYC Agent Deployment Guide - Complete Beginner, Windows
 
 This guide assumes you've never used a terminal before. Every step is spelled out.
 
-**Total time:** 60–90 minutes for your first deployment.
+**Total time:** 60-90 minutes for your first deployment.
 **What you'll end up with:** A live URL like `https://kyc-agent-xyz.vercel.app` that works on any device.
 
 ---
@@ -73,7 +73,7 @@ Git is what moves your code to GitHub.
 1. Go to: **https://git-scm.com/download/win**
 2. The download should start automatically. If not, click the "64-bit Git for Windows Setup" link
 3. Double-click the installer when it downloads
-4. Click **Next** through every screen. **Accept all the defaults** — there are a lot of screens, but defaults are fine
+4. Click **Next** through every screen. **Accept all the defaults** - there are a lot of screens, but defaults are fine
 5. When it finishes, click **Finish**
 
 ### 2.3 Open PowerShell (your terminal)
@@ -103,7 +103,7 @@ git --version
 
 You should see something like `git version 2.43.0`.
 
-✅ **Checkpoint:** Both commands showed version numbers. If yes, move on. If not, the installation didn't complete correctly — reinstall whichever one failed.
+✅ **Checkpoint:** Both commands showed version numbers. If yes, move on. If not, the installation didn't complete correctly - reinstall whichever one failed.
 
 ---
 
@@ -151,7 +151,7 @@ In PowerShell, type:
 npm install
 ```
 
-Press Enter and **wait**. This will take 2–5 minutes and print a lot of text. You'll know it's done when your cursor comes back to a clean line with `PS C:\...>`. It's normal to see some yellow "warnings" — ignore them unless they say "error".
+Press Enter and **wait**. This will take 2-5 minutes and print a lot of text. You'll know it's done when your cursor comes back to a clean line with `PS C:\...>`. It's normal to see some yellow "warnings" - ignore them unless they say "error".
 
 ### 3.4 Test the app locally (optional but recommended)
 
@@ -173,10 +173,10 @@ Wait 1-2 minutes. At the end you should see something like "Compiled successfull
 
 1. Go to: **https://github.com/new** (in your browser, while logged into GitHub)
 2. **Repository name:** `kyc-agent` (or anything you like, no spaces)
-3. Leave it set to **"Public"** (it's free and fine for a demo — the sensitive API key lives on Vercel, not in the code)
+3. Leave it set to **"Public"** (it's free and fine for a demo - the sensitive API key lives on Vercel, not in the code)
 4. **Do NOT** check any of the "Initialize" boxes (no README, no .gitignore, no license)
 5. Click **"Create repository"**
-6. On the next page, you'll see a URL that looks like `https://github.com/YourUsername/kyc-agent.git`. **Copy that URL** — you'll need it in a moment.
+6. On the next page, you'll see a URL that looks like `https://github.com/YourUsername/kyc-agent.git`. **Copy that URL** - you'll need it in a moment.
 
 ### 4.2 Configure Git with your identity
 
@@ -207,7 +207,7 @@ git commit -m "Initial commit"
 git branch -M main
 ```
 
-Now the important one — paste the GitHub URL you copied:
+Now the important one - paste the GitHub URL you copied:
 
 ```
 git remote add origin https://github.com/YourUsername/kyc-agent.git
@@ -247,7 +247,7 @@ Go back to your browser and refresh the GitHub page (`https://github.com/YourUse
 
 ### 5.2 Wait for deployment
 
-Vercel will now build and deploy your site. This takes about 2–3 minutes. You'll see a progress log. When it's done, you'll see:
+Vercel will now build and deploy your site. This takes about 2-3 minutes. You'll see a progress log. When it's done, you'll see:
 
 - A "Congratulations!" screen with confetti
 - A preview of your site
@@ -257,8 +257,8 @@ Vercel will now build and deploy your site. This takes about 2–3 minutes. You'
 
 1. Click the URL Vercel gives you, or copy it and paste into a new browser tab
 2. The KYC Onboarding Agent should load
-3. Type **"Tesco PLC"**, select **"GB — United Kingdom"**, and click **"Research Company"**
-4. Wait 20–30 seconds. You should see the researched company data appear.
+3. Type **"Tesco PLC"**, select **"GB - United Kingdom"**, and click **"Research Company"**
+4. Wait 20-30 seconds. You should see the researched company data appear.
 
 ### 5.4 Share it
 
@@ -316,7 +316,7 @@ git push
 
 - **Vercel:** Free forever on the Hobby plan (unless you get millions of visitors)
 - **GitHub:** Free for public repositories
-- **Anthropic API:** Pay per use. Typical usage for a demo: $0.05–$0.15 per company search. $5 credit = roughly 30–100 searches.
+- **Anthropic API:** Pay per use. Typical usage for a demo: $0.05-$0.15 per company search. $5 credit = roughly 30-100 searches.
 
 You'll get an email from Anthropic when your credit gets low. You can add more or stop using it.
 

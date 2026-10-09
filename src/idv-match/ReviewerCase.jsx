@@ -3,7 +3,7 @@ import React, { useState } from "react";
 // Minimal read-only reviewer view (Phase E4). Shows a case's status, band
 // decisions, immutable identity events, and identity fields MASKED by default;
 // each field has an audited "Reveal" that fetches the full value on demand. The
-// full review-queue UI is a later phase. Presentational — the parent supplies the
+// full review-queue UI is a later phase. Presentational - the parent supplies the
 // case data and an onReveal(concept) that performs the authorized server call.
 const CONCEPT_LABELS = {
   first_name: "First name", last_name: "Last name", date_of_birth: "Date of birth",

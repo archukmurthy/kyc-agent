@@ -1,5 +1,5 @@
 /**
- * ConfirmStep.render.test.jsx — CHARACTERISATION tests for the Confirm page.
+ * ConfirmStep.render.test.jsx - CHARACTERISATION tests for the Confirm page.
  *
  * These assert what the page does TODAY. They are a baseline, not a
  * specification: if something here looks odd, the test is doing its job by
@@ -7,11 +7,11 @@
  * updates the test alongside the code.
  *
  * WHY: ~1,400 lines of Confirm render logic live in App.js with no render
- * coverage — every other test in this repo is pure logic. Any future extraction
+ * coverage - every other test in this repo is pure logic. Any future extraction
  * would be a blind refactor. With this net, an extraction can be done in slices
  * and proved behaviour-identical after each one.
  *
- * SCOPE — this file covers the ConfirmStep SHELL, which is what is already a
+ * SCOPE - this file covers the ConfirmStep SHELL, which is what is already a
  * separate component: the tiles, the header and its hover tooltips, the
  * documents panel, the pre-submit summary and the submit gate. The found-row
  * table and the People section are injected as render-function PROPS from
@@ -19,7 +19,7 @@
  * the real app.
  *
  * Counts are supplied as props here (App.js derives them via confirmState,
- * which has its own 100+ tests) — so these tests characterise how the shell
+ * which has its own 100+ tests) - so these tests characterise how the shell
  * PRESENTS state, not how state is derived.
  */
 
@@ -28,7 +28,7 @@ import { render, screen, within, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { ConfirmStep } from "../ConfirmStep";
 
-// ── Fixtures — the dummy-research shape the app itself ships ──────────────
+// ── Fixtures - the dummy-research shape the app itself ships ──────────────
 const foundRow = (over = {}) => ({
   field: "tradeName",
   label: "Trade Name",
@@ -144,8 +144,8 @@ describe("the header", () => {
 });
 
 describe("hover tooltips - hidden by default, shown on hover, no layout shift", () => {
-  // The name appears twice — the tooltip trigger in the <h2>, and a <strong>
-  // in the reassurance line — so the trigger must be addressed via the heading.
+  // The name appears twice - the tooltip trigger in the <h2>, and a <strong>
+  // in the reassurance line - so the trigger must be addressed via the heading.
   const nameTrigger = () =>
     within(screen.getByRole("heading", { level: 2 })).getByText("Britannia Group Limited");
 

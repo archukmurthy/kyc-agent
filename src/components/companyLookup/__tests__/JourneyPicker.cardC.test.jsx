@@ -4,7 +4,7 @@ import "@testing-library/jest-dom";
 import { JourneyPicker } from "../JourneyPicker";
 
 // Btn is a required prop (rendered unconditionally in the footer) with no
-// default — omitting it crashes render with "Element type is invalid"
+// default - omitting it crashes render with "Element type is invalid"
 // regardless of Card C, so a minimal stand-in is supplied here.
 const base = {
   selectedJourneyCard: null,

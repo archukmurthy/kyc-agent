@@ -58,7 +58,7 @@ test("Band C shows editable cells + blank fields + inline LOA upload, gating Con
   expect(screen.getByText("Bob")).toBeInTheDocument();
   expect(screen.getByLabelText("Email address")).toBeInTheDocument();
   expect(screen.getByText("UPLOAD LOA HERE")).toBeInTheDocument();
-  // Continue is BLOCKED until the LOA is uploaded — clicking does nothing
+  // Continue is BLOCKED until the LOA is uploaded - clicking does nothing
   expect(screen.getByText(/Upload your letter of authorization/)).toBeInTheDocument();
   fireEvent.click(screen.getByText(/Confirm & continue/));
   expect(onConfirm).not.toHaveBeenCalled();
@@ -166,7 +166,7 @@ test("outcomeType unresolved_to_review HARD STOPS even without a requiresReview 
   const onProceed = jest.fn();
   const result = {
     enabled: true, band: "B", outcomeType: "unresolved_to_review",
-    // requiresReview deliberately omitted — the outcomeType alone must still hard-stop.
+    // requiresReview deliberately omitted - the outcomeType alone must still hard-stop.
     applicantView: { title: "We're completing our checks", body: "Your application has been saved. We'll be in touch if we need anything further." },
     verifiedFields: { firstName: "Bob" },
   };

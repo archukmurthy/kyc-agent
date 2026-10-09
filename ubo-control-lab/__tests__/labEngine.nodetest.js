@@ -105,7 +105,7 @@ test("LAB19 preserves each TDR PSC source assertion as one supported projected r
   assert.equal(graph.relationships.every(({ support }) => support.claimCount === 1 && support.evidenceReferenceCount === 1), true);
 });
 
-test("fixture mode produces real snapshots, public projections, planner data and R01–R14", () => {
+test("fixture mode produces real snapshots, public projections, planner data and R01-R14", () => {
   const session = startFixture({ fixtureId: "LAB02" });
   const view = session.snapshots[0].view;
   assert.equal(view.snapshot.snapshotSchemaVersion, "ubo-decision-snapshot-v1");
@@ -443,15 +443,15 @@ test("browser product exposes disabled Evidence, feedback export and Lab-only lo
   const styles = fs.readFileSync(path.join(__dirname, "..", "browser", "lab.css"), "utf8");
   const html = fs.readFileSync(path.join(__dirname, "..", "browser", "index.html"), "utf8");
   const replayStore = fs.readFileSync(path.join(__dirname, "..", "browser", "replayStore.js"), "utf8");
-  assert.match(source, /NOT YET AVAILABLE — EVIDENCE PLATFORM INTEGRATION IN PROGRESS/);
+  assert.match(source, /NOT YET AVAILABLE - EVIDENCE PLATFORM INTEGRATION IN PROGRESS/);
   assert.match(source, /navigator\.clipboard\.writeText/);
   assert.match(source, /ubo-control-lab-feedback-v1/);
   assert.match(source, /snapshotHash/);
   assert.match(source, /Replay saved result/);
   assert.match(source, /Run fresh live Discovery/);
-  assert.match(source, /Saved locally in this browser — Lab testing only/);
+  assert.match(source, /Saved locally in this browser - Lab testing only/);
   assert.match(source, /START_REPLAY/);
-  assert.match(source, /REVIEW POLICY — NOT APPROVED FOR PRODUCTION/);
+  assert.match(source, /REVIEW POLICY - NOT APPROVED FOR PRODUCTION/);
   assert.match(source, /PolicyReadinessWatermark/);
   assert.match(source, /readiness\.blockingReasons\.length/);
   assert.match(source, /readiness\.unresolvedSignoffs\.length/);

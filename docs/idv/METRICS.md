@@ -73,8 +73,8 @@ are unavailable without configured conversion. Partial pricing coverage is
 unavailable rather than silently undercounted.
 
 Cost per started uses all launched cost divided by launches. Cost per completed
-and per successful use all launched cohort cost—including billable failures or
-abandonments—divided by terminal or VERIFIED outcomes respectively.
+and per successful use all launched cohort cost-including billable failures or
+abandonments-divided by terminal or VERIFIED outcomes respectively.
 
 ## Dimensions and POC scorecard
 

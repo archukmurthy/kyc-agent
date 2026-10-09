@@ -1,5 +1,5 @@
 /**
- * ConfirmStep.jsx — the Confirm page of the onboarding wizard, extracted
+ * ConfirmStep.jsx - the Confirm page of the onboarding wizard, extracted
  * verbatim from the inline block in App.js (Option B port, commit 1: pure
  * extraction, ZERO behaviour change).
  *
@@ -7,7 +7,7 @@
  * (checks, research, coverage, stakeholder state) stays in App.js and arrives
  * as props, as do the derived render lists (sortedFound et al.) and the two
  * deep render helpers (renderStakeholderConfirmSection /
- * renderUnifiedFoundTable) — those close over App.js state (checks, refs,
+ * renderUnifiedFoundTable) - those close over App.js state (checks, refs,
  * dialogue persistence) and moving them would change closure semantics.
  * The step gate (`step === STEPS.confirm && …`) also stays in App.js.
  */
@@ -65,7 +65,7 @@ export function ConfirmStep({
 }) {
   const card = cardStyle;
   // Every count on this page comes from the ONE shared predicate
-  // (confirmState.js) that the commit-4 submit gate will also read — the tiles
+  // (confirmState.js) that the commit-4 submit gate will also read - the tiles
   // and the gate can never disagree because there is only one derivation.
   const counts = confirmCounts || { needsYou: 0, confirmed: 0, corrected: 0, docsNeeded: 0, docs: [] };
   const outstanding = counts.needsYou;
@@ -75,7 +75,7 @@ export function ConfirmStep({
   // comes from the SAME list, so the button can never grey out silently.
   const blockerList = blockers || [];
   const isBlocked = blockerList.length > 0;
-  // Pre-fill is a RESEARCH metric — how much arrived and from where, counted in
+  // Pre-fill is a RESEARCH metric - how much arrived and from where, counted in
   // data points (a stakeholder row carrying three people is not one field).
   // Falls back to the old row-based numbers only if the prop is absent.
   const prefillStats = prefill || {
@@ -264,7 +264,7 @@ export function ConfirmStep({
                 commit 4, when it reconciles against /api/amendment-documents.
                 Plain integers, zero tiles de-emphasised. */}
             {(() => {
-              // The old action banner's copy, verbatim — now surfaced only on
+              // The old action banner's copy, verbatim - now surfaced only on
               // hover of the Needs You tile it was always describing.
               const needsInput = outstanding;
               const uncheckedCount = (research.found || []).filter((_, i) => !checks[i]).length;
