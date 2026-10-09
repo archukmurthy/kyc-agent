@@ -387,3 +387,30 @@ test("a save answers with what the screens read after one, not the whole case", 
   await handler({ method: "GET", headers: {}, query: { caseId: "case-1" } }, read);
   assert.ok(read.body.case.projection.researchResult);
 });
+
+// Review (2026-10-09): customer pages read the whole case - research, chart,
+// history - every minute and on every focus, only to learn whether it had
+// changed under them. The state read answers that alone, from the case row
+// (no chart reading, no history), to the same callers as the case itself.
+test("a case's state is read alone, by the same callers as the case", async () => {
+  const gets = [];
+  const row = { caseId: "case-1", updatedAt: "2026-10-09T10:00:00.000Z", currentStage: "QUESTIONS",
+    projection: { round: 3, assessment: { trace: { verificationAssessment: { finalized: true } } }, researchResult: { candidateSources: ["large"] } } };
+  const make = (actor) => route.createHandler(() => ({
+    service: { load: async () => { throw new Error("the whole case is not read"); } },
+    repository: { get: async (caseId) => { gets.push(caseId); return caseId === "case-1" ? row : null; } },
+    close: async () => {},
+  }), { applyCors: () => false, enforceRateLimit: async () => true, requireUboCaller: async () => actor });
+  const customer = fakeRes();
+  await make(CUSTOMER)({ method: "GET", headers: {}, query: { caseId: "case-1", state: "1" } }, customer);
+  assert.strictEqual(customer.statusCode, 200);
+  assert.deepStrictEqual(customer.body.state, { round: 3, finalized: true, stage: "QUESTIONS", updatedAt: "2026-10-09T10:00:00.000Z" });
+  assert.strictEqual(customer.body.case, undefined);
+  const other = fakeRes();
+  await make(CUSTOMER)({ method: "GET", headers: {}, query: { caseId: "case-2", state: "1" } }, other);
+  assert.strictEqual(other.statusCode, 404);
+  const missing = fakeRes();
+  await make({ kind: "staff", tenantId: "acme", role: "analyst" })({ method: "GET", headers: {}, query: { caseId: "case-9", state: "1" } }, missing);
+  assert.strictEqual(missing.statusCode, 404);
+  assert.deepStrictEqual(gets, ["case-1", "case-9"]);
+});

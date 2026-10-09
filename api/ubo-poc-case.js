@@ -22,7 +22,8 @@ const MAX_BODY_BYTES = 3 * 1024 * 1024;
 function dependencies(tenantId) {
   if (!process.env.DATABASE_URL) throw Object.assign(new Error("POC case persistence requires DATABASE_URL"), { statusCode: 503, code: "poc_case_persistence_unavailable" });
   const db = createPostgresDb();
-  return { db, service: new PocCaseService(new PostgresPocCaseRepository(db, tenantId)), close: () => db.close() };
+  const repository = new PostgresPocCaseRepository(db, tenantId);
+  return { db, repository, service: new PocCaseService(repository), close: () => db.close() };
 }
 
 // What a customer (a session for ONE case) may do to that case. Research and
@@ -116,6 +117,21 @@ function createHandler(factory = dependencies, gates = DEFAULT_GATES) {
         if (String(req.query?.ledger || "") === "1") {
           if (customer) return res.status(404).json({ success: false, code: "not_found" });
           return res.status(200).json({ success: true, events: await active.service.ledger(caseId) });
+        }
+        // Whether the case changed under an open page: its round (a new one
+        // after a reset, a reopen, a new chart or new research), whether it is
+        // finalised, its stage and when it last changed. The case row alone -
+        // not its chart reading or history - so a page can ask often and cheaply.
+        if (String(req.query?.state || "") === "1") {
+          const row = await active.repository.get(caseId);
+          if (!row) return res.status(404).json({ success: false, code: "case_not_found", message: "The POC case was not found." });
+          const trace = row.projection?.assessment?.trace || row.projection?.resolution?.trace || null;
+          return res.status(200).json({ success: true, state: {
+            round: Number(row.projection?.round) || 0,
+            finalized: Boolean(trace?.verificationAssessment?.finalized),
+            stage: row.currentStage || null,
+            updatedAt: row.updatedAt || null,
+          } });
         }
         const record = await active.service.load(caseId);
         if (!record) return res.status(404).json({ success: false, code: "case_not_found", message: "The POC case was not found." });
