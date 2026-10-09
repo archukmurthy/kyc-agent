@@ -14,6 +14,7 @@ const RELEASE_STATE = Object.freeze({
   FAILED: "FAILED",
 });
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function json(value) { return JSON.stringify(value == null ? null : value); }
 function rows(result) { return result?.rows || result || []; }
 function first(result) { return rows(result)[0] || null; }
@@ -445,15 +446,21 @@ class PostgresPocCaseRepository {
     return row ? { jobId: row.id, artifactId: row.artifact_id, state: row.state, result: row.result, completedAt: row.completed_at, demoCaseId: row.demo_case_id, company: row.company, evidenceHandoff: row.evidence_handoff } : null;
   }
 
-  /** The server's extraction of an evidence file uploaded for this case. */
+  /** The server's extraction of an evidence file uploaded for this case:
+   *  { result, evidenceHandoff }, { pending: true } while it is still being
+   *  read, or null when no upload for this case has that id. */
   async evidenceResult(caseId, artifactId) {
-    if (!artifactId) return null;
-    const row = first(await this.db.query(`SELECT result, evidence_handoff FROM evidence_customer_extraction_jobs
-      WHERE tenant_id = $1 AND demo_case_id = $2 AND artifact_id = $3 AND state IN ('COMPLETE', 'PARTIAL') AND result IS NOT NULL
-      ORDER BY (evidence_handoff IS NOT NULL) DESC, completed_at DESC NULLS LAST LIMIT 1`, [this.tenantId, caseId, artifactId]));
+    // The id comes from the browser: one that is not a UUID failed the query
+    // (a 500), so it is no upload of this case.
+    if (!UUID.test(String(artifactId || ""))) return null;
+    const row = first(await this.db.query(`SELECT state, result, evidence_handoff FROM evidence_customer_extraction_jobs
+      WHERE tenant_id = $1 AND demo_case_id = $2 AND artifact_id = $3
+      ORDER BY (state IN ('COMPLETE', 'PARTIAL') AND result IS NOT NULL) DESC, (evidence_handoff IS NOT NULL) DESC, completed_at DESC NULLS LAST LIMIT 1`, [this.tenantId, caseId, artifactId]));
+    if (!row) return null;
+    if (!["COMPLETE", "PARTIAL"].includes(row.state) || !row.result) return { pending: true };
     // Which request the upload answered travels with it: an upload that was
     // not made as evidence (the ownership chart itself, say) has none.
-    return row ? { result: row.result, evidenceHandoff: row.evidence_handoff } : null;
+    return { result: row.result, evidenceHandoff: row.evidence_handoff };
   }
 
   async apply({ caseId, operation, idempotencyKey, actorType, actorId = null, correlationId = null, receivedAt = null, payload, release, expectedVersion = null }) {
