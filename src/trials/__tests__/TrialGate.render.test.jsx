@@ -108,11 +108,32 @@ test("a second trial's link for a sign-in already in a trial says what to do, wi
     expect(screen.getByRole("link", { name: "Go to your current trial" })).toHaveAttribute("href", "/ubo-demo/");
     expect(screen.queryByText(/Ask whoever sent it/)).not.toBeInTheDocument();
     expect(screen.queryByText("the product")).not.toBeInTheDocument();
+    window.fetch = jest.fn(async () => ({ ok: true, status: 200, json: async () => ({ left: true }) }));
     screen.getByRole("button", { name: "Sign out" }).click();
     expect(signOut).toHaveBeenCalledWith({ redirectUrl: expect.stringContaining("invite=VODAPH-LT6Y") });
+    // Review, 2026-10-09: signing out left the customer session cookie behind.
+    const [url, options] = window.fetch.mock.calls[0];
+    expect(url).toBe("/api/ubo-customer-link");
+    expect(JSON.parse(options.body)).toEqual({ action: "leave" });
+    expect(options.keepalive).toBe(true);
   } finally {
     delete window.Clerk;
+    delete window.fetch;
   }
+});
+
+test("an invite is redeemed once even when the page starts up twice", async () => {
+  // Review, 2026-10-09: React runs start-up twice in development, and both
+  // runs redeemed - two requests racing for a seat.
+  setUrl("?invite=ACME-7D3K");
+  let finish;
+  mockRedeemInvite.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+  mockTrialStatus.mockResolvedValue({ inTrial: true, trialEndsAt: new Date(Date.now() + 86400000).toISOString() });
+  render(<React.StrictMode><TrialGate><div>the product</div></TrialGate></React.StrictMode>);
+  await waitFor(() => expect(mockRedeemInvite).toHaveBeenCalled());
+  finish({ access: {} });
+  expect(await screen.findByText("the product")).toBeInTheDocument();
+  expect(mockRedeemInvite).toHaveBeenCalledTimes(1);
 });
 test("an owner working in a trial is told their steps are not counted", async () => {
   mockTrialStatus.mockResolvedValue({ inTrial: true, unmetered: true, company: "Test LTD", trialEndsAt: new Date(Date.now() - 86400000).toISOString(), readOnly: false, budgetLeft: 7 });

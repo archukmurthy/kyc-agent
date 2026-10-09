@@ -61,7 +61,33 @@ export async function resumeCustomerSession() {
   return result;
 }
 
-export async function leaveCustomerSession() {
+/** Forgets the session here and asks the server to clear its cookie. Needs no
+ *  sign-in, and is sent at once with keepalive so it still arrives when the
+ *  page is about to navigate away (signing out does). */
+export function leaveCustomerSession() {
   clearCustomerSession();
-  return post({ action: "leave" });
+  return fetch("/api/ubo-customer-link", {
+    method: "POST",
+    credentials: "same-origin",
+    keepalive: true,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "leave" }),
+  }).then(
+    async (response) => ({ ok: response.ok, status: response.status, payload: await response.json().catch(() => ({})) }),
+    () => ({ ok: false, status: 0, payload: {} }),
+  );
+}
+
+/** The one way to sign out of the UBO screens: the customer session cookie
+ *  goes too. Signing out used to leave it behind, so on a shared computer the
+ *  next person to sign in as that customer picked the review back up (review,
+ *  2026-10-09). Every sign-out button calls this; signing out through Clerk's
+ *  own menu is caught by ClerkGate. */
+export function signOutEverywhere(redirectUrl) {
+  try { leaveCustomerSession(); } catch (_) { /* No network here: signing out still goes ahead. */ }
+  try {
+    if (typeof window !== "undefined" && window.Clerk) window.Clerk.signOut({ redirectUrl });
+  } catch (_) {
+    // Nothing to sign out of.
+  }
 }
