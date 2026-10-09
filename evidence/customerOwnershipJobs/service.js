@@ -21,6 +21,7 @@ const TRANSIENT_CODES = new Set([
 ]);
 const DETERMINISTIC_CODES = new Set([
   "provider_request_rejected",
+  "database_persistence_rejected",
   "malformed_provider_result",
   "provider_malformed_output",
   "evidence_result_not_usable",
@@ -98,7 +99,9 @@ function reason(error) {
   const code = String(error?.code || "operation_failed");
   const upstreamStatus = Number.isInteger(error?.upstreamStatus) ? error.upstreamStatus
     : Number.isInteger(error?.statusCode) && [408, 429, 500, 502, 503, 504].includes(error.statusCode) ? error.statusCode : null;
-  const retryable = !DETERMINISTIC_CODES.has(code) && (error?.retryable === true
+  // A failure its source says cannot go differently is never retried: each
+  // attempt is another paid reading.
+  const retryable = !DETERMINISTIC_CODES.has(code) && error?.retryable !== false && (error?.retryable === true
     || TRANSIENT_CODES.has(code)
     || upstreamStatus === 408 || upstreamStatus === 429 || (upstreamStatus != null && upstreamStatus >= 500));
   const safeMessage = String(error?.safeReason || error?.message || code).slice(0, 500);

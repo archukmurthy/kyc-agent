@@ -23,6 +23,12 @@ function transientPersistenceFailure(error) {
   return /connection|socket|websocket|timeout|temporarily unavailable|connection terminated/i.test(String(error?.message || ""));
 }
 
+// Postgres refusing the data itself (class 22 data exception, 23 integrity
+// violation, 42 a statement this code got wrong): deterministic, unlike an outage.
+function persistenceRejected(error) {
+  return /^(22|23|42)[0-9A-Z]{3}$/.test(String(error?.code || ""));
+}
+
 function artifactOrder(artifact) {
   const value = artifact?.artifactMetadata?.pageOrder ?? artifact?.artifactMetadata?.pageNumber;
   return Number.isFinite(Number(value)) ? Number(value) : null;
@@ -192,6 +198,12 @@ class LiveArtifactInterpretationService {
         }
       } else {
         console.error("[evidence-a3] Interpretation persistence failed", { runId: run.id, code: firstError?.code || null, constraint: firstError?.constraint || null, stage: firstError?.persistenceStage || null });
+        // The database refused what was read (a constraint, a value too long):
+        // the same reading would be refused again, so it is not offered for a
+        // retry - each retry is another paid reading. An outage still is.
+        if (persistenceRejected(firstError)) {
+          throw liveError("database_persistence_rejected", "A3 interpretation was refused by the database; reading it again would be refused the same way", 500, { runId: run.id, persistenceCode: firstError?.code || null, persistenceColumn: firstError?.column || null, persistenceConstraint: firstError?.constraint || null, persistenceStage: firstError?.persistenceStage || null, retryAttempted: false });
+        }
         throw liveError("database_persistence_failed", "A3 interpretation could not be persisted; the A2 Artifact and prior interpretations remain unchanged", 503, { runId: run.id, persistenceCode: firstError?.code || null, persistenceColumn: firstError?.column || null, persistenceConstraint: firstError?.constraint || null, persistenceStage: firstError?.persistenceStage || null, retryAttempted: false });
       }
     }
@@ -201,4 +213,4 @@ class LiveArtifactInterpretationService {
   }
 }
 
-module.exports = { LAB_CONTEXT, LAB_REQUESTED_CONCEPTS, LIVE_MEDIA_TYPES, LiveArtifactInterpretationService, artifactOrder, liveError, mediaSupported, orderAndAssessInputs, transientPersistenceFailure };
+module.exports = { LAB_CONTEXT, LAB_REQUESTED_CONCEPTS, LIVE_MEDIA_TYPES, LiveArtifactInterpretationService, artifactOrder, liveError, mediaSupported, orderAndAssessInputs, persistenceRejected, transientPersistenceFailure };

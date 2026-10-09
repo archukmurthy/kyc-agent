@@ -339,6 +339,15 @@ test("an over-long company field is refused before anything is stored (the juris
   assert.equal(h.ingestion.operations.size, 0);
 });
 
+test("a failure marked not retryable fails at once, even wrapped as a 502", async () => {
+  for (const error of [Object.assign(failure("operation_failed", 502), { retryable: false }), failure("database_persistence_rejected", 500)]) {
+    const h = harness([error]);
+    const started = await h.service.start(input());
+    const job = await h.service.process(started.jobId);
+    assert.equal(job.state, "FAILED", error.code); assert.equal(h.calls(), 1, error.code);
+  }
+});
+
 test("a running job inside its lease is left alone", async () => {
   const h = harness([usableResult()]);
   const started = await h.service.start(input());

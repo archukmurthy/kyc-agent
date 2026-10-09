@@ -716,3 +716,16 @@ test("API dispatches saved-extraction re-evaluation separately from document ana
   assert.equal(analysisCalls, 0);
   assert.equal(reevaluationCalls, 1);
 });
+
+// A failure Evidence says cannot go differently is not offered for a retry -
+// each retry is another paid reading (2026-10-09: the database refusing what
+// was read was retried as an outage, three paid readings).
+test("a failure Evidence marks as not retryable reaches the job as not retryable", async () => {
+  const { publicError } = require("../../../evidence/consumer/v1/errors.js");
+  assert.equal(publicError({ code: "database_persistence_rejected" }).retryable, false);
+  assert.equal(publicError({ code: "database_persistence_failed" }).retryable, true, "an outage still is");
+  const rejecting = { ...provider({}), async extract() { throw Object.assign(new Error("rejected"), { code: "provider_media_rejected" }); } };
+  await assert.rejects(analyseCustomerOwnershipChart(input(), { provider: rejecting }), (error) => error.retryable === false);
+  const unavailable = { ...provider({}), async extract() { throw Object.assign(new Error("down"), { code: "provider_unavailable" }); } };
+  await assert.rejects(analyseCustomerOwnershipChart(input(), { provider: unavailable }), (error) => error.retryable === undefined);
+});
