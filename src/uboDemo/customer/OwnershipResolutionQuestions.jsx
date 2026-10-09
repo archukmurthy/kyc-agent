@@ -13,7 +13,7 @@ import {
 } from "./ownershipResolutionEngine";
 import { CUSTOMER_IDV_PATH } from "./customerRoute";
 import { isReadyForIdentityVerification } from "./verificationAssessment";
-import { persistPocCase, smallStableHash, useReloadWhenFinalizedChanges } from "../pocCaseClient";
+import { caseMovedOn, persistPocCase, shownCaseRound, smallStableHash, useReloadWhenFinalizedChanges } from "../pocCaseClient";
 import { casePointerStore, uboStore } from "../browserStore";
 import { limitNotice } from "../../trials/limitNotice";
 
@@ -48,9 +48,31 @@ function readCurrentTrace(context) {
 // A document still being read when the page closed. Ids only - the reading is
 // driven from this page, so without them a reload left it unread and the card
 // showed the previous decision as if nothing had been sent (UBO-59).
+// Each names the case's round it was uploaded in: one from a round since ended
+// (the answers were started again, here or in another tab, or the analyst
+// reopened the case) is for answers that no longer exist, and is dropped.
 function evidenceJobKey(caseId, recordId) { return `ubo-evidence-job:${caseId}:${recordId}`; }
 function readEvidenceJob(caseId, recordId) {
-  try { return JSON.parse(casePointerStore.getItem(evidenceJobKey(caseId, recordId)) || "null")?.jobId || null; } catch (_) { return null; }
+  try {
+    const pointer = JSON.parse(casePointerStore.getItem(evidenceJobKey(caseId, recordId)) || "null");
+    const round = shownCaseRound(caseId);
+    if (pointer && pointer.round !== undefined && round !== undefined && pointer.round !== round) {
+      casePointerStore.removeItem(evidenceJobKey(caseId, recordId));
+      return null;
+    }
+    return pointer?.jobId || null;
+  } catch (_) { return null; }
+}
+function forgetEvidenceJobs(caseId) {
+  try {
+    const prefix = evidenceJobKey(caseId, "");
+    const keys = [];
+    for (let index = 0; index < window.sessionStorage.length; index += 1) {
+      const key = window.sessionStorage.key(index);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+    keys.forEach((key) => casePointerStore.removeItem(key));
+  } catch (_) { /* Storage blocked: nothing was kept there either. */ }
 }
 function fileAsBase64(file) {
   return new Promise((resolve, reject) => {
@@ -175,18 +197,18 @@ function QuestionInput({ question, value, onChange }) {
   return <label className="ubo-resolution-field"><span>Your answer</span><input aria-label="Your answer" type="text" value={value} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
-function CustomerQuestion({ question, draft, error, onDraft, onSubmit }) {
+function CustomerQuestion({ question, draft, error, locked, onDraft, onSubmit }) {
   return <article className="ubo-resolution-question">
     <span className="ubo-resolution-question-kicker">{question.stage === "CONTROL" ? "Control question" : question.stage === "FALLBACK" ? "Senior management question" : question.stage === "ADDITIONAL" ? "Additional question" : "Ownership question"}</span>
     <h3>{question.prompt}</h3>
     {question.explanation && <p>{question.explanation}</p>}
     <QuestionInput question={question} value={draft || ""} onChange={onDraft} />
     {error && <p className="ubo-resolution-error" role="alert">{error}</p>}
-    <button type="button" className="ubo-customer-primary" disabled={draft === undefined || draft === ""} onClick={onSubmit}>Save answer <span>→</span></button>
+    <button type="button" className="ubo-customer-primary" disabled={locked || draft === undefined || draft === ""} onClick={onSubmit}>Save answer <span>→</span></button>
   </article>;
 }
 
-function QuestionGroup({ questions, allQuestions, evidenceRecords, context, drafts, errors, evidenceState, evidence, retainedFiles, onDraft, onSubmit, onUpload }) {
+function QuestionGroup({ questions, allQuestions, evidenceRecords, context, drafts, errors, evidenceState, evidence, retainedFiles, locked, onDraft, onSubmit, onUpload }) {
   const answered = allQuestions.filter(({ status }) => status !== "OPEN").length;
   const evidenceAccepted = evidenceRecords.length > 0 && evidenceRecords.every(({ status }) => status === EVIDENCE_STATUS.SATISFIED);
   return <section className="ubo-resolution-question-group">
@@ -203,10 +225,10 @@ function QuestionGroup({ questions, allQuestions, evidenceRecords, context, draf
       : evidenceAccepted
         ? <p><strong>All questions for this issue are answered.</strong> Supporting evidence has been accepted and remains visible below.</p>
         : <p><strong>All questions for this issue are answered.</strong> Supporting evidence is still required before the issue can be resolved.</p>}
-    {questions.length > 0 && <div>{questions.map((question) => <CustomerQuestion key={question.id} question={question} draft={drafts[question.id]} error={errors[question.id]} onDraft={(value) => onDraft(question.id, value)} onSubmit={() => onSubmit(question)} />)}</div>}
+    {questions.length > 0 && <div>{questions.map((question) => <CustomerQuestion key={question.id} question={question} draft={drafts[question.id]} error={errors[question.id]} locked={locked} onDraft={(value) => onDraft(question.id, value)} onSubmit={() => onSubmit(question)} />)}</div>}
     {evidenceRecords.length > 0 && <div className="ubo-resolution-group-evidence">
       <p>Supporting evidence for this ownership issue</p>
-      {evidenceRecords.map((record) => <EvidenceRequest key={record.id} record={record} context={context} busy={evidenceState.busyId === record.id} message={evidenceState.messages[record.id] || evidence[record.id]?.reason} retainedFile={retainedFiles[record.id]} retryAvailable={Boolean(retainedFiles[record.id])} onUpload={onUpload} onRetry={() => onUpload(record, retainedFiles[record.id])} />)}
+      {evidenceRecords.map((record) => <EvidenceRequest key={record.id} record={record} context={context} busy={evidenceState.busyId === record.id} locked={locked} message={evidenceState.messages[record.id] || evidence[record.id]?.reason} retainedFile={retainedFiles[record.id]} retryAvailable={Boolean(retainedFiles[record.id])} onUpload={onUpload} onRetry={() => onUpload(record, retainedFiles[record.id])} />)}
     </div>}
   </section>;
 }
@@ -222,7 +244,7 @@ function AnsweredQuestion({ question, answer, context, editing, draft, error, lo
       <QuestionInput question={question} value={draft ?? answer.value ?? ""} onChange={onDraft} />
       {error && <p className="ubo-resolution-error" role="alert">{error}</p>}
       <div className="ubo-resolution-edit-actions">
-        <button type="button" className="ubo-customer-primary" disabled={draft === undefined || draft === ""} onClick={onSave}>Save change <span>→</span></button>
+        <button type="button" className="ubo-customer-primary" disabled={locked || draft === undefined || draft === ""} onClick={onSave}>Save change <span>→</span></button>
         <button type="button" onClick={onCancel}>Cancel</button>
       </div>
     </> : <>
@@ -254,7 +276,7 @@ function EvidencePreview({ file }) {
   </details>;
 }
 
-function EvidenceRequest({ record, context, busy, message, retainedFile, retryAvailable, onUpload, onRetry }) {
+function EvidenceRequest({ record, context, busy, locked, message, retainedFile, retryAvailable, onUpload, onRetry }) {
   const input = useRef(null);
   const canChooseFile = [EVIDENCE_STATUS.OPEN, EVIDENCE_STATUS.REJECTED, EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE, EVIDENCE_STATUS.ANALYST_REVIEW].includes(record.status);
   const chooseFile = () => {
@@ -276,8 +298,8 @@ function EvidenceRequest({ record, context, busy, message, retainedFile, retryAv
     {record.filename && <div className="ubo-resolution-evidence-file"><span aria-hidden="true">▤</span><div><strong>{record.filename}</strong><small>{record.status === EVIDENCE_STATUS.SATISFIED ? "File received · evidence accepted" : record.status === EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE ? "File received · analysis not completed" : record.status === EVIDENCE_STATUS.REJECTED ? "File received · evidence not accepted" : "File received"}</small></div></div>}
     {record.status === EVIDENCE_STATUS.SATISFIED && <EvidencePreview file={retainedFile} />}
     <input ref={input} type="file" className="ubo-customer-file-input" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" onChange={(event) => { const file = event.currentTarget.files?.[0] || null; event.currentTarget.value = ""; onUpload(record, file); }} />
-    {record.status === EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE && retryAvailable && <button type="button" onClick={onRetry} disabled={busy}>Retry analysis</button>}
-    {canChooseFile && <button type="button" onClick={chooseFile} disabled={busy}>{busy ? "Validating evidence…" : record.status === EVIDENCE_STATUS.OPEN ? "Choose supporting evidence" : "Choose another file"}</button>}
+    {record.status === EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE && retryAvailable && <button type="button" onClick={onRetry} disabled={busy || locked}>Retry analysis</button>}
+    {canChooseFile && <button type="button" onClick={chooseFile} disabled={busy || locked}>{busy ? "Validating evidence…" : record.status === EVIDENCE_STATUS.OPEN ? "Choose supporting evidence" : "Choose another file"}</button>}
     {record.status !== EVIDENCE_STATUS.OPEN && <strong className="ubo-resolution-evidence-status">{humanize(record.status)}</strong>}
     {message && <p role="status">{message}</p>}
   </article>;
@@ -288,7 +310,6 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const [answers, setAnswers] = useState(restored?.answers || {});
   const [evidence, setEvidence] = useState(restored?.evidence || {});
   const [recalculations, setRecalculations] = useState(restored?.recalculations || {});
-  const [drafts, setDrafts] = useState({});
   const [errors, setErrors] = useState({});
   // A case finalised before this page loaded (the customer came back, or used
   // Back from identity verification): the server refuses any change to it, so
@@ -304,10 +325,24 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     return () => window.removeEventListener("beforeunload", warn);
   }, [saving]);
   const finalizedAtLoad = useMemo(() => Boolean(readCurrentTrace(context)?.verificationAssessment?.finalized), [context]);
-  // ...and when that stops being true on the server (the analyst reopened the
-  // review, or another tab finalised it), the page reloads to match it.
-  const recheckCase = useReloadWhenFinalizedChanges(context?.demoCaseId, finalizedAtLoad);
   const [resetting, setResetting] = useState(false);
+  // While the answers are being cleared nothing else is sent: an answer given
+  // meanwhile reached the server after the reset and was used there, while
+  // this page cleared it from view (review, 2026-10-09). A ref, so a click in
+  // the same moment is refused too.
+  const resettingNow = useRef(false);
+  // Documents being read. Starting again waits for them: one finishing after
+  // the reset sent its upload back to the case.
+  const [readings, setReadings] = useState(0);
+  // Typed or chosen but not sent: a reload would lose it.
+  const [drafts, setDrafts] = useState({});
+  const unsentDraft = Object.entries(drafts).some(([questionId, value]) => value !== undefined && value !== "" && String(value) !== String(answers[questionId]?.value ?? ""));
+  // ...and when the server's case is no longer what the page shows (the
+  // analyst reopened the review, another tab finalised it or started again),
+  // the page reloads to match it - never over work not yet saved.
+  const recheckCase = useReloadWhenFinalizedChanges(context?.demoCaseId, finalizedAtLoad, {
+    hasUnsavedWork: () => saving.size > 0 || resettingNow.current || readings > 0 || finalizing || unsentDraft,
+  });
   // Bumped by "Start questions again": a document still being checked when
   // the answers were cleared belongs to the cleared answers, not the new ones.
   const resetGeneration = useRef(0);
@@ -383,7 +418,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       headers: { "Content-Type": "application/json", ...auth },
       body: JSON.stringify({ operation: "REEVALUATE_SAVED_EXTRACTION", demoContext: { company: context.company, referenceCaseId: context.referenceCaseId, demoCaseId: context.demoCaseId }, savedResult }),
     })).then(async (response) => {
-      const payload = await response.json();
+      const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.success) throw new Error(payload.message || "UBO recalculation failed");
       if (generation !== recalculationGeneration.current) return;
       setRecalculations((current) => {
@@ -408,6 +443,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   }, [context, engine.resolutions, result, rows]);
 
   const submit = (question, retryValue) => {
+    if (resettingNow.current) return;
     let idempotencyKey;
     try {
       const value = answerValue(question, retryValue !== undefined ? retryValue : drafts[question.id]);
@@ -456,32 +492,48 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         setSaving((current) => { const next = new Set(current); next.delete(question.id); return next; });
         answerSubmissions.current.delete(idempotencyKey);
         setErrors((current) => ({ ...current, [question.id]: caught.message }));
-        if (caught.code === "case_finalized") recheckCase();
+        if (caseMovedOn(caught.code)) recheckCase();
       });
       setEditingQuestionId(null);
       setErrors((current) => ({ ...current, [question.id]: "" }));
     } catch (caught) { if (idempotencyKey) answerSubmissions.current.delete(idempotencyKey); setErrors((current) => ({ ...current, [question.id]: caught.message })); }
   };
   const resetAnswers = async () => {
-    if (resetting) return;
+    if (resettingNow.current || readings > 0) return;
     setErrors((current) => ({ ...current, reset: "" }));
     // The server keeps the answers it is given (merged, most recent wins), so
     // starting again has to be said to it, not only done in this browser - and
     // the answers are cleared here only once it has: clearing them regardless
     // showed a fresh start while the server kept every old answer.
     if (context?.demoCaseId) {
+      resettingNow.current = true;
       setResetting(true);
+      let failure = null;
       try {
         await persistPocCase("RESET_ANSWERS", { caseId: context.demoCaseId, actorType: "CUSTOMER", idempotencyKey: `reset:${Date.now()}`, payload: {} });
       } catch (caught) {
-        setErrors((current) => ({ ...current, reset: `Your answers were not cleared: ${caught.message || "the server could not be reached."} Your answers are unchanged.` }));
-        if (caught.code === "case_finalized") recheckCase();
-        return;
+        failure = caught;
       } finally {
+        resettingNow.current = false;
         setResetting(false);
+      }
+      if (failure) {
+        // No answer from the server (it timed out here, or the connection
+        // dropped) is not a refusal: it may have cleared them all the same.
+        // Ask the case rather than say they are unchanged (review, 2026-10-09).
+        const outcome = failure.status ? null : await recheckCase({ ignoreUnsaved: true });
+        const message = outcome === "reloading" || outcome === "changed"
+          ? "Your answers were cleared, but this page did not hear back in time. Reload the page if it does not refresh itself."
+          : outcome === "unchanged" || failure.status
+            ? `Your answers were not cleared: ${failure.message || "the server could not be reached."} Your answers are unchanged.`
+            : "We could not tell whether your answers were cleared. Reload the page to see where things stand.";
+        setErrors((current) => ({ ...current, reset: message }));
+        if (caseMovedOn(failure.code)) recheckCase();
+        return;
       }
     }
     resetGeneration.current += 1;
+    forgetEvidenceJobs(context?.demoCaseId);
     clearSession(context, result);
     // The same answer given again after a reset is a new answer, not a repeat.
     answerSubmissions.current.clear();
@@ -496,7 +548,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     evidenceFiles.current = {};
   };
   const uploadEvidence = async (record, file) => {
-    if (!file) return;
+    if (!file || resettingNow.current) return;
     if (!ACCEPTED_TYPES.has(file.type) || file.size > MAX_BYTES) {
       setEvidenceState((current) => ({ ...current, messages: { ...current.messages, [record.id]: "Upload a PDF, PNG or JPEG up to 3 MB." } }));
       return;
@@ -505,6 +557,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     evidenceFiles.current[record.id] = file;
     setEvidence((current) => ({ ...current, [record.id]: { status: EVIDENCE_STATUS.RECEIVED, filename: file.name } }));
     setEvidenceState((current) => ({ ...current, busyId: record.id, messages: { ...current.messages, [record.id]: "Evidence received and sent to the existing validation pipeline." } }));
+    setReadings((count) => count + 1);
     try {
       setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: EVIDENCE_STATUS.VALIDATING } }));
       const started = await postOwnershipExtraction({
@@ -517,12 +570,14 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       if (generation !== resetGeneration.current) return;
       setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: caught.evidenceStatus || EVIDENCE_STATUS.REJECTED, reason: caught.message } }));
       setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: caught.message } }));
+    } finally {
+      setReadings((count) => count - 1);
     }
   };
   // `generation`: the answers the upload was made for (taken when it started).
   const finishEvidence = async (record, started, filename, generation) => {
     const pointer = evidenceJobKey(context?.demoCaseId, record.id);
-    if (started?.job?.jobId) casePointerStore.setItem(pointer, JSON.stringify({ jobId: started.job.jobId }));
+    if (started?.job?.jobId) casePointerStore.setItem(pointer, JSON.stringify({ jobId: started.job.jobId, round: shownCaseRound(context?.demoCaseId) }));
     try {
       const extractionResult = await awaitSupportingEvidenceResult(started);
       // The answers were cleared while it was being read: it was evidence for
@@ -560,13 +615,16 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       if (!jobId) return;
       setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: EVIDENCE_STATUS.VALIDATING } }));
       setEvidenceState((current) => ({ ...current, busyId: record.id, messages: { ...current.messages, [record.id]: "Still checking the document you uploaded." } }));
+      setReadings((count) => count + 1);
+      const generation = resetGeneration.current;
       postOwnershipExtraction({ operation: "GET_EXTRACTION_JOB", jobId })
-        .then((found) => finishEvidence(record, found, null, 0))
+        .then((found) => finishEvidence(record, found, null, generation))
         .catch((caught) => {
           casePointerStore.removeItem(evidenceJobKey(context.demoCaseId, record.id));
           setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: caught.evidenceStatus || EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE, reason: caught.message } }));
           setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: caught.message } }));
-        });
+        })
+        .finally(() => setReadings((count) => count - 1));
     });
     // Once per page: finishEvidence drives the reading from here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -611,10 +669,11 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       } catch (_) { /* Server submission failed; the page remains blocked from navigation. */ }
       setErrors((current) => ({ ...current, finalize: cause.message || "The assessment could not be saved." }));
       setFinalizing(false);
+      if (caseMovedOn(cause.code)) recheckCase();
     }
   };
   return <section className="ubo-customer-card ubo-resolution-engine">
-    <header><div><small>Questions &amp; resolution</small><h2>{engine.openQuestions.length ? `${engine.openQuestions.length} question${engine.openQuestions.length === 1 ? "" : "s"} for you` : pendingEvidence.length ? `${pendingEvidence.length} supporting evidence request${pendingEvidence.length === 1 ? "" : "s"} remaining` : "No further questions right now"}</h2></div><div className="ubo-resolution-heading-actions"><span>{completed} resolved</span><button type="button" onClick={resetAnswers} hidden={finalizedAtLoad} disabled={resetting || (!Object.keys(answers).length && !Object.keys(evidence).length && !Object.keys(recalculations).length)}>{resetting ? "Clearing your answers…" : "Start questions again"}</button></div></header>
+    <header><div><small>Questions &amp; resolution</small><h2>{engine.openQuestions.length ? `${engine.openQuestions.length} question${engine.openQuestions.length === 1 ? "" : "s"} for you` : pendingEvidence.length ? `${pendingEvidence.length} supporting evidence request${pendingEvidence.length === 1 ? "" : "s"} remaining` : "No further questions right now"}</h2></div><div className="ubo-resolution-heading-actions"><span>{completed} resolved</span><button type="button" onClick={resetAnswers} hidden={finalizedAtLoad} title={readings > 0 ? "Available once the document being checked is done" : undefined} disabled={resetting || readings > 0 || (!Object.keys(answers).length && !Object.keys(evidence).length && !Object.keys(recalculations).length)}>{resetting ? "Clearing your answers…" : "Start questions again"}</button></div></header>
     {errors.reset && <p className="ubo-resolution-error" role="alert">{errors.reset}</p>}
     <p className="ubo-resolution-intro">We ask only for facts that remain relevant after comparing the registry research with your ownership chart. Ownership is resolved first; control and fallback questions appear progressively under the active policy.</p>
     {activeIssueGroups.length > 0 && <div className="ubo-resolution-question-groups">{activeIssueGroups.map((group) => <QuestionGroup
@@ -631,6 +690,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       onDraft={(questionId, value) => setDrafts((current) => ({ ...current, [questionId]: value }))}
       onSubmit={submit}
       onUpload={uploadEvidence}
+      locked={resetting}
     />)}</div>}
     {answeredQuestions.length > 0 && <section className="ubo-resolution-answered">
       <header><div><small>Answer history</small><h3>Answered questions</h3></div><span>{answeredQuestions.length}</span></header>
@@ -643,7 +703,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         editing={editingQuestionId === question.id}
         draft={drafts[question.id]}
         error={errors[question.id]}
-        locked={finalizedAtLoad}
+        locked={finalizedAtLoad || resetting}
         saving={saving.has(question.id)}
         onEdit={() => { setDrafts((current) => ({ ...current, [question.id]: answers[question.id].value })); setEditingQuestionId(question.id); }}
         onDraft={(value) => setDrafts((current) => ({ ...current, [question.id]: value }))}
@@ -653,6 +713,6 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       />)}</div>
     </section>}
     {finalizedAtLoad ? <section className="ubo-customer-next-step"><div><small>Answers submitted</small><h3>Continue to identity verification</h3><p>Your answers have been submitted and can no longer be changed here. If something needs correcting, contact the person who sent you this link.</p></div><a className="ubo-customer-primary" href={CUSTOMER_IDV_PATH}>Continue to identity verification <span>→</span></a></section>
-    : <section className="ubo-customer-next-step"><div><small>{readyForIdv ? "Questions complete" : "Identity verification is not ready yet"}</small><h3>Continue to identity verification</h3><p>{readyForIdv ? "We have recalculated the current set of people who need identity verification." : readinessMessage}</p>{errors.finalize && <p className="ubo-resolution-error" role="alert">{errors.finalize}</p>}</div><form action={CUSTOMER_IDV_PATH} method="get" onSubmit={finalizeCurrentAssessment}><button className="ubo-customer-primary" type="submit" disabled={!readyForIdv || finalizing || saving.size > 0}>{finalizing ? "Submitting your answers…" : saving.size ? "Saving your answers…" : <>Continue to identity verification <span>→</span></>}</button></form></section>}
+    : <section className="ubo-customer-next-step"><div><small>{readyForIdv ? "Questions complete" : "Identity verification is not ready yet"}</small><h3>Continue to identity verification</h3><p>{readyForIdv ? "We have recalculated the current set of people who need identity verification." : readinessMessage}</p>{errors.finalize && <p className="ubo-resolution-error" role="alert">{errors.finalize}</p>}</div><form action={CUSTOMER_IDV_PATH} method="get" onSubmit={finalizeCurrentAssessment}><button className="ubo-customer-primary" type="submit" disabled={!readyForIdv || finalizing || resetting || saving.size > 0}>{finalizing ? "Submitting your answers…" : saving.size ? "Saving your answers…" : <>Continue to identity verification <span>→</span></>}</button></form></section>}
   </section>;
 }
