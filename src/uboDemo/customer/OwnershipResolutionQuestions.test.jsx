@@ -642,6 +642,20 @@ test("an evidence upload answered by a platform error page says so plainly", asy
   expect(screen.queryByText(/Unexpected token/)).toBeNull();
 });
 
+test("an upload refused before the file was taken in is not shown as a rejected document", async () => {
+  // Review: "nothing was started" refusals read as the file being received
+  // and its analysis failing, or as evidence not accepted.
+  const { container } = render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })} />);
+  const declaration = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");
+  fireEvent.click(within(declaration).getByLabelText("Yes"));
+  fireEvent.click(within(declaration).getByRole("button", { name: /Save answer/i }));
+  window.fetch.mockImplementationOnce(async () => ({ ok: false, status: 503, json: async () => ({ error: "limits_unavailable", message: "We could not check usage limits just now, so nothing was started. Please try again in a minute." }) }));
+  fireEvent.change(container.querySelector('.ubo-resolution-evidence input[type="file"]'), { target: { files: [new File(["%PDF-1.4\n%%EOF"], "nominee-agreement.pdf", { type: "application/pdf" })] } });
+  expect(await screen.findByText(/your file was not sent/i)).toBeInTheDocument();
+  expect(screen.queryByText(/File received · analysis not completed/)).toBeNull();
+  expect(screen.queryByText(/limits_unavailable/)).toBeNull();
+});
+
 test("changing an answer back recalculates with it, rather than keeping the other value's result", async () => {
   render(<OwnershipResolutionQuestions {...props({ type: "RANGE", lowerBound: 10, upperBound: 40, lowerInclusive: true, upperInclusive: true }, { type: "UNKNOWN" })} />);
   const answer = async (value, button) => {

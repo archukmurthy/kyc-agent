@@ -94,7 +94,16 @@ function evidenceUploadFailure(payload, responseStatus) {
   // received, so the request stays open rather than offering a retry that fails.
   const limit = limitNotice(payload?.error, payload?.message);
   if (limit) return { status: EVIDENCE_STATUS.OPEN, message: `${limit.title}. ${limit.body}` };
-  const code = String(payload?.code || "evidence_validation_failed");
+  const code = String(payload?.code || payload?.error || "evidence_validation_failed");
+  // Refused before the file was taken in: not a verdict on it either, so the
+  // request stays open - in plain words, never the code (review, 2026-10-09).
+  const notTakenIn = {
+    limits_unavailable: "We could not check usage limits just now, so your file was not sent. Please try again in a minute.",
+    case_finalized: "Your answers for this review have already been submitted, so no more documents can be added. If something needs correcting, contact the person who sent you this link.",
+    case_round_changed: "This review changed while you were working on it. Please reload the page to see where it stands.",
+    job_not_found: "We could not find this document's reading any more. Please choose the file again.",
+  };
+  if (notTakenIn[code]) return { status: EVIDENCE_STATUS.OPEN, message: notTakenIn[code] };
   if (code === "invalid_media" || /artifact bytes do not match the declared media type/i.test(payload?.message || "")) {
     return { status: EVIDENCE_STATUS.REJECTED, message: MEDIA_MISMATCH_MESSAGE };
   }
