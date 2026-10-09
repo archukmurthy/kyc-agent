@@ -13,6 +13,7 @@ import { DEMO_SESSION_KEY } from "./demoSession";
 import { CUSTOMER_OWNERSHIP_CHART_SESSION_KEY } from "./customer/customerOwnershipChartSession";
 import { uboStore } from "./browserStore";
 import { expandSharedAnalyses } from "./customer/recalculationStorage";
+import { clearCustomerSession, onCustomerSessionEnded, setCustomerSession } from "../auth/customerSession";
 
 function response(body, ok = true) {
   return { ok, status: ok ? 200 : 503, json: async () => body };
@@ -215,6 +216,23 @@ test("a write that never answers is given up on, and the next write to the case 
     await expect(next).resolves.toEqual(record);
   } finally {
     jest.useRealTimers();
+  }
+});
+
+// Review (2026-10-09): a save refused because the customer's link was replaced
+// failed with a generic message; the customer gate is told instead.
+test("a case read or write refused for an ended customer session is reported", async () => {
+  setCustomerSession({ session: "s-1", caseId: "case-1" });
+  const ended = jest.fn();
+  const stop = onCustomerSessionEnded(ended);
+  try {
+    const refused = jest.fn(async () => ({ ok: false, status: 401, json: async () => ({ error: "customer_session_invalid", message: "This link has expired or been withdrawn." }) }));
+    await expect(persistPocCase("SUBMIT_ANSWER", { caseId: "case-1", idempotencyKey: "answer:ended", payload: {} }, refused)).rejects.toMatchObject({ status: 401 });
+    await expect(loadPocCase("case-1", refused)).rejects.toMatchObject({ status: 401 });
+    expect(ended).toHaveBeenCalledTimes(2);
+  } finally {
+    stop();
+    clearCustomerSession();
   }
 });
 

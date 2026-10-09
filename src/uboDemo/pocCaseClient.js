@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { clerkAuthHeaders } from "../auth/clerkFetch";
+import { noteCustomerRefusal } from "../auth/customerSession";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "./demoSession";
 import {
   CUSTOMER_OWNERSHIP_CHART_SESSION_KEY,
@@ -42,10 +43,17 @@ export function clearActivePocCase(storage = casePointerStore) {
   try { storage.removeItem(ACTIVE_POC_CASE_KEY); } catch (_) { /* No durable case is deleted. */ }
 }
 
-async function parse(response) {
+async function readPayload(response) {
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload.success) throw Object.assign(new Error(payload.message || "The case could not be saved or restored right now."), { code: payload.code, status: response.status });
-  return payload.case;
+  if (!response.ok || !payload.success) {
+    noteCustomerRefusal(response.status, payload);
+    throw Object.assign(new Error(payload.message || "The case could not be saved or restored right now."), { code: payload.code || payload.error, status: response.status });
+  }
+  return payload;
+}
+
+async function parse(response) {
+  return (await readPayload(response)).case;
 }
 
 /** Whether a customer may already be working on a case, from its audit

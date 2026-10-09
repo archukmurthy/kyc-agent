@@ -24,6 +24,7 @@ import { clearCustomerOwnershipChartPreview, customerOwnershipChartPreviewFor, w
 import "./customerOwnershipChart.css";
 import { persistPocCase, smallStableHash } from "../pocCaseClient";
 import { clerkAuthHeaders } from "../../auth/clerkFetch";
+import { noteCustomerRefusal } from "../../auth/customerSession";
 import { limitNotice } from "../../trials/limitNotice";
 
 const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v3";
@@ -358,6 +359,7 @@ export default function CustomerOwnershipChartPage() {
     // A platform error page (a timeout, an overload) is not JSON.
     const payload = await response.json().catch(() => ({ code: `server_${response.status}` }));
     if (!response.ok || !payload.success) {
+      noteCustomerRefusal(response.status, payload);
       throw Object.assign(new Error(analysisFailureMessage(payload, response.status)), { status: response.status, transient: response.status >= 500 || response.status === 429 });
     }
     return payload.job || (payload.result ? {

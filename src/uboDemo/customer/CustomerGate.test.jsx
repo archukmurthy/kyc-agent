@@ -4,9 +4,9 @@
  * the view - who goes through the trial gate exactly as before.
  */
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import CustomerGate from "./CustomerGate";
-import { clearCustomerSession, currentCustomerSession } from "../../auth/customerSession";
+import { clearCustomerSession, currentCustomerSession, noteCustomerRefusal } from "../../auth/customerSession";
 
 function respondWith(byAction) {
   window.fetch = jest.fn(async (url, options) => {
@@ -22,6 +22,7 @@ function at(path) {
 
 afterEach(() => {
   clearCustomerSession();
+  window.sessionStorage.clear();
   at("/");
 });
 
@@ -94,6 +95,51 @@ test("a customer session left in this browser for another case does not take ove
   expect(currentCustomerSession()).toBeNull();
   const actions = window.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).action);
   expect(actions).toEqual(["resume", "leave"]);
+});
+
+// Review (2026-10-09): a replaced or withdrawn link, or a lapsed sign-in, left
+// the open page showing the case until a save failed with a generic message,
+// and a reload showed the staff "You need an invitation" screen.
+const ENDED = /This link has been replaced or has ended/;
+
+test("a reload after the link was replaced tells the customer, not the staff gate", async () => {
+  respondWith({ resume: [401, { error: "customer_session_invalid", message: "This link has expired or been withdrawn. Ask for a new one." }] });
+  at("/ubo-demo/customer/questions");
+  render(<CustomerGate fallback={trialGate}>{page}</CustomerGate>);
+  expect(await screen.findByText(ENDED)).toBeInTheDocument();
+  expect(screen.queryByTestId("trial-gate")).toBeNull();
+});
+
+test("a reload after a lapsed sign-in (its cookie cleared) in a tab that showed the review tells the customer", async () => {
+  respondWith({ resume: [200, { session: "s-1", caseId: "case-1" }] });
+  at("/ubo-demo/customer/questions");
+  const first = render(<CustomerGate fallback={trialGate}>{page}</CustomerGate>);
+  await screen.findByText("Customer page");
+  first.unmount();
+  clearCustomerSession();
+  respondWith({ resume: [401, { error: "no_customer_session" }] });
+  render(<CustomerGate fallback={trialGate}>{page}</CustomerGate>);
+  expect(await screen.findByText(ENDED)).toBeInTheDocument();
+  expect(screen.queryByTestId("trial-gate")).toBeNull();
+});
+
+test("an open page whose session is refused shows the customer what happened", async () => {
+  respondWith({ resume: [200, { session: "s-1", caseId: "case-1" }] });
+  at("/ubo-demo/customer/questions");
+  render(<CustomerGate fallback={trialGate}>{page}</CustomerGate>);
+  await screen.findByText("Customer page");
+  act(() => { noteCustomerRefusal(401, { error: "customer_session_invalid" }); });
+  expect(screen.getByText(ENDED)).toBeInTheDocument();
+  expect(screen.queryByText("Customer page")).toBeNull();
+});
+
+test("a refusal that is not about the customer's session changes nothing", async () => {
+  respondWith({ resume: [200, { session: "s-1", caseId: "case-1" }] });
+  at("/ubo-demo/customer/questions");
+  render(<CustomerGate fallback={trialGate}>{page}</CustomerGate>);
+  await screen.findByText("Customer page");
+  act(() => { noteCustomerRefusal(401, { error: "unauthorized" }); noteCustomerRefusal(409, { code: "case_finalized" }); });
+  expect(screen.getByText("Customer page")).toBeInTheDocument();
 });
 
 test("a customer returning to their own case keeps their session", async () => {

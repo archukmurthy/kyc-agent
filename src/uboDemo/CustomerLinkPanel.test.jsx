@@ -52,7 +52,9 @@ test("a new link says the earlier one has stopped working", async () => {
   expect(await screen.findByText(/the new one replaces it/)).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Customer's email address"), { target: { value: "customer@example.test" } });
   fireEvent.click(screen.getByRole("button", { name: "Create customer link" }));
-  expect(await screen.findByText(/earlier link for this case no longer works/)).toBeInTheDocument();
+  // Said as it happens: a page open from the earlier link is stopped at its
+  // next step, not signed out on the spot (review, 2026-10-09).
+  expect(await screen.findByText(/earlier link for this case no longer works/)).toHaveTextContent(/stopped at its next step/);
 });
 
 test("the server's refusal is shown", async () => {

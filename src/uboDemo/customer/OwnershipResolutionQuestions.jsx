@@ -1,4 +1,5 @@
 import { clerkAuthHeaders } from "../../auth/clerkFetch";
+import { noteCustomerRefusal } from "../../auth/customerSession";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import { caseInputs, evaluateCase, resolutionTrace } from "./caseResolution";
@@ -100,8 +101,11 @@ async function postOwnershipExtraction(body) {
     headers: { "Content-Type": "application/json", ...(await clerkAuthHeaders()) },
     body: JSON.stringify(body),
   });
-  const payload = await response.json();
+  // A platform error page (a timeout, an overload) is not JSON: it showed the
+  // customer "Unexpected token <" (review, 2026-10-09).
+  const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload.success) {
+    noteCustomerRefusal(response.status, payload);
     const failure = evidenceUploadFailure(payload, response.status);
     throw Object.assign(new Error(failure.message), { evidenceStatus: failure.status });
   }
