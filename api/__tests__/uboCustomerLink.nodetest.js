@@ -325,3 +325,19 @@ test("a link the ledger could not record is not handed out", async () => {
   assert.strictEqual(res.statusCode, 500);
   assert.strictEqual(res.body.token, undefined);
 });
+
+// A customer whose link was replaced or withdrawn is told so when the page
+// loads, not shown the staff sign-up screen (review, 2026-10-09). The cookie
+// is still sent; the session it holds is refused - said with its own code.
+test("resume says whether a session was held and has ended, or there was none", async () => {
+  const none = await call(handler(), { action: "resume" });
+  assert.strictEqual(none.statusCode, 401);
+  assert.strictEqual(none.body.error, "no_customer_session");
+  const { token } = await customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+  const opened = await call(handler(), { action: "open", link: token });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  await customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+  const ended = await call(handler(), { action: "resume" }, { cookie: `ubo_customer_session=${opened.body.session}` });
+  assert.strictEqual(ended.statusCode, 401);
+  assert.strictEqual(ended.body.error, "customer_session_invalid");
+});
