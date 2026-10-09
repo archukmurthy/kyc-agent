@@ -54,3 +54,17 @@ test("a transaction that rolls back cleanly returns its connection for reuse", a
   await assert.rejects(() => db.transaction(async () => { throw new Error("work failed"); }));
   assert.equal(seen.released[0], undefined);
 });
+
+test("a statement the client gave up on does not leave its connection in the pool", async () => {
+  const { createPostgresDb, seen } = withFakePool(() => { throw new Error("Query read timeout"); });
+  const db = createPostgresDb("postgres://example");
+  await assert.rejects(() => db.query("SELECT pg_sleep(600)"), /timeout/);
+  assert.ok(seen.released[0] instanceof Error, "released with its error, so it is destroyed");
+});
+
+test("each transaction tells the database its time limit in the same message as BEGIN", async () => {
+  const sent = [];
+  const { createPostgresDb, DEFAULT_TIMEOUTS } = withFakePool((sql) => { sent.push(sql); return {}; });
+  await createPostgresDb("postgres://example").transaction(async () => {});
+  assert.equal(sent[0], `BEGIN; SET LOCAL statement_timeout = ${DEFAULT_TIMEOUTS.queryMs}`);
+});

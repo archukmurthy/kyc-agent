@@ -21,13 +21,29 @@ function createPostgresDb(connectionString = process.env.DATABASE_URL, timeouts 
     // eslint-disable-next-line no-console
     console.warn("[postgres] an idle connection was lost:", error && error.message);
   });
+  // A statement the client gave up on is still running on the database, so
+  // its connection is thrown away rather than handed to the next query, which
+  // would wait behind it (review, 2026-10-09).
+  const timedOut = (error) => /timeout/i.test(String(error && error.message));
   return {
-    query: (text, params) => pool.query(text, params),
+    async query(text, params) {
+      const client = await pool.connect();
+      let broken = null;
+      try {
+        return await client.query(text, params);
+      } catch (error) {
+        if (timedOut(error)) broken = error;
+        throw error;
+      } finally { client.release(broken || undefined); }
+    },
     async transaction(work) {
       const client = await pool.connect();
       let broken = null;
       try {
-        await client.query("BEGIN");
+        // The database stops the work too: the pooler ignores a limit set
+        // when connecting, but takes one set for the transaction - sent with
+        // BEGIN, so it costs no extra round trip.
+        await client.query(`BEGIN; SET LOCAL statement_timeout = ${Math.max(1, Math.floor(queryMs))}`);
         const result = await work(client);
         await client.query("COMMIT");
         return result;
@@ -35,6 +51,7 @@ function createPostgresDb(connectionString = process.env.DATABASE_URL, timeouts 
         // A connection that died mid-transaction cannot roll back; the error
         // that matters is the original one, and the connection is not reused.
         try { await client.query("ROLLBACK"); } catch (rollbackError) { broken = rollbackError; }
+        if (timedOut(error)) broken = broken || error;
         throw error;
       } finally { client.release(broken || undefined); }
     },
