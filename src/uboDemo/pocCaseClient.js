@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef } from "react";
 import { clerkAuthHeaders } from "../auth/clerkFetch";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "./demoSession";
 import {
@@ -73,6 +74,59 @@ export async function listSavedResearch(fetchImpl = window.fetch) {
 export async function loadPocCase(caseId, fetchImpl = window.fetch) {
   if (!caseId) return null;
   return parse(await fetchImpl(`/api/ubo-poc-case?caseId=${encodeURIComponent(caseId)}`, { headers: { Accept: "application/json", ...(await clerkAuthHeaders()) } }));
+}
+
+/** Whether the server holds the case as finalised - its own current trace. */
+export function serverCaseFinalized(record) {
+  const trace = record?.projection?.assessment?.trace || record?.projection?.resolution?.trace || null;
+  return Boolean(trace?.verificationAssessment?.finalized);
+}
+
+// ponytail: reads the whole case once a minute while the page is in view; a
+// small state-only read (or a push) if customer pages ever need it cheaper.
+export const CASE_STATE_CHECK_MS = 60 * 1000;
+
+/**
+ * A customer page shows the case as it was when the page loaded. When the
+ * server's case is no longer finalised as the page shows it - the analyst
+ * reopened it, or another tab finalised it - the page reloads, which restores
+ * the case from the server (DurablePocCaseBoundary). Without this a page open
+ * before a reopen stayed locked until the customer happened to reload.
+ *
+ * Checked when the page comes back into view and once a minute while it is in
+ * view; the returned function checks now (after the server refuses a step).
+ */
+export function useReloadWhenFinalizedChanges(caseId, shownFinalized, { load = loadPocCase, reload = () => window.location.reload() } = {}) {
+  const check = useRef(() => {});
+  // Passed fresh on each render; held so the timer is not restarted by every render.
+  const io = useRef({ load, reload });
+  io.current = { load, reload };
+  useEffect(() => {
+    if (!caseId) return undefined;
+    let active = true;
+    let busy = false;
+    check.current = async () => {
+      if (busy || (typeof document !== "undefined" && document.hidden)) return;
+      busy = true;
+      try {
+        const record = await io.current.load(caseId);
+        if (active && record && serverCaseFinalized(record) !== Boolean(shownFinalized)) io.current.reload();
+      } catch (_) { /* The next check tries again; the page keeps what it shows. */ }
+      finally { busy = false; }
+    };
+    const onVisible = () => { if (!document.hidden) check.current(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    const timer = setInterval(() => check.current(), CASE_STATE_CHECK_MS);
+    return () => {
+      active = false;
+      check.current = () => {};
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      clearInterval(timer);
+    };
+  }, [caseId, shownFinalized]);
+  return useCallback(() => check.current(), []);
 }
 
 // One write per case at a time from this tab. An answer and the syncs it

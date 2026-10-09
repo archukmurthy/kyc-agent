@@ -353,11 +353,16 @@ export default function UboDemoRoot() {
       if (typeof document !== "undefined" && document.hidden) return;
       try {
         const record = await loadPocCase(caseId);
-        const trace = record?.projection?.assessment?.trace || record?.projection?.resolution?.trace || null;
-        if (!active || !trace) return;
-        setResearchResult((current) => (current && current.status !== "LOADING"
-          && JSON.stringify(current.ownershipResolutionTrace || null) !== JSON.stringify(trace)
-          ? { ...current, ownershipResolutionTrace: trace } : current));
+        if (!active || !record) return;
+        // The server's trace as it is - none at all after a reopen, until the
+        // customer's next step. Skipping "none" left other analyst tabs showing
+        // the finalised review and its Reopen button (review, 2026-10-09).
+        const trace = record.projection?.assessment?.trace || record.projection?.resolution?.trace || null;
+        setResearchResult((current) => {
+          if (!current || current.status === "LOADING" || JSON.stringify(current.ownershipResolutionTrace || null) === JSON.stringify(trace)) return current;
+          const { ownershipResolutionTrace: _shown, ...research } = current;
+          return trace ? { ...research, ownershipResolutionTrace: trace } : research;
+        });
       } catch (_) { /* The next refresh tries again; the page keeps what it has. */ }
     };
     const timer = setInterval(refresh, CUSTOMER_PROGRESS_REFRESH_MS);

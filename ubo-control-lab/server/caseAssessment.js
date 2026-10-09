@@ -150,9 +150,20 @@ async function decideEvidence(engine, raw, findEvidenceResult, chartArtifactId, 
     // One register can genuinely evidence two transfers: its contents are
     // checked against each request (evidenceResultStatus), so a file is not
     // limited to one. The ownership chart itself never evidences itself.
-    const found = base.artifactId === chartArtifactId ? null : await findEvidenceResult(base.artifactId);
+    if (base.artifactId === chartArtifactId) {
+      out[record.id] = { ...base, status: EVIDENCE_STATUS.REJECTED, reason: "The ownership chart cannot be its own evidence." };
+      continue;
+    }
+    const found = await findEvidenceResult(base.artifactId);
+    // No upload of this case has that id - it is the browser's word, so it is
+    // not kept: stored, it failed the database's reference to the upload (a
+    // 500) or pointed at another workspace's file (review, 2026-10-09).
     if (!found) {
-      out[record.id] = { ...base, status: base.artifactId === chartArtifactId ? EVIDENCE_STATUS.REJECTED : EVIDENCE_STATUS.VALIDATING, ...(base.artifactId === chartArtifactId ? { reason: "The ownership chart cannot be its own evidence." } : {}) };
+      out[record.id] = { ...base, artifactId: null, status: EVIDENCE_STATUS.REJECTED, reason: "That file was not uploaded for this case. Please upload it again." };
+      continue;
+    }
+    if (found.pending) {
+      out[record.id] = { ...base, status: EVIDENCE_STATUS.VALIDATING };
       continue;
     }
     if (!uploadedFor(found.evidenceHandoff, record.handoff)) {

@@ -12,7 +12,7 @@ import {
 } from "./ownershipResolutionEngine";
 import { CUSTOMER_IDV_PATH } from "./customerRoute";
 import { isReadyForIdentityVerification } from "./verificationAssessment";
-import { persistPocCase, smallStableHash } from "../pocCaseClient";
+import { persistPocCase, smallStableHash, useReloadWhenFinalizedChanges } from "../pocCaseClient";
 import { casePointerStore, uboStore } from "../browserStore";
 import { limitNotice } from "../../trials/limitNotice";
 
@@ -300,6 +300,13 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     return () => window.removeEventListener("beforeunload", warn);
   }, [saving]);
   const finalizedAtLoad = useMemo(() => Boolean(readCurrentTrace(context)?.verificationAssessment?.finalized), [context]);
+  // ...and when that stops being true on the server (the analyst reopened the
+  // review, or another tab finalised it), the page reloads to match it.
+  const recheckCase = useReloadWhenFinalizedChanges(context?.demoCaseId, finalizedAtLoad);
+  const [resetting, setResetting] = useState(false);
+  // Bumped by "Start questions again": a document still being checked when
+  // the answers were cleared belongs to the cleared answers, not the new ones.
+  const resetGeneration = useRef(0);
   const [editingQuestionId, setEditingQuestionId] = useState(null);
   const [evidenceState, setEvidenceState] = useState({ busyId: null, messages: {} });
   const evidenceFiles = useRef({});
@@ -318,17 +325,11 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
   const engine = useMemo(() => evaluateCase(inputs, { answers, evidence, recalculations, now: createdAt.current }), [inputs, answers, evidence, recalculations]);
   const currentTrace = useMemo(() => resolutionTrace({ engine, rows, answers, previousTrace: readCurrentTrace(context), recalculations }), [answers, context, engine, recalculations, rows]);
 
-  const durableResolution = (nextAnswers = answers, nextEvidence = evidence, nextRecalculations = recalculations, trace = currentTrace, submittedAnswer = null) => ({
-    createdAt: createdAt.current,
-    requirements: engine.requirements,
-    questions: trace.questions || engine.questions,
-    evidenceRequirements: engine.evidenceRequirements,
-    answers: nextAnswers,
-    evidence: nextEvidence,
-    recalculations: nextRecalculations,
-    trace,
-    ...(submittedAnswer ? { submittedAnswer } : {}),
-  });
+  // What each write sends is only what the server takes from the browser
+  // (caseAssessment.js): the answer being given, and which upload was for which
+  // request. It computes everything else itself. Writes used to carry the
+  // whole resolution - every recalculation's chart analysis, and the research
+  // too - which the server threw away, against a 3 MB request limit.
 
   useEffect(() => { saveSession(context, result, { createdAt: createdAt.current, answers, evidence, recalculations }); }, [answers, context, evidence, recalculations, result]);
   useEffect(() => {
@@ -343,10 +344,9 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       caseId: context.demoCaseId,
       actorType: "SYSTEM",
       idempotencyKey: `resolution:${signature}`,
-      payload: {
-        resolution: durableResolution(),
-        assessment: { assessmentId: currentTrace.verificationAssessment?.assessmentVersionId, trace: currentTrace, evidence },
-      },
+      // The uploads this page knows of: a sync after an upload that failed to
+      // reach the case is sent again here.
+      payload: { resolution: { evidence } },
     }).catch(() => durableSyncs.current.delete(context.demoCaseId));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context?.demoCaseId]);
@@ -411,19 +411,6 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       const changed = previousValue !== value;
       const answeredAt = new Date().toISOString();
       const answer = { value, answeredAt, factRequirementId: question.factRequirementId, comparisonItemId: question.comparisonItemId };
-      const nextAnswers = { ...answers, [question.id]: answer };
-      const nextRecalculations = { ...recalculations };
-      const nextEvidence = { ...evidence };
-      if (changed) {
-        delete nextRecalculations[question.comparisonItemId];
-        engine.evidenceRequirements.filter(({ comparisonItemId }) => comparisonItemId === question.comparisonItemId).forEach(({ id }) => delete nextEvidence[id]);
-      }
-      const nextEngine = evaluateCase(inputs, { answers: nextAnswers, evidence: nextEvidence, recalculations: nextRecalculations, now: createdAt.current });
-      const activeQuestionIds = new Set(nextEngine.questions.map(({ id: questionId }) => questionId));
-      Object.entries(nextAnswers).forEach(([questionId, stored]) => {
-        if (questionId !== question.id && stored.comparisonItemId === question.comparisonItemId && !activeQuestionIds.has(questionId)) delete nextAnswers[questionId];
-      });
-      const nextTrace = resolutionTrace({ engine: nextEngine, rows, answers: nextAnswers, previousTrace: currentTrace, recalculations: nextRecalculations });
       idempotencyKey = `answer:${smallStableHash([question.id, answers[question.id]?.answeredAt || "initial", value])}`;
       if (answerSubmissions.current.has(idempotencyKey)) return;
       answerSubmissions.current.add(idempotencyKey);
@@ -458,26 +445,42 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         caseId: context.demoCaseId,
         actorType: "CUSTOMER",
         idempotencyKey,
-        payload: {
-          resolution: { ...durableResolution(nextAnswers, nextEvidence, nextRecalculations, nextTrace), submittedAnswer: { question, answer } },
-          assessment: { assessmentId: nextTrace.verificationAssessment?.assessmentVersionId, trace: nextTrace, evidence: nextEvidence },
-        },
+        payload: { resolution: { answers: { [question.id]: answer }, submittedAnswer: { question: { id: question.id } } } },
       }).then(() => {
         setSaving((current) => { const next = new Set(current); next.delete(question.id); return next; });
       }).catch((caught) => {
         setSaving((current) => { const next = new Set(current); next.delete(question.id); return next; });
         answerSubmissions.current.delete(idempotencyKey);
         setErrors((current) => ({ ...current, [question.id]: caught.message }));
+        if (caught.code === "case_finalized") recheckCase();
       });
       setEditingQuestionId(null);
       setErrors((current) => ({ ...current, [question.id]: "" }));
     } catch (caught) { if (idempotencyKey) answerSubmissions.current.delete(idempotencyKey); setErrors((current) => ({ ...current, [question.id]: caught.message })); }
   };
-  const resetAnswers = () => {
-    clearSession(context, result);
+  const resetAnswers = async () => {
+    if (resetting) return;
+    setErrors((current) => ({ ...current, reset: "" }));
     // The server keeps the answers it is given (merged, most recent wins), so
-    // starting again has to be said to it, not only done in this browser.
-    if (context?.demoCaseId) persistPocCase("RESET_ANSWERS", { caseId: context.demoCaseId, actorType: "CUSTOMER", idempotencyKey: `reset:${Date.now()}`, payload: {} }).catch(() => {});
+    // starting again has to be said to it, not only done in this browser - and
+    // the answers are cleared here only once it has: clearing them regardless
+    // showed a fresh start while the server kept every old answer.
+    if (context?.demoCaseId) {
+      setResetting(true);
+      try {
+        await persistPocCase("RESET_ANSWERS", { caseId: context.demoCaseId, actorType: "CUSTOMER", idempotencyKey: `reset:${Date.now()}`, payload: {} });
+      } catch (caught) {
+        setErrors((current) => ({ ...current, reset: `Your answers were not cleared: ${caught.message || "the server could not be reached."} Your answers are unchanged.` }));
+        if (caught.code === "case_finalized") recheckCase();
+        return;
+      } finally {
+        setResetting(false);
+      }
+    }
+    resetGeneration.current += 1;
+    clearSession(context, result);
+    // The same answer given again after a reset is a new answer, not a repeat.
+    answerSubmissions.current.clear();
     lastRecalculation.current = null;
     setAnswers({});
     setEvidence({});
@@ -494,6 +497,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       setEvidenceState((current) => ({ ...current, messages: { ...current.messages, [record.id]: "Upload a PDF, PNG or JPEG up to 3 MB." } }));
       return;
     }
+    const generation = resetGeneration.current;
     evidenceFiles.current[record.id] = file;
     setEvidence((current) => ({ ...current, [record.id]: { status: EVIDENCE_STATUS.RECEIVED, filename: file.name } }));
     setEvidenceState((current) => ({ ...current, busyId: record.id, messages: { ...current.messages, [record.id]: "Evidence received and sent to the existing validation pipeline." } }));
@@ -504,35 +508,36 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         file: { originalFilename: file.name, declaredMediaType: file.type, sizeBytes: file.size, contentBase64: await fileAsBase64(file) },
         evidenceHandoff: record.handoff,
       });
-      await finishEvidence(record, started, file.name);
+      await finishEvidence(record, started, file.name, generation);
     } catch (caught) {
+      if (generation !== resetGeneration.current) return;
       setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: caught.evidenceStatus || EVIDENCE_STATUS.REJECTED, reason: caught.message } }));
       setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: caught.message } }));
     }
   };
-  const finishEvidence = async (record, started, filename) => {
+  // `generation`: the answers the upload was made for (taken when it started).
+  const finishEvidence = async (record, started, filename, generation) => {
     const pointer = evidenceJobKey(context?.demoCaseId, record.id);
     if (started?.job?.jobId) casePointerStore.setItem(pointer, JSON.stringify({ jobId: started.job.jobId }));
     try {
       const extractionResult = await awaitSupportingEvidenceResult(started);
+      // The answers were cleared while it was being read: it was evidence for
+      // those, and sending it now would bring it back (review, 2026-10-09).
+      if (generation !== resetGeneration.current) return;
       const resolution = engine.resolutions.find((item) => item.comparisonItemId === record.comparisonItemId);
       const outcome = evidenceResultStatus(extractionResult, resolution, record);
-      const submittedEvidence = { ...(evidence[record.id] || {}), filename: filename || extractionResult.artifact?.originalFilename || "Your document", ...outcome, artifactId: extractionResult.artifact?.artifactId, validatedAt: new Date().toISOString() };
-      const nextEvidence = { ...evidence, [record.id]: submittedEvidence };
-      setEvidence(nextEvidence);
+      const submittedEvidence = { filename: filename || extractionResult.artifact?.originalFilename || "Your document", ...outcome, artifactId: extractionResult.artifact?.artifactId, validatedAt: new Date().toISOString() };
+      // From the state as it is now, not as it was when the reading started.
+      setEvidence((current) => ({ ...current, [record.id]: { ...(current[record.id] || {}), ...submittedEvidence } }));
       setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: outcome.reason } }));
       try {
-        const nextEngine = evaluateCase(inputs, { answers, evidence: nextEvidence, recalculations, now: createdAt.current });
-        const nextTrace = resolutionTrace({ engine: nextEngine, rows, answers, previousTrace: currentTrace, recalculations });
+        // This upload only: a copy of every upload the page held could carry
+        // ones the customer has since cleared back to the case.
         await persistPocCase("SYNC_RESOLUTION", {
           caseId: context.demoCaseId,
           actorType: "CUSTOMER",
           idempotencyKey: `evidence:${record.id}:${extractionResult.artifact?.artifactId}`,
-          payload: {
-            resolution: durableResolution(answers, nextEvidence, recalculations, nextTrace),
-            assessment: { assessmentId: nextTrace.verificationAssessment?.assessmentVersionId, trace: nextTrace, evidence: nextEvidence },
-            researchResult: { ...researchResult, ownershipResolutionTrace: nextTrace },
-          },
+          payload: { resolution: { evidence: { [record.id]: submittedEvidence } } },
         });
       } catch (syncError) {
         setEvidenceState((current) => ({ busyId: null, messages: { ...current.messages, [record.id]: `${outcome.reason} The case link will retry automatically: ${syncError.message}` } }));
@@ -552,7 +557,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
       setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: EVIDENCE_STATUS.VALIDATING } }));
       setEvidenceState((current) => ({ ...current, busyId: record.id, messages: { ...current.messages, [record.id]: "Still checking the document you uploaded." } }));
       postOwnershipExtraction({ operation: "GET_EXTRACTION_JOB", jobId })
-        .then((found) => finishEvidence(record, found, null))
+        .then((found) => finishEvidence(record, found, null, 0))
         .catch((caught) => {
           casePointerStore.removeItem(evidenceJobKey(context.demoCaseId, record.id));
           setEvidence((current) => ({ ...current, [record.id]: { ...current[record.id], status: caught.evidenceStatus || EVIDENCE_STATUS.ANALYSIS_UNAVAILABLE, reason: caught.message } }));
@@ -591,11 +596,8 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         caseId: context.demoCaseId,
         actorType: "CUSTOMER",
         idempotencyKey: `assessment:${finalTrace.verificationAssessment?.assessmentVersionId}`,
-        payload: {
-          resolution: durableResolution(answers, evidence, recalculations, finalTrace),
-          assessment: { assessmentId: finalTrace.verificationAssessment?.assessmentVersionId, trace: finalTrace, evidence },
-          researchResult: { ...researchResult, ownershipResolutionTrace: finalTrace },
-        },
+        // The server finalises from what it holds.
+        payload: {},
       });
       window.location.assign(CUSTOMER_IDV_PATH);
     } catch (cause) {
@@ -608,7 +610,8 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     }
   };
   return <section className="ubo-customer-card ubo-resolution-engine">
-    <header><div><small>Questions &amp; resolution</small><h2>{engine.openQuestions.length ? `${engine.openQuestions.length} question${engine.openQuestions.length === 1 ? "" : "s"} for you` : pendingEvidence.length ? `${pendingEvidence.length} supporting evidence request${pendingEvidence.length === 1 ? "" : "s"} remaining` : "No further questions right now"}</h2></div><div className="ubo-resolution-heading-actions"><span>{completed} resolved</span><button type="button" onClick={resetAnswers} hidden={finalizedAtLoad} disabled={!Object.keys(answers).length && !Object.keys(evidence).length && !Object.keys(recalculations).length}>Start questions again</button></div></header>
+    <header><div><small>Questions &amp; resolution</small><h2>{engine.openQuestions.length ? `${engine.openQuestions.length} question${engine.openQuestions.length === 1 ? "" : "s"} for you` : pendingEvidence.length ? `${pendingEvidence.length} supporting evidence request${pendingEvidence.length === 1 ? "" : "s"} remaining` : "No further questions right now"}</h2></div><div className="ubo-resolution-heading-actions"><span>{completed} resolved</span><button type="button" onClick={resetAnswers} hidden={finalizedAtLoad} disabled={resetting || (!Object.keys(answers).length && !Object.keys(evidence).length && !Object.keys(recalculations).length)}>{resetting ? "Clearing your answers…" : "Start questions again"}</button></div></header>
+    {errors.reset && <p className="ubo-resolution-error" role="alert">{errors.reset}</p>}
     <p className="ubo-resolution-intro">We ask only for facts that remain relevant after comparing the registry research with your ownership chart. Ownership is resolved first; control and fallback questions appear progressively under the active policy.</p>
     {activeIssueGroups.length > 0 && <div className="ubo-resolution-question-groups">{activeIssueGroups.map((group) => <QuestionGroup
       key={group.comparisonItemId}

@@ -6,28 +6,47 @@
 
 const { test, beforeEach, afterEach } = require("node:test");
 const assert = require("node:assert");
-const { PocCaseService, projectCommand } = require("../pocCaseState");
+const { PocCaseService, projectCommand, recordedKey } = require("../pocCaseState");
 const fx = require("./fixtures/caseAssessmentFixture");
 
 const CHART_JOB = { jobId: "job-chart", demoCaseId: "case-1", artifactId: "chart-artifact", state: "COMPLETE", company: fx.company, result: null, evidenceHandoff: null };
 
+// Faithful to the Postgres repository where it matters: a step recorded under
+// a key it has seen before changes nothing (ON CONFLICT DO NOTHING - except an
+// answer, which is recomputed), and a step worked out from an older version of
+// the case is refused (case_changed). A stand-in that applied every step hid
+// the reopen defect: on the real database the re-finalisation was skipped.
 function memoryRepository(chartPercentage = 30) {
   const state = new Map();
   const jobs = new Map([["job-chart", { ...CHART_JOB, result: fx.chartResult(chartPercentage) }]]);
   const evidence = new Map();
   const persisted = [];
+  const events = new Set();
+  let version = 0;
   return {
-    state, jobs, evidence, persisted,
-    get: async (caseId) => state.get(caseId) || null,
+    state, jobs, evidence, persisted, events,
+    get: async (caseId) => {
+      const record = state.get(caseId);
+      return record ? { ...record, version: record.version || String(version) } : null;
+    },
     history: async () => [],
     extraction: async (jobId) => jobs.get(jobId) || null,
     evidenceResult: async (caseId, artifactId) => evidence.get(artifactId) || null,
     apply: async (command) => {
       const previous = state.get(command.caseId);
+      if (command.expectedVersion && previous && (previous.version || String(version)) !== command.expectedVersion) {
+        throw Object.assign(new Error("The case changed while this step was being worked out."), { statusCode: 409, code: "case_changed", retryable: true });
+      }
+      const key = recordedKey(previous?.projection, command.operation, command.idempotencyKey);
+      if (key === null) return { duplicate: true, record: previous };
+      const seen = events.has(`${command.operation}:${key}`);
+      if (seen && command.operation !== "SUBMIT_ANSWER") return { duplicate: true, record: previous };
+      events.add(`${command.operation}:${key}`);
       const projection = projectCommand(previous?.projection, command.operation, command.payload, command.release);
-      state.set(command.caseId, { caseId: command.caseId, company: projection.demoCase?.company || previous?.company, projection });
+      version += 1;
+      state.set(command.caseId, { caseId: command.caseId, company: projection.demoCase?.company || previous?.company, projection, version: String(version) });
       if (command.payload.assessment || command.payload.resolution) persisted.push(command.operation);
-      return { duplicate: false, record: null };
+      return { duplicate: seen, record: state.get(command.caseId) };
     },
   };
 }
@@ -415,17 +434,8 @@ test("a late, older answer is kept out without being recorded as this request's 
 test("a sync computed from a case that changed meanwhile does not erase the answer saved in between", async () => {
   const { repository, customer, projection } = await openCase();
   const q = questionsOf(projection())[0];
-  let version = 1;
-  const realGet = repository.get.bind(repository);
-  const realApply = repository.apply.bind(repository);
-  repository.get = async (caseId) => { const record = await realGet(caseId); return record && { ...record, version: String(version) }; };
-  repository.apply = async (command) => {
-    if (command.expectedVersion && command.expectedVersion !== String(version)) throw Object.assign(new Error("The case changed while this was computed."), { code: "case_changed", retryable: true });
-    const out = await realApply(command);
-    version += 1;
-    return out;
-  };
-  // The sync reads now, but the answer lands before it writes.
+  // The stand-in versions the case as the database does. The sync reads now,
+  // but the answer lands before it writes.
   let releaseSync;
   const syncRead = new Promise((resolve) => { releaseSync = resolve; });
   const firstGet = repository.get;
@@ -442,4 +452,87 @@ test("a sync computed from a case that changed meanwhile does not erase the answ
   releaseSync();
   await sync;
   assert.strictEqual(projection().resolution.answers[q.id]?.value, q.options[1].value, "the sync erased the answer saved in between");
+});
+
+// Steps keyed by what they carry come round again once the computed state is
+// dropped: a reopen, a reset. On the real database the repeat was taken for a
+// retry and skipped (review, 2026-10-09).
+
+test("after a reopen, finalising again with unchanged answers is applied", async () => {
+  const { analyst, customer, projection, person } = await verifiedCase();
+  await analyst("REOPEN_CASE", {}, "reopen");
+  await customer("SYNC_RESOLUTION", {}, "after-reopen");
+  // The browser's key is the hash of the inputs - unchanged, so the same key.
+  const refinalised = await customer("FINALIZE_ASSESSMENT", {}, "finalise");
+  assert.strictEqual(refinalised.duplicate, false, "the re-finalisation was taken for a retry");
+  assert.strictEqual(projection().assessment.trace.verificationAssessment.finalized, true);
+  await customer("COMPLETE_IDV", { personId: person.personId }, "idv");
+  // A second reopen of the re-finalised case, from the same screen, works too.
+  await analyst("REOPEN_CASE", {}, "reopen");
+  assert.strictEqual(projection().assessment, null, "the second reopen was skipped");
+});
+
+test("the page-open sync after a reopen computes the assessment, whatever its key", async () => {
+  const { analyst, customer, projection } = await verifiedCase();
+  await analyst("REOPEN_CASE", {}, "reopen");
+  // openCase synced under this key before the case was finalised.
+  await customer("SYNC_RESOLUTION", {});
+  assert.ok(projection().assessment, "the sync after the reopen was skipped - no assessment");
+});
+
+test("a retried step in the same round is still applied once", async () => {
+  const { analyst, customer } = await verifiedCase();
+  await analyst("REOPEN_CASE", {}, "reopen");
+  const retriedReopen = await analyst("REOPEN_CASE", {}, "reopen");
+  assert.strictEqual(retriedReopen.duplicate, true, "a reopen of a case already reopened changes nothing");
+  await customer("SYNC_RESOLUTION", {}, "after-reopen");
+  assert.strictEqual((await customer("FINALIZE_ASSESSMENT", {}, "again")).duplicate, false);
+  assert.strictEqual((await customer("FINALIZE_ASSESSMENT", {}, "again")).duplicate, true);
+});
+
+test("after a reset, the same evidence upload counts again", async () => {
+  const { repository, customer, projection } = await openCase();
+  const difference = questionsOf(projection()).find((q) => q.id.includes("EXPLAIN_OWNERSHIP_DIFFERENCE"));
+  const answerAll = async (prefix) => {
+    for (let round = 0; round < 6; round += 1) {
+      const open = questionsOf(projection()).find((q) => !projection().resolution.answers[q.id]);
+      if (!open) break;
+      await answer(customer, open, honestValue(open), `${prefix}-${round}`);
+    }
+  };
+  assert.ok(difference);
+  await answerAll("first");
+  const requirement = projection().resolution.evidenceRequirements[0];
+  const reading = fx.chartResult(30);
+  repository.evidence.set("transfer-record", { result: { ...reading, artifact: { ...reading.artifact, artifactId: "transfer-record", integrityVerified: true } }, evidenceHandoff: { requestedConcepts: requirement.handoff.requestedConcepts } });
+  const upload = { resolution: { evidence: { [requirement.id]: { artifactId: "transfer-record" } } } };
+  await customer("SYNC_RESOLUTION", upload, `evidence:${requirement.id}:transfer-record`);
+  assert.strictEqual(projection().resolution.evidence[requirement.id].status, "SATISFIED");
+  await customer("RESET_ANSWERS", {}, "reset-1");
+  assert.deepStrictEqual(projection().resolution.evidence, {});
+  // The same answers and the same file: the same keys as the first time.
+  await answerAll("first");
+  await customer("SYNC_RESOLUTION", upload, `evidence:${requirement.id}:transfer-record`);
+  assert.strictEqual(projection().resolution.evidence[requirement.id]?.status, "SATISFIED", "the re-upload after the reset was ignored");
+});
+
+test("an identity completion racing a reopen does not re-finalise the case", async () => {
+  const { repository, analyst, customer, projection, person } = await verifiedCase();
+  // Holds the completion after it has read the case, until the reopen has landed.
+  const realGet = repository.get;
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  let holding = true;
+  repository.get = async (caseId) => {
+    const record = await realGet(caseId);
+    if (holding) { holding = false; await held; }
+    return record;
+  };
+  const completion = customer("COMPLETE_IDV", { personId: person.personId }, "idv-again");
+  await new Promise((resolve) => setImmediate(resolve));
+  repository.get = realGet;
+  await analyst("REOPEN_CASE", {}, "reopen");
+  release();
+  await assert.rejects(completion, (error) => error.code === "not_finalized" && error.statusCode === 409);
+  assert.strictEqual(projection().assessment, null, "the completion wrote the finalised assessment back over the reopen");
 });

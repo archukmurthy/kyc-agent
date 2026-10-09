@@ -9,6 +9,7 @@ const {
   compactCaseRecordForTransport,
   evaluateResearchRelease,
   projectCommand,
+  recordedKey,
 } = require("../pocCaseState.js");
 
 function partialResult(informationNeeds = []) {
@@ -31,7 +32,10 @@ class MemoryRepository {
   async history(caseId) { return this.events.get(caseId) || []; }
 
   async apply(command) {
-    const eventKey = `${command.operation}:${command.idempotencyKey}`;
+    // Recorded as the Postgres repository records it: per round of the case.
+    const key = recordedKey(this.state.get(command.caseId)?.projection, command.operation, command.idempotencyKey);
+    if (key === null) return { record: this.state.get(command.caseId), duplicate: true };
+    const eventKey = `${command.operation}:${key}`;
     const events = this.events.get(command.caseId) || [];
     const duplicate = events.some((event) => event.eventId === eventKey);
     if (duplicate && command.operation !== "SUBMIT_ANSWER") return { record: this.state.get(command.caseId), duplicate: true };

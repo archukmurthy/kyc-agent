@@ -44,8 +44,17 @@ test("evidence claimed as accepted without an upload the server read is not acce
   const { answers, requirement, projection } = await withEvidenceRequest();
   const noUpload = await compute("SYNC_RESOLUTION", { resolution: { answers, evidence: { [requirement.id]: { status: "SATISFIED", filename: "forged.pdf" } } } }, { projection });
   assert.strictEqual(noUpload.resolution.evidence[requirement.id].status, "REJECTED");
-  const unread = await compute("SYNC_RESOLUTION", { resolution: { answers, evidence: { [requirement.id]: { status: "SATISFIED", artifactId: "artifact-9" } } } }, { projection });
+  const unread = await compute("SYNC_RESOLUTION", { resolution: { answers, evidence: { [requirement.id]: { status: "SATISFIED", artifactId: "artifact-9" } } } }, { projection, findEvidenceResult: async () => ({ pending: true }) });
   assert.strictEqual(unread.resolution.evidence[requirement.id].status, "VALIDATING");
+});
+
+test("an upload id that is not one of this case's uploads is refused and not kept", async () => {
+  // Review: stored as sent, it failed the database's reference to the upload
+  // (a 500) - or, someone else's real upload, pointed at another workspace's file.
+  const { answers, requirement, projection } = await withEvidenceRequest();
+  const { resolution } = await compute("SYNC_RESOLUTION", { resolution: { answers, evidence: { [requirement.id]: { status: "SATISFIED", artifactId: "not-a-uuid" } } } }, { projection });
+  assert.strictEqual(resolution.evidence[requirement.id].status, "REJECTED");
+  assert.strictEqual(resolution.evidence[requirement.id].artifactId, null);
 });
 
 test("an upload's outcome is decided from the server's own reading of it", async () => {

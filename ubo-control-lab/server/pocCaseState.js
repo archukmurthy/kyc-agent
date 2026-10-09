@@ -14,6 +14,7 @@ const RELEASE_STATE = Object.freeze({
   FAILED: "FAILED",
 });
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function json(value) { return JSON.stringify(value == null ? null : value); }
 function rows(result) { return result?.rows || result || []; }
 function first(result) { return rows(result)[0] || null; }
@@ -231,25 +232,6 @@ function serverTraceOf(projection) {
   return trace?.computedBy === "server" ? trace : null;
 }
 
-function traceTime(trace) {
-  const value = Date.parse(trace?.updatedAt || "");
-  return Number.isFinite(value) ? value : null;
-}
-
-function mergeResolution(current, incoming) {
-  if (!incoming) return current;
-  const submitted = incoming.submittedAnswer;
-  const submittedAnswer = submitted?.question?.id && submitted?.answer
-    ? { [submitted.question.id]: submitted.answer }
-    : {};
-  return {
-    ...incoming,
-    answers: { ...(current?.answers || {}), ...(incoming.answers || {}), ...submittedAnswer },
-    evidence: { ...(current?.evidence || {}), ...(incoming.evidence || {}) },
-    recalculations: { ...(current?.recalculations || {}), ...(incoming.recalculations || {}) },
-  };
-}
-
 /** The case with everything computed from its inputs dropped - the
  *  customer's answers and uploads kept as their input. Nothing, identity
  *  verification included, acts on it until the server computes again. */
@@ -261,7 +243,32 @@ function uncomputed(base) {
   return {
     resolution: base.resolution ? { createdAt: base.resolution.createdAt, answers: base.resolution.answers, evidence: base.resolution.evidence, ...(priorTrace ? { priorTrace } : {}) } : base.resolution,
     assessment: null,
+    round: nextRound(base),
   };
+}
+
+/** A new round starts whenever what was computed for the case is dropped (a
+ *  reopen, a reset, a new chart, new research, a renamed company). Steps are
+ *  recorded per round - see recordedKey. */
+function nextRound(base) { return (Number(base?.round) || 0) + 1; }
+
+/**
+ * The key a step is recorded under, or null when the case already reflects it.
+ *
+ * The screens key a step by what it carries - a finalisation by the hash of
+ * its inputs, an upload by its file - so the same key comes round again once
+ * the computed state is dropped. Recorded as sent, the repeat was taken for a
+ * retry and skipped: after a reopen the re-finalisation never happened, and the
+ * customer and analyst were both left waiting (review, 2026-10-09). Recorded
+ * per round, a repeat within a round is still a retry and changes nothing.
+ */
+function recordedKey(projection, operation, idempotencyKey) {
+  // Reopening a case that is not finalised: a retry, or a second analyst tab.
+  if (operation === "REOPEN_CASE" && !serverTraceOf(projection)?.verificationAssessment?.finalized) return null;
+  const round = Number(projection?.round) || 0;
+  // A reset starts a round itself, and one reset request is one reset however
+  // late it is retried - it would otherwise clear answers given after it.
+  return round && operation !== "RESET_ANSWERS" ? `${idempotencyKey}#round-${round}` : idempotencyKey;
 }
 
 /** What makes research different research - the same fields the analyst
@@ -296,7 +303,7 @@ function projectCommand(current, operation, payload, release) {
     // So were its identity checks: nothing of the old company's history carries over.
     const { chartReference: _reference, chartProjection: _chart, ...rest } = base;
     const { priorTrace: _history, ...resolution } = uncomputed(base).resolution || {};
-    return { ...rest, resolution: base.resolution ? resolution : base.resolution, assessment: null, currentStage: "COMPANY_DETAILS" };
+    return { ...rest, resolution: base.resolution ? resolution : base.resolution, assessment: null, round: nextRound(base), currentStage: "COMPANY_DETAILS" };
   }
   if (operation === "REOPEN_CASE") return { ...base, ...uncomputed(base), currentStage: "QUESTIONS" };
   if (operation === "SAVE_RESEARCH") {
@@ -330,6 +337,7 @@ function projectCommand(current, operation, payload, release) {
       ...base,
       resolution: payload.resolution,
       assessment: payload.assessment,
+      ...(operation === "RESET_ANSWERS" ? { round: nextRound(base) } : {}),
       currentStage: stageFromTrace(payload.assessment?.trace, "QUESTIONS"),
     };
   }
@@ -419,15 +427,21 @@ class PostgresPocCaseRepository {
     return row ? { jobId: row.id, artifactId: row.artifact_id, state: row.state, result: row.result, completedAt: row.completed_at, demoCaseId: row.demo_case_id, company: row.company, evidenceHandoff: row.evidence_handoff } : null;
   }
 
-  /** The server's extraction of an evidence file uploaded for this case. */
+  /** The server's extraction of an evidence file uploaded for this case:
+   *  { result, evidenceHandoff }, { pending: true } while it is still being
+   *  read, or null when no upload for this case has that id. */
   async evidenceResult(caseId, artifactId) {
-    if (!artifactId) return null;
-    const row = first(await this.db.query(`SELECT result, evidence_handoff FROM evidence_customer_extraction_jobs
-      WHERE tenant_id = $1 AND demo_case_id = $2 AND artifact_id = $3 AND state IN ('COMPLETE', 'PARTIAL') AND result IS NOT NULL
-      ORDER BY (evidence_handoff IS NOT NULL) DESC, completed_at DESC NULLS LAST LIMIT 1`, [this.tenantId, caseId, artifactId]));
+    // The id comes from the browser: one that is not a UUID failed the query
+    // (a 500), so it is no upload of this case.
+    if (!UUID.test(String(artifactId || ""))) return null;
+    const row = first(await this.db.query(`SELECT state, result, evidence_handoff FROM evidence_customer_extraction_jobs
+      WHERE tenant_id = $1 AND demo_case_id = $2 AND artifact_id = $3
+      ORDER BY (state IN ('COMPLETE', 'PARTIAL') AND result IS NOT NULL) DESC, (evidence_handoff IS NOT NULL) DESC, completed_at DESC NULLS LAST LIMIT 1`, [this.tenantId, caseId, artifactId]));
+    if (!row) return null;
+    if (!["COMPLETE", "PARTIAL"].includes(row.state) || !row.result) return { pending: true };
     // Which request the upload answered travels with it: an upload that was
     // not made as evidence (the ownership chart itself, say) has none.
-    return row ? { result: row.result, evidenceHandoff: row.evidence_handoff } : null;
+    return { result: row.result, evidenceHandoff: row.evidence_handoff };
   }
 
   async apply({ caseId, operation, idempotencyKey, actorType, actorId = null, correlationId = null, receivedAt = null, payload, release, expectedVersion = null }) {
@@ -450,11 +464,14 @@ class PostgresPocCaseRepository {
       if (expectedVersion && locked && locked.version !== expectedVersion) {
         throw Object.assign(new Error("The case changed while this step was being worked out."), { statusCode: 409, code: "case_changed", retryable: true });
       }
+      // Under the lock: the round a step belongs to is the case's as it stands.
+      const key = recordedKey(existing?.projection, operation, idempotencyKey);
+      if (key === null) return { record: existing, duplicate: true };
       const inserted = first(await client.query(`INSERT INTO ubo_poc_case_events
         (case_id, event_type, idempotency_key, actor_type, payload)
         VALUES ($1, $2, $3, $4, $5::jsonb)
         ON CONFLICT (case_id, event_type, idempotency_key) DO NOTHING
-        RETURNING event_id`, [caseId, operation, idempotencyKey, actorType, json(payload)]));
+        RETURNING event_id`, [caseId, operation, key, actorType, json(payload)]));
       if (!inserted && operation !== "SUBMIT_ANSWER") return { record: existing, duplicate: true };
       const projection = projectCommand(existing?.projection, operation, payload, release);
       const chart = projection.chartReference || {};
@@ -466,16 +483,17 @@ class PostgresPocCaseRepository {
         projection.researchRelease?.state || existing?.researchReleaseState || null,
         chart.jobId || existing?.latestExtractionJobId || null, chart.artifactId || existing?.latestArtifactId || null,
         assessmentId, json(projection)]));
-      await this.persistResolution(client, caseId, payload.resolution, operation, idempotencyKey);
+      await this.persistResolution(client, caseId, payload.resolution, operation, key);
       await this.persistAssessment(client, caseId, payload.assessment, projection.chartReference);
       // The audit ledger, in the same transaction: the step and its record
-      // stand or fall together (UBO-33).
+      // stand or fall together (UBO-33). Under the round's key, so a second
+      // finalisation is recorded rather than taken for the first.
       await auditLedger.record(client, this.tenantId, auditLedger.eventsForCommand({
-        caseId, operation, before: existing?.projection, after: projection, payload, operationId: idempotencyKey,
+        caseId, operation, before: existing?.projection, after: projection, payload, operationId: key,
         actor: { type: actorType, id: actorId }, correlationId, receivedAt,
         researchChanged: operation === "SAVE_RESEARCH" && researchIdentity(existing?.projection?.researchResult) !== researchIdentity(projection.researchResult),
       }));
-      if (operation === "COMPLETE_IDV") await this.persistVerificationEvent(client, caseId, payload, idempotencyKey);
+      if (operation === "COMPLETE_IDV") await this.persistVerificationEvent(client, caseId, payload, key);
       console.info("[ubo-poc-case] projection-applied", {
         caseRef: stableHash(caseId).slice(0, 12),
         operation,
@@ -541,7 +559,7 @@ class PostgresPocCaseRepository {
       await client.query(`INSERT INTO ubo_poc_evidence_requirements (case_id, evidence_requirement_key, fact_requirement_key, snapshot, current_status, artifact_id)
         SELECT $1, e.key, e.requirement, e.snapshot::jsonb, e.status, e.artifact::uuid FROM unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::text[]) AS e(key, requirement, snapshot, status, artifact)
         ON CONFLICT (case_id, evidence_requirement_key) DO UPDATE SET snapshot=EXCLUDED.snapshot,
-        current_status=EXCLUDED.current_status, artifact_id=COALESCE(EXCLUDED.artifact_id, ubo_poc_evidence_requirements.artifact_id), updated_at=NOW()`,
+        current_status=EXCLUDED.current_status, artifact_id=EXCLUDED.artifact_id, updated_at=NOW()`,
       [caseId, column(evidence, 0), column(evidence, 1), column(evidence, 2), column(evidence, 3), column(evidence, 4)]);
     }
     if (operation === "SUBMIT_ANSWER" && resolution.submittedAnswer) {
@@ -562,10 +580,16 @@ class PostgresPocCaseRepository {
       ...(chartReference?.artifactId ? [{ artifactId: chartReference.artifactId, extractionJobId: chartReference.jobId || null }] : []),
       ...Object.values(assessment?.evidence || {}).filter(({ artifactId }) => artifactId).map(({ artifactId }) => ({ artifactId })),
     ];
+    // The same inputs come back as the same version (after a reopen, say). Its
+    // record keeps that it was once finalised, and when first - recomputing it
+    // un-finalised wrote NULL over that - while what is stored is current: it
+    // kept the first-ever trace, completions and all (review, 2026-10-09).
     await client.query(`INSERT INTO ubo_poc_assessment_versions
       (assessment_id, case_id, policy_id, policy_version, input_state_version, evidence_references, assessment, calculated_at, finalized_at)
       VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8,$9)
-      ON CONFLICT (case_id, assessment_id) DO UPDATE SET finalized_at = EXCLUDED.finalized_at`, [current.assessmentVersionId, caseId,
+      ON CONFLICT (case_id, assessment_id) DO UPDATE SET
+        finalized_at = COALESCE(ubo_poc_assessment_versions.finalized_at, EXCLUDED.finalized_at),
+        assessment = EXCLUDED.assessment, evidence_references = EXCLUDED.evidence_references`, [current.assessmentVersionId, caseId,
       trace.policy?.policyId || "UK_CORPORATE_UBO", current.policyVersion || trace.policy?.policyVersion || "1.0",
       current.inputStateVersion, json(evidenceReferences), json(trace), current.calculatedAt,
       current.finalized ? (current.calculatedAt || new Date().toISOString()) : null]);
@@ -597,16 +621,18 @@ class PostgresPocCaseRepository {
 // mode, the person is one its own stored assessment requires, and the record
 // says plainly that nothing was verified. Anything the browser sends as a
 // trace, assessment or research result for this operation is discarded.
-async function demoIdentityVerificationPayload(repository, caseId, payload) {
+// The record is the case as read for this step; the step is written only if the
+// case is still that version (PocCaseService#apply), so a reopen landing in
+// between - or a second person completed from another tab - is not overwritten.
+function demoIdentityVerificationPayload(record, payload) {
   if (String(process.env.UBO_POC_IDV_MODE || "").trim().toUpperCase() !== "DEMO") {
     throw Object.assign(new Error("Identity verification is not available on this deployment."), { statusCode: 403, code: "idv_demo_mode_off" });
   }
-  const record = await repository.get(caseId);
   const stored = serverTraceOf(record?.projection);
   // Only from the server's own assessment, finalised and ready - not from a
   // trace a browser wrote before UBO-13, and not while questions are open.
   if (!stored || stored.computedBy !== "server" || !stored.verificationAssessment?.finalized || !isReadyForIdentityVerification(stored)) {
-    throw Object.assign(new Error("Identity verification starts once the ownership review has been finalised."), { statusCode: 409, code: "not_finalized" });
+    throw Object.assign(new Error("Identity verification starts once the ownership review has been finalised. If it was reopened, the questions need finishing again first."), { statusCode: 409, code: "not_finalized" });
   }
   const now = new Date().toISOString();
   const next = stored ? completeIdentityVerification(stored, payload?.personId, now) : null;
@@ -735,6 +761,11 @@ class PocCaseService {
       // A finalised assessment is what identity verification was started
       // from; answers after that would change it with no new finalisation.
       const stored = serverTraceOf(record?.projection);
+      // Finalising a case that is finalised is a retry (a timed-out request
+      // sent again): it is done, so it is answered as done, not refused.
+      if (stored?.verificationAssessment?.finalized && operation === "FINALIZE_ASSESSMENT") {
+        return { caseId, updatedAt: record.updatedAt || null, projection: record.projection, duplicate: true, researchRelease: record.projection?.researchRelease || null };
+      }
       if (stored?.verificationAssessment?.finalized) {
         throw Object.assign(new Error("This review has been finalised and can no longer be changed."), { statusCode: 409, code: "case_finalized" });
       }
@@ -747,9 +778,15 @@ class PocCaseService {
       });
       incoming = { resolution: computed.resolution, assessment: computed.assessment };
     }
-    const payload = command.operation === "COMPLETE_IDV"
-      ? await demoIdentityVerificationPayload(this.repository, caseId, incoming)
-      : compactCasePayload(incoming);
+    let payload;
+    if (operation === "COMPLETE_IDV") {
+      // Read and written at one version, as the computed steps are: read
+      // unchecked, a completion racing a reopen re-finalised the case, and
+      // two completions from two tabs lost one (review, 2026-10-09).
+      const record = await this.repository.get(caseId);
+      expectedVersion = record?.version || null;
+      payload = demoIdentityVerificationPayload(record, incoming);
+    } else payload = compactCasePayload(incoming);
     const release = command.operation === "SAVE_RESEARCH" ? evaluateResearchRelease(payload?.researchResult) : null;
     if (operation === "SAVE_RESEARCH" || operation === "UPSERT_CASE") {
       // New research or a renamed company would drop a finalised assessment
@@ -793,4 +830,5 @@ module.exports = {
   compactCaseRecordForTransport,
   stableHash,
   projectCommand,
+  recordedKey,
 };
