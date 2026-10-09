@@ -1,7 +1,5 @@
 import React from "react";
-import { DEMO_AUDIT_PATH, DEMO_REVIEW_PATH } from "../demoRoute";
 import { CUSTOMER_OWNERSHIP_CHART_PATH } from "./customerRoute";
-import { currentCustomerSession } from "../../auth/customerSession";
 import { customerOwnershipChartSessionForContext, readCustomerDemoContext } from "./customerOwnershipChartSession";
 
 const STEPS = ["Company", "Ownership", "Questions", "Identity verification", "Complete"];
@@ -23,9 +21,11 @@ export default function CustomerJourneyHeader({ currentStep, onViewOwnershipAnal
         <span className="ubo-customer-secure">Customer journey · Demo</span>
         <nav className="ubo-customer-analyst-links" aria-label="Analyst views">
           {showCustomerOwnershipAnalysis() && hasChart && <a href={ownershipAnalysisPath} aria-current={ownershipAnalysisVisible ? "page" : undefined} onClick={onViewOwnershipAnalysis ? (event) => { event.preventDefault(); onViewOwnershipAnalysis(); } : undefined}>View Ownership Analysis</a>}
-          {/* Analyst screens: not for a customer, who could not open them anyway. */}
-          {!currentCustomerSession() && <a href={DEMO_REVIEW_PATH}>Open Analyst Review</a>}
-          {!currentCustomerSession() && <a href={DEMO_AUDIT_PATH}>Open Audit</a>}
+          {/* No links to the analyst's screens here. They were hidden only once
+              the customer's session had loaded, which after a page load is a
+              moment later than this header draws - so customers saw them
+              (end-to-end check, 2026-10-08). An analyst previewing has their
+              own tab. */}
         </nav>
       </div>
     </header>

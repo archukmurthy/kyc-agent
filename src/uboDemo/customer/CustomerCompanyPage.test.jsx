@@ -5,7 +5,6 @@ import { uboStore } from "../browserStore";
 jest.mock("../pocCaseClient", () => ({ ...jest.requireActual("../pocCaseClient"), persistPocCase: async () => ({ researchRelease: { mayProceed: true } }) }));
 import CustomerCompanyPage from "./CustomerCompanyPage";
 import { DEMO_SESSION_KEY } from "../demoSession";
-import { DEMO_AUDIT_PATH, DEMO_REVIEW_PATH } from "../demoRoute";
 import { CUSTOMER_OWNERSHIP_CHART_PATH, isCustomerCompanyPath } from "./customerRoute";
 import { CUSTOMER_OWNERSHIP_CHART_SESSION_KEY } from "./customerOwnershipChartSession";
 
@@ -14,12 +13,12 @@ beforeEach(() => {
   window.history.replaceState({}, "", "/ubo-demo/customer/");
 });
 
-test("customer screens link to Analyst Review and Audit; ownership analysis waits for a chart", () => {
+test("customer screens do not link to the analyst's screens; ownership analysis waits for a chart", () => {
   render(<CustomerCompanyPage />);
   // Nothing to analyse yet (the link with a chart: CustomerOwnershipChartPage tests).
   expect(screen.queryByRole("link", { name: "View Ownership Analysis" })).not.toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Open Analyst Review" })).toHaveAttribute("href", DEMO_REVIEW_PATH);
-  expect(screen.getByRole("link", { name: "Open Audit" })).toHaveAttribute("href", DEMO_AUDIT_PATH);
+  expect(screen.queryByRole("link", { name: "Open Analyst Review" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Open Audit" })).not.toBeInTheDocument();
 });
 
 test("customer company input continues directly to ownership with no research step", () => {
