@@ -2,7 +2,7 @@
 
 const { createDemoEntityMatcher } = require("../ubo-control-lab/server/demoEntityMatching.js");
 const { applyCors, requireUboCaller } = require("../lib/routeAuth");
-const { enforceRateLimit } = require("../lib/rateLimit");
+const { enforceRateLimit, paidStepRefusal } = require("../lib/rateLimit");
 const trials = require("../lib/uboTrials");
 
 function createHandler(matchEntities = createDemoEntityMatcher(), countPaidStep = trials.countPaidStep) {
@@ -27,8 +27,10 @@ function createHandler(matchEntities = createDemoEntityMatcher(), countPaidStep 
       return res.status(405).json({ success: false, code: "method_not_allowed" });
     }
     try {
-      // One of the caller's trial steps, counted where the AI call starts (UBO-44).
-      await countPaidStep(actor);
+      // One of the caller's trial steps, taken where the AI call starts (UBO-44)
+      // and checked as it is taken; a refused step makes no call.
+      const step = await countPaidStep(actor);
+      if (step?.refused) return res.status(403).json({ success: false, code: step.refused, ...paidStepRefusal(actor, step.refused, step.budget) });
       const result = await matchEntities(req.body || {});
       res.setHeader("Cache-Control", "no-store");
       return res.status(200).json({ success: true, result });

@@ -39,3 +39,14 @@ test("API handler is POST-only and exposes the bounded matcher result", async ()
   assert.equal(accepted.statusCode, 200);
   assert.equal(accepted.body.result.decisionScope, "PARTY_IDENTITY_ONLY");
 });
+
+// Review, 2026-10-09: a trial step refused at the call makes no AI call.
+test("API handler makes no matching call when the trial step is refused", async () => {
+  let matched = 0;
+  const handler = createHandler(async () => { matched += 1; return { matches: [] }; }, async () => ({ refused: "trial_budget_spent", budget: 10 }));
+  const res = { statusCode: null, body: null, setHeader() {}, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
+  await handler({ method: "POST", headers: {}, body: { candidates: [candidate] } }, res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body.code, "trial_budget_spent");
+  assert.equal(matched, 0);
+});

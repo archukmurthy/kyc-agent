@@ -160,3 +160,23 @@ test("a cached result uses no trial step; a live run uses exactly one", async ()
   await discovery(live.req, live.res);
   assert.deepEqual(counted, ["user_1"]);
 });
+
+// Review, 2026-10-09: the step is taken and checked at the call; a refused one
+// stops the run before Companies House or Anthropic is reached.
+test("a run whose trial step is refused at the call makes no provider call and says why", async () => {
+  let ran = 0;
+  let demoRuns = 0;
+  discovery.__setDeps({
+    enforceRateLimit: async () => true,
+    requireStaff: async () => ({ kind: "staff", userId: "user_1", tenantId: "acme" }),
+    demoAllowance: { record: async () => { demoRuns += 1; } },
+    trials: { countPaidStep: async () => ({ refused: "trial_budget_spent", budget: 10 }) },
+    runUboFramework: async () => { ran += 1; return { status: "COMPLETE", entities: [] }; },
+    getFresh: async () => null,
+  });
+  const { req, res } = fakeReqRes({ ...VALID, forceRefresh: true });
+  await discovery(req, res);
+  assert.equal(res.statusCode, 403);
+  assert.equal(ran, 0);
+  assert.equal(demoRuns, 0, "a refused run does not use a demo run either");
+});

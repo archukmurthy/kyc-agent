@@ -7,7 +7,7 @@ const { getFresh, resultKey, cacheResult, appendAudit, identity, CACHE_TTL } = r
 const { persistUboInvestigation } = require("../agents/ubo/uboDatabaseAudit");
 const { withTimeout } = require("../agents/ubo/boundedAsync");
 const { randomUUID } = require("crypto");
-const { enforceRateLimit } = require("../lib/rateLimit");
+const { enforceRateLimit, paidStepRefusal } = require("../lib/rateLimit");
 const { checkTextFields } = require("../lib/inputLimits");
 const { applyCors, requireStaff, uboCallerTenant } = require("../lib/routeAuth");
 const { logFailure, attachRequestId } = require("../lib/requestLog");
@@ -137,12 +137,19 @@ module.exports = async function handler(req, res) {
         return finish(forReviewer({ ...response, run: { ...run, completedAt: new Date().toISOString() }, audit: { id: auditId, persistence: "ASYNC_PENDING" } }));
       }
     }
-    // Past the cache: this run reaches Companies House and Anthropic, so it
-    // uses one of a public demo's shared runs (a no-op anywhere else).
+    // Past the cache: this run reaches Companies House and Anthropic. One of
+    // the caller's trial steps is taken here rather than before the request
+    // was checked (UBO-44) - taken and checked at once, so runs in flight
+    // together cannot pass the budget; a refused run stops before any call.
+    const step = await _deps.trials.countPaidStep(actor);
+    if (step?.refused) {
+      const refusal = paidStepRefusal(actor, step.refused, step.budget);
+      console.info(`[ubo-research:${jobId}] refused ${refusal.error}`);
+      if (streaming) { emit({ stage: "error", terminalState: "FAILED", code: refusal.error, message: refusal.message }); return res.end(); }
+      return res.status(403).json({ ...refusal, terminalState: "FAILED", jobId });
+    }
+    // ...and one of a public demo's shared runs (a no-op anywhere else).
     await _deps.demoAllowance.record("ubo-discovery");
-    // ...and one of the caller's trial steps, counted here rather than before
-    // the request was checked (UBO-44).
-    await _deps.trials.countPaidStep(actor);
     const jobController = createResearchJobController(req, res);
     let result;
     try {
