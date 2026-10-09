@@ -232,25 +232,6 @@ function serverTraceOf(projection) {
   return trace?.computedBy === "server" ? trace : null;
 }
 
-function traceTime(trace) {
-  const value = Date.parse(trace?.updatedAt || "");
-  return Number.isFinite(value) ? value : null;
-}
-
-function mergeResolution(current, incoming) {
-  if (!incoming) return current;
-  const submitted = incoming.submittedAnswer;
-  const submittedAnswer = submitted?.question?.id && submitted?.answer
-    ? { [submitted.question.id]: submitted.answer }
-    : {};
-  return {
-    ...incoming,
-    answers: { ...(current?.answers || {}), ...(incoming.answers || {}), ...submittedAnswer },
-    evidence: { ...(current?.evidence || {}), ...(incoming.evidence || {}) },
-    recalculations: { ...(current?.recalculations || {}), ...(incoming.recalculations || {}) },
-  };
-}
-
 /** The case with everything computed from its inputs dropped - the
  *  customer's answers and uploads kept as their input. Nothing, identity
  *  verification included, acts on it until the server computes again. */
@@ -578,7 +559,7 @@ class PostgresPocCaseRepository {
       await client.query(`INSERT INTO ubo_poc_evidence_requirements (case_id, evidence_requirement_key, fact_requirement_key, snapshot, current_status, artifact_id)
         SELECT $1, e.key, e.requirement, e.snapshot::jsonb, e.status, e.artifact::uuid FROM unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::text[]) AS e(key, requirement, snapshot, status, artifact)
         ON CONFLICT (case_id, evidence_requirement_key) DO UPDATE SET snapshot=EXCLUDED.snapshot,
-        current_status=EXCLUDED.current_status, artifact_id=COALESCE(EXCLUDED.artifact_id, ubo_poc_evidence_requirements.artifact_id), updated_at=NOW()`,
+        current_status=EXCLUDED.current_status, artifact_id=EXCLUDED.artifact_id, updated_at=NOW()`,
       [caseId, column(evidence, 0), column(evidence, 1), column(evidence, 2), column(evidence, 3), column(evidence, 4)]);
     }
     if (operation === "SUBMIT_ANSWER" && resolution.submittedAnswer) {
