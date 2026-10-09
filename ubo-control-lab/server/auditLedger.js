@@ -185,24 +185,31 @@ function linkEvent({ caseId, eventType, actor = {}, receivedAt, operationId, exp
   };
 }
 
-/** Writes events; a replayed step records nothing twice. */
+/** Writes events; a replayed step records nothing twice. All of a step's
+ *  events go in one statement: one round trip each made a step with ten events
+ *  take ten (review, 2026-10-09). Every event is checked before any is written. */
 async function record(executor, tenantId, events) {
+  const COLUMNS = 18;
+  const rows = [];
   for (const raw of events) {
     const event = { ...raw, receivedAt: raw.receivedAt || new Date().toISOString() };
     event.occurredAt = event.occurredAt || event.receivedAt;
     if (!EVENT_TYPES.includes(event.eventType)) throw new Error(`Unknown audit event type: ${event.eventType}`);
     if (!event.caseId) continue;
-    await executor.query(`INSERT INTO ubo_audit_events
-      (tenant_id, case_id, actor_type, actor_id, event_type, occurred_at, received_at, effective_at, correlation_id, operation_id,
-       related_assertion_id, related_artifact_id, related_assessment_id, related_question_id, reason_code, detail, retain_until, dedupe_key)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18)
-      ON CONFLICT (tenant_id, dedupe_key) DO NOTHING`, [
+    rows.push([
       tenantId, event.caseId, event.actorType, event.actorId, event.eventType, event.occurredAt, event.receivedAt, event.effectiveAt,
       event.correlationId, event.operationId, event.relatedAssertionId, event.relatedArtifactId, event.relatedAssessmentId,
       event.relatedQuestionId, event.reasonCode, JSON.stringify(event.detail || {}), retainUntil(event.receivedAt),
       `${event.caseId}:${event.operationId}:${event.eventType}:${event.subject}`,
     ]);
   }
+  if (!rows.length) return;
+  const values = rows.map((_, row) => `(${Array.from({ length: COLUMNS }, (__, column) => `$${row * COLUMNS + column + 1}${column === 15 ? "::jsonb" : ""}`).join(",")})`);
+  await executor.query(`INSERT INTO ubo_audit_events
+      (tenant_id, case_id, actor_type, actor_id, event_type, occurred_at, received_at, effective_at, correlation_id, operation_id,
+       related_assertion_id, related_artifact_id, related_assessment_id, related_question_id, reason_code, detail, retain_until, dedupe_key)
+      VALUES ${values.join(", ")}
+      ON CONFLICT (tenant_id, dedupe_key) DO NOTHING`, rows.flat());
 }
 
 /** A case's ledger, oldest first - the most recent `limit` events of a long one. */
