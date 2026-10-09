@@ -121,7 +121,11 @@ module.exports = async function handler(req, res) {
         userId: session.userId,
         // Stored because Clerk ids change between instances; the verified email
         // is what lets their work be re-linked after a move to a real domain.
-        email: session.email || (req.body || {}).email || null,
+        // Only the address Clerk has VERIFIED, asked of Clerk: the session
+        // token carries no email, so this used to fall through to one the
+        // request body named - anyone could file their trial under someone
+        // else's address (review, 2026-10-09).
+        email: await _deps.clerkAuth.verifiedEmailFor(session.userId),
       });
       if (!result.ok) return send(res, 403, { error: result.reason });
       return send(res, 200, { access: result.access, alreadyRedeemed: Boolean(result.alreadyRedeemed) });

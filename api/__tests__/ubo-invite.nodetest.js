@@ -60,15 +60,35 @@ test("creating without a company is refused before anything is stored", async ()
   assert.equal(created, false);
 });
 
-test("redeeming needs a signed-in person, not an owner", async () => {
+// The real verifyClerkSession returns no email (Clerk leaves it out of the
+// token), so the stand-ins do not either; the address comes from
+// verifiedEmailFor, which asks Clerk (lib/clerkAuth.js).
+test("redeeming needs a signed-in person, not an owner, and stores the address Clerk verified", async () => {
   invite.__setDeps({
-    clerkAuth: { verifyClerkSession: async () => ({ ok: true, userId: "user_a", email: "a@acme.com" }) },
+    clerkAuth: {
+      verifyClerkSession: async () => ({ ok: true, userId: "user_a" }),
+      verifiedEmailFor: async (userId) => (userId === "user_a" ? "a@acme.com" : null),
+    },
     trials: { redeem: async (args) => ({ ok: true, access: { tenantId: "trial-acme-1", email: args.email } }) },
   });
   const { req, res } = call({ body: { action: "redeem", code: "ACME-7D3K" } });
   await invite(req, res);
   assert.equal(res.statusCode, 200);
   assert.equal(res.body.access.email, "a@acme.com", "the email is carried through so their work can be re-linked later");
+});
+
+test("an email named in the request is never stored as the trial's", async () => {
+  // Review, 2026-10-09: the route took session.email || body.email, and the
+  // session never has one - so the body decided whose trial it was.
+  let stored;
+  invite.__setDeps({
+    clerkAuth: { verifyClerkSession: async () => ({ ok: true, userId: "user_a" }), verifiedEmailFor: async () => null },
+    trials: { redeem: async (args) => { stored = args.email; return { ok: true, access: {} }; } },
+  });
+  const { req, res } = call({ body: { action: "redeem", code: "ACME-7D3K", email: "ceo@victim.example" } });
+  await invite(req, res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(stored, null);
 });
 
 test("a signed-out visitor cannot redeem", async () => {
@@ -83,7 +103,7 @@ test("a signed-out visitor cannot redeem", async () => {
 
 test("a full or revoked invite is refused with the reason", async () => {
   invite.__setDeps({
-    clerkAuth: { verifyClerkSession: async () => ({ ok: true, userId: "user_z" }) },
+    clerkAuth: { verifyClerkSession: async () => ({ ok: true, userId: "user_z" }), verifiedEmailFor: async () => null },
     trials: { redeem: async () => ({ ok: false, reason: "invite_full" }) },
   });
   const { req, res } = call({ body: { action: "redeem", code: "ACME-7D3K" } });
@@ -171,7 +191,7 @@ test("only redeeming uses the strict limit; the owner's screen and the trial che
   invite.__setDeps({
     enforceRateLimit: async (_req, _res, bucket) => { buckets.push(bucket); return true; },
     requireStaff: async () => ({ kind: "staff", userId: "user_owner", role: "owner", tenantId: null }),
-    clerkAuth: { verifyClerkSession: async () => ({ ok: true, userId: "user_1", email: "a@example.test" }) },
+    clerkAuth: { verifyClerkSession: async () => ({ ok: true, userId: "user_1" }), verifiedEmailFor: async () => "a@example.test" },
     trials: { listInvites: async () => [], statusFor: async () => ({ inTrial: false }), redeem: async () => ({ ok: true, access: {} }) },
   });
   for (const request of [
