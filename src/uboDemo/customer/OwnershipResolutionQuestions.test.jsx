@@ -173,10 +173,55 @@ test("start questions again clears saved answers and restores the initial journe
 
   fireEvent.click(screen.getByRole("button", { name: "Start questions again" }));
 
-  expect(screen.queryByRole("heading", { name: "Answered questions" })).not.toBeInTheDocument();
+  // Cleared once the server has cleared them.
+  await waitFor(() => expect(screen.queryByRole("heading", { name: "Answered questions" })).not.toBeInTheDocument());
   expect(screen.getByRole("heading", { name: /What percentage of Target Limited does Alice Morgan currently own/i })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Start questions again" })).toBeDisabled();
+});
+
+test("starting again keeps the answers, and says so, when the server did not clear them", async () => {
+  // Review: the browser cleared its answers whatever the server said, so the
+  // page showed a fresh start while the case kept every old answer.
+  render(<OwnershipResolutionQuestions {...props({ type: "RANGE", lowerBound: 10, upperBound: 40, lowerInclusive: true, upperInclusive: true }, { type: "UNKNOWN" })} />);
+  fireEvent.change(screen.getByLabelText("Ownership percentage"), { target: { value: "18" } });
+  fireEvent.click(screen.getAllByRole("button", { name: /Save answer/i })[0]);
+  await waitFor(() => expect(screen.getByText("18%")).toBeInTheDocument());
+  mockPersist = async (operation) => {
+    if (operation === "RESET_ANSWERS") throw Object.assign(new Error("The server did not answer in time. Please try again."), { code: "case_write_timeout" });
+    return {};
+  };
+
+  fireEvent.click(screen.getByRole("button", { name: "Start questions again" }));
+
+  expect(await screen.findByText(/Your answers were not cleared/i)).toBeInTheDocument();
+  expect(screen.getByText("18%")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Answered questions" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Start questions again" })).toBeEnabled();
+});
+
+test("a document still being checked when the answers are cleared is not sent back to the case", async () => {
+  // Review: its check finished after the reset and synced the cleared upload back.
+  const { container } = render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })} />);
+  const declaration = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");
+  fireEvent.click(within(declaration).getByLabelText("Yes"));
+  fireEvent.click(within(declaration).getByRole("button", { name: /Save answer/i }));
+  const sent = [];
+  mockPersist = async (operation, command) => { sent.push({ operation, command }); return {}; };
+  let finishReading;
+  window.fetch.mockImplementationOnce(() => new Promise((resolve) => { finishReading = resolve; }));
+  const fileInput = container.querySelector('.ubo-resolution-evidence input[type="file"]');
+  fireEvent.change(fileInput, { target: { files: [new File(["%PDF-1.4\n%%EOF"], "nominee-agreement.pdf", { type: "application/pdf" })] } });
+  await waitFor(() => expect(finishReading).toBeDefined());
+
+  fireEvent.click(screen.getByRole("button", { name: "Start questions again" }));
+  await waitFor(() => expect(sent.some(({ operation }) => operation === "RESET_ANSWERS")).toBe(true));
+  await act(async () => {
+    finishReading({ ok: true, json: async () => ({ success: true, result: { artifact: { artifactId: "nominee-artifact", integrityVerified: true }, candidateFacts: [] } }) });
+  });
+
+  await waitFor(() => expect(screen.queryByRole("heading", { name: "Answered questions" })).not.toBeInTheDocument());
+  expect(sent.filter(({ operation, command }) => operation === "SYNC_RESOLUTION" && command.idempotencyKey.startsWith("evidence:"))).toEqual([]);
 });
 
 test("questions and evidence identify the company and related ownership issue", () => {
