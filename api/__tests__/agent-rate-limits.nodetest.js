@@ -22,8 +22,9 @@ beforeEach(() => {
     now: () => 500 * 3600 * 1000,
     resolveDossierActor: async () => ({ kind: "none", reason: "unauthorized" }),
     storage: {
-      async get(key) { seenKeys.push(key); return 999; },
-      async set() { throw new Error("a refused request must not increment"); },
+      async incr(key) { seenKeys.push(key); return 1000; },
+      async get() { throw new Error("the limiter counts in one step, never reads then writes"); },
+      async set() { throw new Error("the limiter counts in one step, never reads then writes"); },
     },
   });
 });
