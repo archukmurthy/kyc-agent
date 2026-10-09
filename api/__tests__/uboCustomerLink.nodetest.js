@@ -322,7 +322,7 @@ test("a link the ledger could not record is not handed out", async () => {
     clerk: { isConfigured: () => false },
   });
   const res = await call(h, { action: "create", caseId: "case-1", email: "customer@example.test" });
-  assert.strictEqual(res.statusCode, 500);
+  assert.strictEqual(res.statusCode, 503, "a clear refusal, not a bare server error");
   assert.strictEqual(res.body.token, undefined);
 });
 
