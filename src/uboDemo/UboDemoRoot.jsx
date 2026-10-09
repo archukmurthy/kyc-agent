@@ -21,7 +21,7 @@ import AnalystResolutionView from "./AnalystResolutionView";
 import JobsNeedingAttention from "./JobsNeedingAttention";
 import CaseLedger from "./CaseLedger";
 import ReuseEarlierChart from "./ReuseEarlierChart";
-import { clearActivePocCase, customerEngagement, listSavedResearch, loadPocCase, persistPocCase, smallStableHash } from "./pocCaseClient";
+import { clearActivePocCase, customerEngagement, listSavedResearch, loadPocCase, loadPocCaseState, persistPocCase, smallStableHash } from "./pocCaseClient";
 import { customerCompanyKey } from "./customer/customerOwnershipChartSession";
 import { adoptRegistryName } from "./registryName";
 import "./uboDemo.css";
@@ -268,6 +268,7 @@ function ResearchError({ error, result, replays, onRetry, onReplay, onEdit }) {
 
 // ponytail: a fixed interval; a push channel if analysts need it sooner.
 const CUSTOMER_PROGRESS_REFRESH_MS = 30 * 1000;
+const COMPLETE_CASE_REFRESH_EVERY = 10;
 
 export default function UboDemoRoot() {
   const restored = readDemoSession();
@@ -349,11 +350,25 @@ export default function UboDemoRoot() {
     const caseId = demoCase?.demoCaseId;
     if (!caseId || !casePathOpen || !researchReady) return undefined;
     let active = true;
+    // The whole case (research, chart, history) is read only when its state
+    // says it changed; it was read every 30 s per tab, against the case read
+    // limit, even once the case was complete (review, 2026-10-09). A complete
+    // case is looked at every 5 minutes instead.
+    let seenUpdatedAt = null;
+    let complete = false;
+    let tick = 0;
     const refresh = async () => {
       if (typeof document !== "undefined" && document.hidden) return;
+      tick += 1;
+      if (complete && tick % COMPLETE_CASE_REFRESH_EVERY) return;
       try {
+        const state = await loadPocCaseState(caseId);
+        if (!active || !state) return;
+        complete = state.stage === "COMPLETE";
+        if (state.updatedAt && state.updatedAt === seenUpdatedAt) return;
         const record = await loadPocCase(caseId);
         if (!active || !record) return;
+        seenUpdatedAt = state.updatedAt;
         // The server's trace as it is - none at all after a reopen, until the
         // customer's next step. Skipping "none" left other analyst tabs showing
         // the finalised review and its Reopen button (review, 2026-10-09).
