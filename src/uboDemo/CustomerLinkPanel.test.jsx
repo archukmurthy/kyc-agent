@@ -46,6 +46,15 @@ test("every link for the case can be withdrawn", async () => {
   expect(JSON.parse(window.fetch.mock.calls[1][1].body)).toEqual({ action: "revoke", caseId: "case-1" });
 });
 
+test("a new link says the earlier one has stopped working", async () => {
+  server({ create: [200, { token: "tok.en", expiresAt: "2026-10-30T10:00:00.000Z", replaced: true }] });
+  render(<CustomerLinkPanel caseId="case-1" linkStatus={async () => ({ linkSent: true })} />);
+  expect(await screen.findByText(/the new one replaces it/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Customer's email address"), { target: { value: "customer@example.test" } });
+  fireEvent.click(screen.getByRole("button", { name: "Create customer link" }));
+  expect(await screen.findByText(/earlier link for this case no longer works/)).toBeInTheDocument();
+});
+
 test("the server's refusal is shown", async () => {
   server({ create: [404, { error: "case_not_found", message: "That case is not in your workspace." }] });
   render(<CustomerLinkPanel caseId="case-9" />);

@@ -37,21 +37,21 @@ function reqRes({ method = "POST", body = {}, headers = {}, query = {}, url = "/
 /** An in-memory rate limiter wired to stand-ins, so an attack can be run
  *  end to end without touching a real store or a real Clerk. */
 function armLimiter({ session = null, access = null, trial = { inTrial: false }, spend = {} } = {}) {
-  const store = new Map();
   const recorded = { spendCap: [], trialSpend: [] };
   rateLimit.__setDeps({
-    storage: {
-      get: async (k) => (store.has(k) ? store.get(k) : null),
-      set: async (k, v) => { store.set(k, v); },
-    },
+    storage: require("../../lib/storage").createMemoryStore(),
     clerkAuth: {
       isConfigured: () => Boolean(session),
       verifyClerkSession: async () => (session ? { ok: true, ...session } : { ok: false }),
     },
-    userAccess: { getAccess: async () => access },
+    userAccess: { getAccess: async () => access, bootstrapOwners: () => [] },
+    // The trial as lib/uboTrials.js#admitPaidStep would answer for it.
     trials: {
-      statusFor: async () => trial,
-      recordSpend: async (userId) => { recorded.trialSpend.push(userId); },
+      admitPaidStep: async ({ userId, take }) => {
+        if (trial.inTrial && trial.readOnly) return { refused: trial.overBudget ? "trial_budget_spent" : "trial_ended", budget: trial.budget };
+        if (trial.inTrial && take) recorded.trialSpend.push(userId);
+        return { refused: null };
+      },
     },
     spendCap: {
       check: async (tenantId) => { recorded.spendCap.push(["check", tenantId]); return spend.blocked ? { blocked: true, limit: 100, message: "stop" } : { blocked: false }; },

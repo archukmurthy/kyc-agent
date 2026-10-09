@@ -16,6 +16,18 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { redeemInvite, trialStatus } from "./trialApi";
 import { isClerkEnabled } from "../auth/ClerkGate";
+import { signOutEverywhere } from "../auth/customerSession";
+
+// One redeem per code at a time, whoever asks. React runs a page's start-up
+// twice in development, and each run redeemed: two requests racing for a seat
+// (review, 2026-10-09). The second caller shares the first one's answer.
+const redeeming = new Map();
+function redeemOnce(code) {
+  if (!redeeming.has(code)) {
+    redeeming.set(code, redeemInvite(code).finally(() => redeeming.delete(code)));
+  }
+  return redeeming.get(code);
+}
 
 const BOX = {
   maxWidth: 560,
@@ -53,7 +65,7 @@ export default function TrialGate({ children }) {
     const code = inviteCodeFromUrl();
     try {
       if (code) {
-        await redeemInvite(code);
+        await redeemOnce(code);
         clearInviteFromUrl();
       }
       const status = await trialStatus();
@@ -98,9 +110,7 @@ export default function TrialGate({ children }) {
   if (state.phase === "bad-invite" && state.reason === "already_in_trial") {
     // Signing out comes back here with the invitation still in the address,
     // so the next sign-in uses it.
-    const signOut = () => {
-      try { window.Clerk?.signOut({ redirectUrl: window.location.href }); } catch (_) { /* Nothing to sign out of. */ }
-    };
+    const signOut = () => signOutEverywhere(window.location.href);
     return (
       <div style={BOX}>
         <h2 style={{ marginTop: 0 }}>This invitation cannot be used</h2>

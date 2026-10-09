@@ -12,8 +12,21 @@
  * 2. It renders the sign-in form in place rather than redirecting. The app has
  *    no router; a redirect would need routes that do not exist.
  */
-import React from "react";
+import React, { useEffect } from "react";
 import { ClerkProvider, SignedIn, SignedOut, SignIn, UserButton } from "@clerk/clerk-react";
+import { leaveCustomerSession } from "./customerSession";
+
+/** Signed out - by Clerk's own menu, an expired sign-in, or any sign-out
+ *  button: a customer session cookie left in this browser goes too, so the
+ *  next person to sign in here never picks up somebody's review (review,
+ *  2026-10-09). The cookie cannot be seen from a script, so it is asked for
+ *  once per signed-out page. */
+function ForgetCustomerSession() {
+  useEffect(() => {
+    try { leaveCustomerSession(); } catch (_) { /* No network: nothing to forget. */ }
+  }, []);
+  return null;
+}
 
 const PUBLISHABLE_KEY = process.env.REACT_APP_CLERK_PUBLISHABLE_KEY || "";
 
@@ -40,6 +53,7 @@ export default function ClerkGate({ children }) {
         {children}
       </SignedIn>
       <SignedOut>
+        <ForgetCustomerSession />
         <div style={{ display: "flex", justifyContent: "center", padding: "48px 16px" }}>
           {/* Come back to the page the person was trying to reach. Without
               these, Clerk sends them to its configured home URL, which on a

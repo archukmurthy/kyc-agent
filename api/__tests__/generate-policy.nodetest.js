@@ -35,17 +35,11 @@ function validForm(extra = {}) {
   };
 }
 
-let storedCounts;
-
 beforeEach(() => {
-  storedCounts = {};
   rateLimit.__setDeps({
     now: () => 500 * 3600 * 1000,
     resolveDossierActor: async () => ({ kind: "none" }),
-    storage: {
-      async get(k) { return storedCounts[k] || null; },
-      async set(k, v) { storedCounts[k] = v; },
-    },
+    storage: require("../../lib/storage").createMemoryStore(),
   });
 });
 

@@ -8,7 +8,8 @@ const { randomUUID } = require("node:crypto");
  *
  *   POST { action: "create", caseId, email }  ANALYST - a link for a case in
  *                                             their own workspace, bound to
- *                                             the customer's email
+ *                                             the customer's email; it
+ *                                             replaces every earlier link
  *   POST { action: "revoke", caseId }         ANALYST - every link and
  *                                             customer session for the case
  *                                             stops working
@@ -39,6 +40,7 @@ const storage = require("../lib/storage");
 const { enforceRateLimit } = require("../lib/rateLimit");
 const clerkAuth = require("../lib/clerkAuth");
 const customerLink = require("../lib/uboCustomerLink");
+const trials = require("../lib/uboTrials");
 const { logFailure, attachRequestId } = require("../lib/requestLog");
 
 // Whether a case exists in a workspace, through the case store's own
@@ -139,11 +141,22 @@ function createHandler(deps = DEFAULT_DEPS) {
         }
         const email = String(body.email || "").trim();
         if (!EMAIL.test(email)) return send(res, 400, { error: "email_required", message: "Enter the customer's email address." });
-        const { token, expiresAt } = customerLink.mintLink({ caseId, tenantId, email });
+        // An ended trial is read-only: no new links (review, 2026-10-09).
+        // Withdrawing stays possible above - taking access away is a safety
+        // step, and an ended trial must still be able to take it.
+        if (await (deps.trialEnded || trials.trialEndedFor)({ ...actor, tenantId })) {
+          return send(res, 403, { error: "trial_ended", message: "This trial has ended. Your work is still here and can be viewed - get in touch to continue." });
+        }
+        // A new link replaces every earlier one for the case (and ends the
+        // session opened from it) - recorded as the withdrawal it is.
+        const { token, expiresAt, replaced } = await customerLink.mintLink({ caseId, tenantId, email });
         // Recorded before the link is handed over: a link the ledger does not
         // know about is one the analyst's warnings cannot see.
-        if (deps.recordLinkEvent) await deps.recordLinkEvent(tenantId, { caseId, eventType: "CUSTOMER_LINK_ISSUED", actor: linkActor, receivedAt, operationId: `link-issued:${randomUUID()}`, expiresAt });
-        return send(res, 200, { token, caseId, expiresAt });
+        if (deps.recordLinkEvent) {
+          if (replaced) await deps.recordLinkEvent(tenantId, { caseId, eventType: "CUSTOMER_LINK_REVOKED", actor: linkActor, receivedAt, operationId: `link-revoked:${randomUUID()}` });
+          await deps.recordLinkEvent(tenantId, { caseId, eventType: "CUSTOMER_LINK_ISSUED", actor: linkActor, receivedAt, operationId: `link-issued:${randomUUID()}`, expiresAt });
+        }
+        return send(res, 200, { token, caseId, expiresAt, replaced });
       }
 
       return send(res, 400, { error: "unknown_action" });

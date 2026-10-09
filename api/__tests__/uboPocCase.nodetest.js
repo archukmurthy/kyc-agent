@@ -271,6 +271,42 @@ test("who acted, when it arrived and the correlation id are the server's, not th
   assert.strictEqual(res.headers["x-correlation-id"], "corr-from-caller-123");
 });
 
+// Review, 2026-10-09: only paid calls stopped at a trial's end; the analyst
+// could still write cases.
+test("an ended trial is read-only for its staff; its customer may finish a review already sent", async () => {
+  const trials = require("../../lib/uboTrials");
+  const store = require("../../lib/storage").createMemoryStore();
+  let clock = Date.parse("2026-10-01T09:00:00.000Z");
+  trials.__setDeps({ storage: store, now: () => clock });
+  try {
+    const invite = await trials.createInvite({ company: "Acme", days: 7 });
+    const { access } = await trials.redeem({ code: invite.code, userId: "user_a", email: "a@acme.test" });
+    let applied = 0;
+    const make = (actor) => route.createHandler(() => ({ service: { load: async () => ({}), apply: async () => { applied += 1; return {}; } }, close: async () => {} }), {
+      applyCors: () => false, enforceRateLimit: async () => true, requireUboCaller: async () => actor,
+    });
+    const analyst = { kind: "staff", tenantId: access.tenantId, role: "analyst", userId: "user_a" };
+    const customer = { kind: "customer", tenantId: access.tenantId, caseId: "case-1", userId: "user_customer" };
+    const save = (actor, operation) => {
+      const res = fakeRes();
+      return make(actor)({ method: "POST", headers: {}, query: {}, body: { operation, caseId: "case-1", idempotencyKey: "k", payload: {} } }, res).then(() => res);
+    };
+
+    assert.strictEqual((await save(analyst, "UPSERT_CASE")).statusCode, 200, "a live trial writes");
+    clock += 8 * 24 * 60 * 60 * 1000;
+    const refused = await save(analyst, "UPSERT_CASE");
+    assert.strictEqual(refused.statusCode, 403);
+    assert.strictEqual(refused.body.code, "trial_ended");
+    const read = fakeRes();
+    await make(analyst)({ method: "GET", headers: {}, query: { caseId: "case-1" }, body: {} }, read);
+    assert.strictEqual(read.statusCode, 200, "the work is still there to read");
+    assert.strictEqual((await save(customer, "SUBMIT_ANSWER")).statusCode, 200);
+    assert.strictEqual(applied, 2);
+  } finally {
+    trials.__setDeps({ storage: require("../../lib/storage") });
+  }
+});
+
 test("a correlation id that is not a plain id is replaced", async () => {
   let applied;
   const handler = route.createHandler(() => ({ service: { load: async () => ({}), apply: async (command) => { applied = command; return {}; } }, close: async () => {} }), {

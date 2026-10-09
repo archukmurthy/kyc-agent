@@ -12,6 +12,7 @@ const { PocCaseService, PostgresPocCaseRepository } = require("../ubo-control-la
 const { applyCors, requireUboCaller, uboCallerTenant } = require("../lib/routeAuth");
 const { enforceRateLimit } = require("../lib/rateLimit");
 const { ensureTenantRow } = require("../lib/tenantRow");
+const trials = require("../lib/uboTrials");
 
 // ponytail: a fixed ceiling, well under Vercel's 4.5 MB request cap. The
 // screens compact what they send (pocCaseClient.js); raise it only if a real
@@ -73,6 +74,21 @@ function createHandler(factory = dependencies, gates = DEFAULT_GATES) {
     }
     if (customer && req.method === "POST" && !CUSTOMER_OPERATIONS.has(req.body?.operation)) {
       return res.status(403).json({ success: false, code: "not_a_customer_operation", message: "This step is not available from a customer link." });
+    }
+    // An ended trial is read-only for its staff: the work stays, nothing new
+    // is written (review, 2026-10-09 - only paid calls were stopped). A
+    // customer finishing a review sent while the trial was live may still
+    // save their answers: they cannot fix the trial, and their paid steps are
+    // refused by the rate limiter anyway. A failed check does not block a
+    // save - it costs nothing, unlike a paid call.
+    if (!customer && req.method === "POST") {
+      let ended = false;
+      try {
+        ended = await (gates.trialEnded || trials.trialEndedFor)(actor);
+      } catch (error) {
+        console.warn("[ubo-poc-case] trial check failed, allowing the save", { code: error.code || null });
+      }
+      if (ended) return res.status(403).json({ success: false, code: "trial_ended", message: "This trial has ended. Your work is still here and can be viewed - get in touch to continue." });
     }
 
     // One id for this whole request, in the audit ledger and the response; a
