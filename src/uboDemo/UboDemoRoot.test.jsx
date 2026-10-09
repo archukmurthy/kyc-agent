@@ -814,6 +814,26 @@ test("an open analyst page picks up the customer's progress from the server ever
   expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.candidateSources).toEqual(research.candidateSources);
 });
 
+test("an open analyst page stops showing a finalised review once another tab reopens it", async () => {
+  // Review: a refresh that found no trace on the server (a reopened case) kept
+  // the old one, so other analyst tabs still showed "Finalised review" and Reopen.
+  jest.useFakeTimers();
+  const research = compactResearchResult(evaluatedSession, "LIVE", "EFFECTIVE_INTEREST");
+  const finalised = { discoveryState: "IDV_IN_PROGRESS", verificationAssessment: { finalized: true } };
+  uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({
+    contractVersion: DEMO_SESSION_CONTRACT,
+    draft: { ...emptyDemoDraft(), legalName: "Acme Holdings Limited", registrationNumber: "00445790" },
+    demoCase: { demoCaseId: "demo-live", company: { legalName: "Acme Holdings Limited", registrationNumber: "00445790", countryCode: "GB", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" } },
+    researchResult: { ...research, ownershipResolutionTrace: finalised },
+  }));
+  mockLoadPocCase.mockResolvedValue({ projection: { assessment: null, resolution: { answers: {} } } });
+  window.history.replaceState({}, "", DEMO_REVIEW_PATH);
+  render(<UboDemoRoot />);
+  await act(async () => { jest.advanceTimersByTime(30 * 1000); });
+  await waitFor(() => expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.ownershipResolutionTrace).toBeUndefined());
+  expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.candidateSources).toEqual(research.candidateSources);
+});
+
 // UBO-57: a customer link points at one case. Re-running research, or
 // correcting the company's name, continues that case; a different company is a
 // new case, and if a customer may be working on the current one the analyst is
