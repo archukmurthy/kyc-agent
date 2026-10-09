@@ -6,7 +6,7 @@ import { CUSTOMER_COMPLETE_PATH, CUSTOMER_DEMO_START_PATH, CUSTOMER_QUESTIONS_PA
 import { idvSubjectsFromTrace, traceReadyForIdv } from "./idvSubjects";
 import { completeIdentityVerification, DISCOVERY_STATE, VERIFICATION_REASON } from "./verificationAssessment";
 import "./customerOwnershipChart.css";
-import { persistPocCase, smallStableHash } from "../pocCaseClient";
+import { persistPocCase, smallStableHash, useReloadWhenFinalizedChanges } from "../pocCaseClient";
 import { uboStore } from "../browserStore";
 
 function readTrace(context) {
@@ -39,6 +39,10 @@ export default function CustomerIdvPage() {
   const [pendingPersonId, setPendingPersonId] = useState(null);
   const [saveError, setSaveError] = useState("");
   const subjects = useMemo(() => idvSubjectsFromTrace(trace), [trace]);
+  // An analyst reopening the review while this page is open: it reloads and
+  // sends the customer back to the questions, rather than offering checks the
+  // server will refuse.
+  const recheckCase = useReloadWhenFinalizedChanges(context?.demoCaseId, Boolean(trace?.verificationAssessment?.finalized));
   const complete = async (personId) => {
     if (pendingPersonId) return;
     const next = completeIdentityVerification(trace, personId);
@@ -56,7 +60,10 @@ export default function CustomerIdvPage() {
       const saved = record?.projection?.assessment?.trace || next;
       writeTrace(context, saved);
       setTrace(saved);
-    } catch (cause) { setSaveError(cause.message || "Identity-verification completion could not be saved."); }
+    } catch (cause) {
+      setSaveError(cause.message || "Identity-verification completion could not be saved.");
+      if (cause.code === "not_finalized") recheckCase();
+    }
     finally { setPendingPersonId(null); }
   };
   if (!context) return <div className="ubo-customer-page"><CustomerJourneyHeader currentStep={4} /><main className="ubo-customer-empty"><span>Identity verification</span><h1>Start with a demo company</h1><a href={CUSTOMER_DEMO_START_PATH}>Enter company details</a></main></div>;

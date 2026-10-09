@@ -6,10 +6,13 @@ import { readTrace } from "./CustomerIdvPage";
 import { DISCOVERY_STATE } from "./verificationAssessment";
 import "./customerOwnershipChart.css";
 import { currentCustomerSession } from "../../auth/customerSession";
+import { useReloadWhenFinalizedChanges } from "../pocCaseClient";
 
 export default function CustomerCompletePage() {
   const context = useMemo(() => readCustomerDemoContext(), []);
   const trace = useMemo(() => readTrace(context), [context]);
+  // Reopened by the analyst after the customer finished: there is more to do.
+  useReloadWhenFinalizedChanges(context?.demoCaseId, Boolean(trace?.verificationAssessment?.finalized));
   if (trace?.discoveryState !== DISCOVERY_STATE.IDV_COMPLETE) return <div className="ubo-customer-page"><CustomerJourneyHeader currentStep={5} /><main className="ubo-customer-empty"><span>Review not complete</span><h1>Finish identity verification first</h1><p>Every person currently requiring identity verification must complete it before the application information can be marked complete.</p><a href={CUSTOMER_IDV_PATH}>Return to identity verification</a></main></div>;
   // A customer has finished: nothing to start again. The demo restart is for
   // an analyst trying the customer view.

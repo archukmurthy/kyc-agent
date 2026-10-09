@@ -12,7 +12,7 @@ import {
 } from "./ownershipResolutionEngine";
 import { CUSTOMER_IDV_PATH } from "./customerRoute";
 import { isReadyForIdentityVerification } from "./verificationAssessment";
-import { persistPocCase, smallStableHash } from "../pocCaseClient";
+import { persistPocCase, smallStableHash, useReloadWhenFinalizedChanges } from "../pocCaseClient";
 import { casePointerStore, uboStore } from "../browserStore";
 import { limitNotice } from "../../trials/limitNotice";
 
@@ -300,6 +300,9 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
     return () => window.removeEventListener("beforeunload", warn);
   }, [saving]);
   const finalizedAtLoad = useMemo(() => Boolean(readCurrentTrace(context)?.verificationAssessment?.finalized), [context]);
+  // ...and when that stops being true on the server (the analyst reopened the
+  // review, or another tab finalised it), the page reloads to match it.
+  const recheckCase = useReloadWhenFinalizedChanges(context?.demoCaseId, finalizedAtLoad);
   const [editingQuestionId, setEditingQuestionId] = useState(null);
   const [evidenceState, setEvidenceState] = useState({ busyId: null, messages: {} });
   const evidenceFiles = useRef({});
@@ -468,6 +471,7 @@ export default function OwnershipResolutionQuestions({ researchResult, result, c
         setSaving((current) => { const next = new Set(current); next.delete(question.id); return next; });
         answerSubmissions.current.delete(idempotencyKey);
         setErrors((current) => ({ ...current, [question.id]: caught.message }));
+        if (caught.code === "case_finalized") recheckCase();
       });
       setEditingQuestionId(null);
       setErrors((current) => ({ ...current, [question.id]: "" }));

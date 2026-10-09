@@ -1,9 +1,13 @@
+import React from "react";
+import { act, render } from "@testing-library/react";
 import {
   ACTIVE_POC_CASE_KEY,
   activePocCaseId,
+  CASE_STATE_CHECK_MS,
   hydrateBrowserFromPocCase,
   loadPocCase,
   persistPocCase,
+  useReloadWhenFinalizedChanges,
 } from "./pocCaseClient";
 import { DEMO_SESSION_KEY } from "./demoSession";
 import { CUSTOMER_OWNERSHIP_CHART_SESSION_KEY } from "./customer/customerOwnershipChartSession";
@@ -212,4 +216,36 @@ test("a write that never answers is given up on, and the next write to the case 
   } finally {
     jest.useRealTimers();
   }
+});
+
+// A customer page open before the analyst reopened the review stayed locked
+// until the customer happened to reload (review, 2026-10-09).
+describe("a customer page notices the server's case changing under it", () => {
+  const finalised = { projection: { assessment: { trace: { verificationAssessment: { finalized: true } } } } };
+  const reopened = { projection: { assessment: null, resolution: { answers: {} } } };
+  function Page({ shownFinalized, load, reload }) {
+    useReloadWhenFinalizedChanges("case-1", shownFinalized, { load, reload });
+    return null;
+  }
+  afterEach(() => jest.useRealTimers());
+
+  test("a page shown as finalised reloads once the server's case is reopened", async () => {
+    jest.useFakeTimers();
+    const load = jest.fn(async () => reopened);
+    const reload = jest.fn();
+    render(React.createElement(Page, { shownFinalized: true, load, reload }));
+    expect(load).not.toHaveBeenCalled();
+    await act(async () => { jest.advanceTimersByTime(CASE_STATE_CHECK_MS); });
+    expect(load).toHaveBeenCalledWith("case-1");
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  test("coming back to the page checks at once; a page that matches the server stays as it is", async () => {
+    const load = jest.fn(async () => finalised);
+    const reload = jest.fn();
+    render(React.createElement(Page, { shownFinalized: true, load, reload }));
+    await act(async () => { window.dispatchEvent(new Event("focus")); });
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(reload).not.toHaveBeenCalled();
+  });
 });
