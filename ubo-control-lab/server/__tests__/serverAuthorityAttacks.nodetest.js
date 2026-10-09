@@ -515,3 +515,24 @@ test("after a reset, the same evidence upload counts again", async () => {
   await customer("SYNC_RESOLUTION", upload, `evidence:${requirement.id}:transfer-record`);
   assert.strictEqual(projection().resolution.evidence[requirement.id]?.status, "SATISFIED", "the re-upload after the reset was ignored");
 });
+
+test("an identity completion racing a reopen does not re-finalise the case", async () => {
+  const { repository, analyst, customer, projection, person } = await verifiedCase();
+  // Holds the completion after it has read the case, until the reopen has landed.
+  const realGet = repository.get;
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  let holding = true;
+  repository.get = async (caseId) => {
+    const record = await realGet(caseId);
+    if (holding) { holding = false; await held; }
+    return record;
+  };
+  const completion = customer("COMPLETE_IDV", { personId: person.personId }, "idv-again");
+  await new Promise((resolve) => setImmediate(resolve));
+  repository.get = realGet;
+  await analyst("REOPEN_CASE", {}, "reopen");
+  release();
+  await assert.rejects(completion, (error) => error.code === "not_finalized" && error.statusCode === 409);
+  assert.strictEqual(projection().assessment, null, "the completion wrote the finalised assessment back over the reopen");
+});

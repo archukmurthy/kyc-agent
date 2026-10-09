@@ -627,16 +627,18 @@ class PostgresPocCaseRepository {
 // mode, the person is one its own stored assessment requires, and the record
 // says plainly that nothing was verified. Anything the browser sends as a
 // trace, assessment or research result for this operation is discarded.
-async function demoIdentityVerificationPayload(repository, caseId, payload) {
+// The record is the case as read for this step; the step is written only if the
+// case is still that version (PocCaseService#apply), so a reopen landing in
+// between - or a second person completed from another tab - is not overwritten.
+function demoIdentityVerificationPayload(record, payload) {
   if (String(process.env.UBO_POC_IDV_MODE || "").trim().toUpperCase() !== "DEMO") {
     throw Object.assign(new Error("Identity verification is not available on this deployment."), { statusCode: 403, code: "idv_demo_mode_off" });
   }
-  const record = await repository.get(caseId);
   const stored = serverTraceOf(record?.projection);
   // Only from the server's own assessment, finalised and ready - not from a
   // trace a browser wrote before UBO-13, and not while questions are open.
   if (!stored || stored.computedBy !== "server" || !stored.verificationAssessment?.finalized || !isReadyForIdentityVerification(stored)) {
-    throw Object.assign(new Error("Identity verification starts once the ownership review has been finalised."), { statusCode: 409, code: "not_finalized" });
+    throw Object.assign(new Error("Identity verification starts once the ownership review has been finalised. If it was reopened, the questions need finishing again first."), { statusCode: 409, code: "not_finalized" });
   }
   const now = new Date().toISOString();
   const next = stored ? completeIdentityVerification(stored, payload?.personId, now) : null;
@@ -782,9 +784,15 @@ class PocCaseService {
       });
       incoming = { resolution: computed.resolution, assessment: computed.assessment };
     }
-    const payload = command.operation === "COMPLETE_IDV"
-      ? await demoIdentityVerificationPayload(this.repository, caseId, incoming)
-      : compactCasePayload(incoming);
+    let payload;
+    if (operation === "COMPLETE_IDV") {
+      // Read and written at one version, as the computed steps are: read
+      // unchecked, a completion racing a reopen re-finalised the case, and
+      // two completions from two tabs lost one (review, 2026-10-09).
+      const record = await this.repository.get(caseId);
+      expectedVersion = record?.version || null;
+      payload = demoIdentityVerificationPayload(record, incoming);
+    } else payload = compactCasePayload(incoming);
     const release = command.operation === "SAVE_RESEARCH" ? evaluateResearchRelease(payload?.researchResult) : null;
     if (operation === "SAVE_RESEARCH" || operation === "UPSERT_CASE") {
       // New research or a renamed company would drop a finalised assessment
