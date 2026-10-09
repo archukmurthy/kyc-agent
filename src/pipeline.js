@@ -647,7 +647,7 @@ const isRegistryExemptionNotice = (stakeholder) => {
   // almost certainly a descriptive notice, especially with sentence punctuation.
   const nameWordCount = rawName.trim() ? rawName.trim().split(/\s+/).length : 0;
   const nameTooLong = nameWordCount > 6;
-  const hasNoticePunctuation = /[-–—/]/.test(rawName) && nameWordCount > 4;
+  const hasNoticePunctuation = /[-\u2013\u2014/]/.test(rawName) && nameWordCount > 4;
 
   return nameIsExemption || roleIsExemption || (nameTooLong && hasNoticePunctuation);
 };
@@ -936,7 +936,7 @@ const parseStakeholdersFromString = (rawString, source, sourceUrl, sourceTier, f
     }
 
     // "Name - Role" or "Name - Role"
-    const dashMatch = cleaned.match(/^(.+?)\s*[—–-]\s*(.+)$/);
+    const dashMatch = cleaned.match(/^(.+?)\s*[\u2014\u2013-]\s*(.+)$/);
     if (dashMatch) {
       return makeStakeholder({
         full_name: dashMatch[1].trim(),

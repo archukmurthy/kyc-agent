@@ -37,7 +37,7 @@ function parsePercentage(raw) {
   // and neither is a point value. Both used to yield the bare number.
   if (/-\s*\d/.test(s)) return null;
   // En and em dashes as escapes: registry and customer text uses them for ranges.
-  if (/\d\s*(?:–|—|-|to\b)\s*\d/i.test(s)) return null;
+  if (/\d\s*(?:\u2013|\u2014|to\b)\s*\d/i.test(s)) return null;
   if (/\b(over|under|more than|less than|at least|up to|above|below|approx|around|circa)\b/i.test(s)) return null;
   const matches = s.match(/\d+(?:\.\d+)?/g);
   // Two or more numbers means a band we have not recognised - refuse it.
