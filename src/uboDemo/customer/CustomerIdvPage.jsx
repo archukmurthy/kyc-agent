@@ -6,7 +6,7 @@ import { CUSTOMER_COMPLETE_PATH, CUSTOMER_DEMO_START_PATH, CUSTOMER_QUESTIONS_PA
 import { idvSubjectsFromTrace, traceReadyForIdv } from "./idvSubjects";
 import { completeIdentityVerification, DISCOVERY_STATE, VERIFICATION_REASON } from "./verificationAssessment";
 import "./customerOwnershipChart.css";
-import { persistPocCase, smallStableHash, useReloadWhenFinalizedChanges } from "../pocCaseClient";
+import { caseMovedOn, persistPocCase, smallStableHash, useReloadWhenFinalizedChanges } from "../pocCaseClient";
 import { uboStore } from "../browserStore";
 
 function readTrace(context) {
@@ -42,7 +42,8 @@ export default function CustomerIdvPage() {
   // An analyst reopening the review while this page is open: it reloads and
   // sends the customer back to the questions, rather than offering checks the
   // server will refuse.
-  const recheckCase = useReloadWhenFinalizedChanges(context?.demoCaseId, Boolean(trace?.verificationAssessment?.finalized));
+  // Not while a completion is being saved: its answer is what the page shows.
+  const recheckCase = useReloadWhenFinalizedChanges(context?.demoCaseId, Boolean(trace?.verificationAssessment?.finalized), { hasUnsavedWork: () => Boolean(pendingPersonId) });
   const complete = async (personId) => {
     if (pendingPersonId) return;
     const next = completeIdentityVerification(trace, personId);
@@ -62,7 +63,8 @@ export default function CustomerIdvPage() {
       setTrace(saved);
     } catch (cause) {
       setSaveError(cause.message || "Identity-verification completion could not be saved.");
-      if (cause.code === "not_finalized") recheckCase();
+      // Reopened, or started again elsewhere: the page reloads to show it.
+      if (cause.code === "not_finalized" || caseMovedOn(cause.code)) recheckCase();
     }
     finally { setPendingPersonId(null); }
   };
