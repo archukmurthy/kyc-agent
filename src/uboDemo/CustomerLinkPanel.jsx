@@ -100,7 +100,7 @@ export default function CustomerLinkPanel({ caseId, prepare, notice, linkStatus 
       {state.kind === "made" && (
         <div role="status">
           <p>Only <strong>{state.email}</strong> can open this link, until {new Date(state.expiresAt).toLocaleDateString()}. Copy it and send it to them.</p>
-          {state.replaced && <p>The earlier link for this case no longer works, and anyone using it has been signed out of the case.</p>}
+          {state.replaced && <p>The earlier link for this case no longer works. A page still open from it is stopped at its next step and told to ask for a new link.</p>}
           <input readOnly aria-label="Customer link" value={state.url} onFocus={(event) => event.target.select()} />
           <button type="button" className="ubo-demo-secondary" onClick={copy}>
             {copied ? "Copied" : "Copy link"}
@@ -109,7 +109,7 @@ export default function CustomerLinkPanel({ caseId, prepare, notice, linkStatus 
           <button type="button" className="ubo-demo-secondary" onClick={withdraw}>Withdraw every link for this case</button>
         </div>
       )}
-      {state.kind === "withdrawn" && <p role="status">Every link for this case has been withdrawn. The customer's open session has ended too.</p>}
+      {state.kind === "withdrawn" && <p role="status">Every link for this case has been withdrawn. The customer can no longer open or change it; a page they still have open is stopped at its next step.</p>}
       {state.kind === "error" && <p role="alert">{state.message}</p>}
     </section>
   );

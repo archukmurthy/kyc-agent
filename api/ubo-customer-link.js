@@ -111,7 +111,10 @@ function createHandler(deps = DEFAULT_DEPS) {
         // Only the person who opened the link gets it back.
         const token = cookieValue(req);
         const checked = await verifyCustomerCaller(req, token, deps.clerk);
-        if (!checked.actor) return send(res, 401, { error: "no_customer_session" });
+        // A session held and now refused (its link replaced or withdrawn, or
+        // expired) is said with its own code, so the page can tell the
+        // customer so rather than treat them as someone who never had a link.
+        if (!checked.actor) return send(res, 401, token && checked.error === "customer_session_invalid" ? { error: checked.error, message: checked.message } : { error: "no_customer_session" });
         const { payload } = await customerLink.verifyCustomerSession(token);
         return send(res, 200, { session: token, caseId: payload.caseId, expiresAt: new Date(payload.exp).toISOString() });
       }

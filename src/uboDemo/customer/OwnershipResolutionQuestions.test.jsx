@@ -8,6 +8,7 @@ jest.mock("../pocCaseClient", () => ({ ...jest.requireActual("../pocCaseClient")
 import OwnershipResolutionQuestions from "./OwnershipResolutionQuestions";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import { DISCOVERY_STATE } from "./verificationAssessment";
+import { hydrateBrowserFromPocCase } from "../pocCaseClient";
 
 const context = {
   demoCaseId: "case-questions",
@@ -188,7 +189,8 @@ test("starting again keeps the answers, and says so, when the server did not cle
   fireEvent.click(screen.getAllByRole("button", { name: /Save answer/i })[0]);
   await waitFor(() => expect(screen.getByText("18%")).toBeInTheDocument());
   mockPersist = async (operation) => {
-    if (operation === "RESET_ANSWERS") throw Object.assign(new Error("The server did not answer in time. Please try again."), { code: "case_write_timeout" });
+    // The server answered: it did not clear them.
+    if (operation === "RESET_ANSWERS") throw Object.assign(new Error("The case could not be saved or restored right now."), { code: "poc_case_request_failed", status: 500 });
     return {};
   };
 
@@ -200,8 +202,9 @@ test("starting again keeps the answers, and says so, when the server did not cle
   expect(screen.getByRole("button", { name: "Start questions again" })).toBeEnabled();
 });
 
-test("a document still being checked when the answers are cleared is not sent back to the case", async () => {
-  // Review: its check finished after the reset and synced the cleared upload back.
+test("the answers cannot be cleared while a document is still being checked, so it can never come back after", async () => {
+  // Review: its check finished after the reset and synced the cleared upload
+  // back - and while the reset was being saved, its sync queued behind it.
   const { container } = render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })} />);
   const declaration = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");
   fireEvent.click(within(declaration).getByLabelText("Yes"));
@@ -214,14 +217,81 @@ test("a document still being checked when the answers are cleared is not sent ba
   fireEvent.change(fileInput, { target: { files: [new File(["%PDF-1.4\n%%EOF"], "nominee-agreement.pdf", { type: "application/pdf" })] } });
   await waitFor(() => expect(finishReading).toBeDefined());
 
-  fireEvent.click(screen.getByRole("button", { name: "Start questions again" }));
-  await waitFor(() => expect(sent.some(({ operation }) => operation === "RESET_ANSWERS")).toBe(true));
+  expect(screen.getByRole("button", { name: "Start questions again" })).toBeDisabled();
   await act(async () => {
     finishReading({ ok: true, json: async () => ({ success: true, result: { artifact: { artifactId: "nominee-artifact", integrityVerified: true }, candidateFacts: [] } }) });
   });
-
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start questions again" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Start questions again" }));
   await waitFor(() => expect(screen.queryByRole("heading", { name: "Answered questions" })).not.toBeInTheDocument());
-  expect(sent.filter(({ operation, command }) => operation === "SYNC_RESOLUTION" && command.idempotencyKey.startsWith("evidence:"))).toEqual([]);
+  // The upload's sync went before the reset, which cleared it on the server too.
+  const order = sent.map(({ operation, command }) => (operation === "SYNC_RESOLUTION" ? command.idempotencyKey.split(":")[0] : operation));
+  expect(order.indexOf("evidence")).toBeLessThan(order.indexOf("RESET_ANSWERS"));
+  expect(order.lastIndexOf("evidence")).toBeLessThan(order.indexOf("RESET_ANSWERS"));
+});
+
+test("while the answers are being cleared nothing can be answered or uploaded", async () => {
+  // Review: an answer given meanwhile reached the server after the reset and
+  // was used there, while this page cleared it from view.
+  const { container } = render(<OwnershipResolutionQuestions {...props({ type: "RANGE", lowerBound: 10, upperBound: 40, lowerInclusive: true, upperInclusive: true }, { type: "UNKNOWN" })} />);
+  fireEvent.change(screen.getByLabelText("Ownership percentage"), { target: { value: "18" } });
+  fireEvent.click(screen.getAllByRole("button", { name: /Save answer/i })[0]);
+  await waitFor(() => expect(screen.getByText("18%")).toBeInTheDocument());
+  let finishReset;
+  const sent = [];
+  mockPersist = (operation) => {
+    sent.push(operation);
+    return operation === "RESET_ANSWERS" ? new Promise((resolve) => { finishReset = () => resolve({}); }) : Promise.resolve({});
+  };
+  fireEvent.click(screen.getByRole("button", { name: "Start questions again" }));
+  expect(await screen.findByRole("button", { name: /Clearing your answers/ })).toBeDisabled();
+
+  const nominee = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");
+  fireEvent.click(within(nominee).getByLabelText("No"));
+  expect(within(nominee).getByRole("button", { name: /Save answer/i })).toBeDisabled();
+  fireEvent.click(within(nominee).getByRole("button", { name: /Save answer/i }));
+  expect(screen.queryByRole("button", { name: "Edit answer" })).toBeNull();
+  container.querySelectorAll(".ubo-resolution-evidence button").forEach((button) => expect(button).toBeDisabled());
+  expect(sent).not.toContain("SUBMIT_ANSWER");
+
+  await act(async () => { finishReset(); });
+  await waitFor(() => expect(screen.queryByRole("heading", { name: "Answered questions" })).not.toBeInTheDocument());
+});
+
+test("starting again forgets a document reading left from before, so a reload cannot bring it back", async () => {
+  // Review: the reading's pointer survived the reset; after a reload the
+  // reading was picked up again and its upload synced back to the case.
+  window.sessionStorage.clear();
+  render(<OwnershipResolutionQuestions {...props({ type: "RANGE", lowerBound: 10, upperBound: 40, lowerInclusive: true, upperInclusive: true }, { type: "UNKNOWN" })} />);
+  fireEvent.change(screen.getByLabelText("Ownership percentage"), { target: { value: "18" } });
+  fireEvent.click(screen.getAllByRole("button", { name: /Save answer/i })[0]);
+  await waitFor(() => expect(screen.getByText("18%")).toBeInTheDocument());
+  window.sessionStorage.setItem("ubo-evidence-job:case-questions:some-request", JSON.stringify({ jobId: "job-before-reset", round: 0 }));
+  fireEvent.click(screen.getByRole("button", { name: "Start questions again" }));
+  await waitFor(() => expect(screen.queryByRole("heading", { name: "Answered questions" })).not.toBeInTheDocument());
+  expect(window.sessionStorage.getItem("ubo-evidence-job:case-questions:some-request")).toBeNull();
+});
+
+test("a reset whose answer never came is checked against the server, and the page says what is true", async () => {
+  // Review: a reset that timed out here may still have been applied there, but
+  // the page said the answers were unchanged.
+  hydrateBrowserFromPocCase({ caseId: context.demoCaseId, projection: { round: 2, draft: {}, demoCase: { demoCaseId: context.demoCaseId, company: context.company } } });
+  uboStore.clear();
+  render(<OwnershipResolutionQuestions {...props({ type: "RANGE", lowerBound: 10, upperBound: 40, lowerInclusive: true, upperInclusive: true }, { type: "UNKNOWN" })} />);
+  fireEvent.change(screen.getByLabelText("Ownership percentage"), { target: { value: "18" } });
+  fireEvent.click(screen.getAllByRole("button", { name: /Save answer/i })[0]);
+  await waitFor(() => expect(screen.getByText("18%")).toBeInTheDocument());
+  mockPersist = async (operation) => {
+    if (operation === "RESET_ANSWERS") throw Object.assign(new Error("The server did not answer in time. Please try again."), { code: "case_write_timeout" });
+    return {};
+  };
+  const recalculate = window.fetch.getMockImplementation();
+  window.fetch.mockImplementation(async (url, request) => (String(url).includes("state=1")
+    ? { ok: true, status: 200, json: async () => ({ success: true, state: { round: 3, finalized: false } }) }
+    : recalculate(url, request)));
+  fireEvent.click(screen.getByRole("button", { name: "Start questions again" }));
+  expect(await screen.findByText(/Your answers were cleared/i)).toBeInTheDocument();
+  expect(screen.queryByText(/Your answers are unchanged/i)).toBeNull();
 });
 
 test("questions and evidence identify the company and related ownership issue", () => {
@@ -522,6 +592,68 @@ test("a document still being checked when the page closed is picked up when it o
   await waitFor(() => expect(screen.getByText("File received · evidence accepted")).toBeInTheDocument());
   expect(window.fetch.mock.calls.map(([, request]) => JSON.parse(request.body))).toContainEqual({ operation: "GET_EXTRACTION_JOB", jobId: "job-support-2" });
   expect([...Array(window.sessionStorage.length).keys()].map((index) => window.sessionStorage.key(index)).filter((key) => key.startsWith("ubo-evidence-job:"))).toEqual([]);
+});
+
+test("a document reading left from an earlier round of the case is not picked up again", async () => {
+  // Review: started again in another tab, then this one reloaded - the old
+  // reading resumed and its upload was synced into the new round.
+  window.sessionStorage.clear();
+  const shownAt = (round) => {
+    const answers = uboStore.getItem("ubo-demo.ownership-resolution.v1:case-questions:chart-artifact");
+    hydrateBrowserFromPocCase({ caseId: context.demoCaseId, projection: { round, draft: {}, demoCase: { demoCaseId: context.demoCaseId, company: context.company } } });
+    uboStore.clear();
+    if (answers) uboStore.setItem("ubo-demo.ownership-resolution.v1:case-questions:chart-artifact", answers);
+  };
+  shownAt(5);
+  const input = props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 });
+  const first = render(<OwnershipResolutionQuestions {...input} />);
+  const declaration = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");
+  fireEvent.click(within(declaration).getByLabelText("Yes"));
+  fireEvent.click(within(declaration).getByRole("button", { name: /Save answer/i }));
+  // The upload is accepted for reading, and the page closes while it is read.
+  window.fetch.mockClear();
+  window.fetch
+    .mockResolvedValueOnce({ ok: true, status: 202, json: async () => ({ success: true, job: { jobId: "job-old-round", state: "QUEUED" } }) })
+    .mockImplementationOnce(() => new Promise(() => {}));
+  fireEvent.change(first.container.querySelector('.ubo-resolution-evidence input[type="file"]'), { target: { files: [new File(["%PDF-1.4\n%%EOF"], "nominee-agreement.pdf", { type: "application/pdf" })] } });
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(2));
+  first.unmount();
+  const pointers = () => [...Array(window.sessionStorage.length).keys()].map((index) => window.sessionStorage.key(index)).filter((key) => key.startsWith("ubo-evidence-job:"));
+  expect(pointers()).toHaveLength(1);
+
+  // Meanwhile the case was started again elsewhere: it is now round 6.
+  shownAt(6);
+  window.fetch.mockClear();
+  render(<OwnershipResolutionQuestions {...input} />);
+  await act(async () => { await Promise.resolve(); });
+  expect(window.fetch.mock.calls.map(([, request]) => (request?.body ? JSON.parse(request.body).operation : null))).not.toContain("GET_EXTRACTION_JOB");
+  expect(pointers()).toEqual([]);
+});
+
+test("an evidence upload answered by a platform error page says so plainly", async () => {
+  // Review: response.json() on an HTML error page showed "Unexpected token <".
+  const { container } = render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })} />);
+  const declaration = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");
+  fireEvent.click(within(declaration).getByLabelText("Yes"));
+  fireEvent.click(within(declaration).getByRole("button", { name: /Save answer/i }));
+  window.fetch.mockImplementationOnce(async () => ({ ok: false, status: 504, json: async () => { throw new SyntaxError("Unexpected token < in JSON at position 0"); } }));
+  fireEvent.change(container.querySelector('.ubo-resolution-evidence input[type="file"]'), { target: { files: [new File(["%PDF-1.4\n%%EOF"], "nominee-agreement.pdf", { type: "application/pdf" })] } });
+  expect(await screen.findByText(/document analysis could not complete/i)).toBeInTheDocument();
+  expect(screen.queryByText(/Unexpected token/)).toBeNull();
+});
+
+test("an upload refused before the file was taken in is not shown as a rejected document", async () => {
+  // Review: "nothing was started" refusals read as the file being received
+  // and its analysis failing, or as evidence not accepted.
+  const { container } = render(<OwnershipResolutionQuestions {...props({ type: "EXACT", value: 40 }, { type: "EXACT", value: 40 })} />);
+  const declaration = screen.getByRole("heading", { name: /hold shares or ownership rights on behalf/i }).closest("article");
+  fireEvent.click(within(declaration).getByLabelText("Yes"));
+  fireEvent.click(within(declaration).getByRole("button", { name: /Save answer/i }));
+  window.fetch.mockImplementationOnce(async () => ({ ok: false, status: 503, json: async () => ({ error: "limits_unavailable", message: "We could not check usage limits just now, so nothing was started. Please try again in a minute." }) }));
+  fireEvent.change(container.querySelector('.ubo-resolution-evidence input[type="file"]'), { target: { files: [new File(["%PDF-1.4\n%%EOF"], "nominee-agreement.pdf", { type: "application/pdf" })] } });
+  expect(await screen.findByText(/your file was not sent/i)).toBeInTheDocument();
+  expect(screen.queryByText(/File received · analysis not completed/)).toBeNull();
+  expect(screen.queryByText(/limits_unavailable/)).toBeNull();
 });
 
 test("changing an answer back recalculates with it, rather than keeping the other value's result", async () => {

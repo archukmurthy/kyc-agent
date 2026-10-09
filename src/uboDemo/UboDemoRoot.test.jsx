@@ -7,7 +7,10 @@ const mockOpenCustomerViewHandoff = jest.fn();
 const mockListSavedResearch = jest.fn(async () => []);
 const mockLoadPocCase = jest.fn(async () => null);
 const mockCustomerEngagement = jest.fn(async () => ({ linkSent: false, customerStarted: false }));
-jest.mock("./pocCaseClient", () => ({ ...jest.requireActual("./pocCaseClient"), persistPocCase: (...args) => mockPersistPocCase(...args), listSavedResearch: (...args) => mockListSavedResearch(...args), loadPocCase: (...args) => mockLoadPocCase(...args), customerEngagement: (...args) => mockCustomerEngagement(...args) }));
+let mockCaseUpdates = 0;
+// Each state read reports a change unless a test says otherwise (beforeEach).
+const mockLoadPocCaseState = jest.fn();
+jest.mock("./pocCaseClient", () => ({ ...jest.requireActual("./pocCaseClient"), persistPocCase: (...args) => mockPersistPocCase(...args), listSavedResearch: (...args) => mockListSavedResearch(...args), loadPocCase: (...args) => mockLoadPocCase(...args), loadPocCaseState: (...args) => mockLoadPocCaseState(...args), customerEngagement: (...args) => mockCustomerEngagement(...args) }));
 jest.mock("./customerHandoff", () => ({ ...jest.requireActual("./customerHandoff"), openCustomerViewHandoff: (...args) => mockOpenCustomerViewHandoff(...args) }));
 import UboDemoRoot from "./UboDemoRoot";
 import { abortActiveDemoResearchJobs, accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory, runDemoResearch } from "./demoResearch";
@@ -51,7 +54,7 @@ function britishAirwaysSession(replayId) {
   };
 }
 
-beforeEach(() => { uboStore.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); window.scrollTo = jest.fn(); window.HTMLElement.prototype.scrollIntoView = jest.fn(); mockPersistPocCase.mockReset().mockResolvedValue({ researchRelease: { mayProceed: true } }); mockOpenCustomerViewHandoff.mockReset().mockResolvedValue("http://localhost:3000/ubo-demo/customer/"); mockListSavedResearch.mockReset().mockResolvedValue([]); mockLoadPocCase.mockReset().mockResolvedValue(null); mockCustomerEngagement.mockReset().mockResolvedValue({ linkSent: false, customerStarted: false }); });
+beforeEach(() => { uboStore.clear(); window.history.replaceState({}, "", "/"); window.fetch = jest.fn(() => okJson(evaluatedSession)); window.scrollTo = jest.fn(); window.HTMLElement.prototype.scrollIntoView = jest.fn(); mockPersistPocCase.mockReset().mockResolvedValue({ researchRelease: { mayProceed: true } }); mockOpenCustomerViewHandoff.mockReset().mockResolvedValue("http://localhost:3000/ubo-demo/customer/"); mockListSavedResearch.mockReset().mockResolvedValue([]); mockLoadPocCase.mockReset().mockResolvedValue(null); mockLoadPocCaseState.mockReset().mockImplementation(async () => ({ round: 0, finalized: false, stage: "QUESTIONS", updatedAt: `t${(mockCaseUpdates += 1)}` })); mockCustomerEngagement.mockReset().mockResolvedValue({ linkSent: false, customerStarted: false }); });
 afterEach(() => { abortActiveDemoResearchJobs(); uboStore.clear(); jest.restoreAllMocks(); jest.useRealTimers(); });
 
 test("new demo route loads and existing Lab route remains separate", () => { renderStart(); expect(screen.getByRole("heading", { name: /research your company/i })).toBeInTheDocument(); expect(isUboDemoPath("/ubo-demo/")).toBe(true); expect(isUboDemoPath("/ubo-control-lab/")).toBe(false); });
@@ -812,6 +815,37 @@ test("an open analyst page picks up the customer's progress from the server ever
   await waitFor(() => expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.ownershipResolutionTrace).toEqual(customerTrace));
   // The analyst's own research is untouched.
   expect(JSON.parse(uboStore.getItem(DEMO_SESSION_KEY)).researchResult.candidateSources).toEqual(research.candidateSources);
+});
+
+// Review (2026-10-09): the whole case was read every 30 s per analyst tab,
+// against the case read limit, even after the case was complete.
+test("an open analyst page reads the whole case only when its state says it changed, and rarely once complete", async () => {
+  jest.useFakeTimers();
+  const research = compactResearchResult(evaluatedSession, "LIVE", "EFFECTIVE_INTEREST");
+  uboStore.setItem(DEMO_SESSION_KEY, JSON.stringify({
+    contractVersion: DEMO_SESSION_CONTRACT,
+    draft: { ...emptyDemoDraft(), legalName: "Acme Holdings Limited", registrationNumber: "00445790" },
+    demoCase: { demoCaseId: "demo-quiet", company: { legalName: "Acme Holdings Limited", registrationNumber: "00445790", countryCode: "GB", countryName: "United Kingdom", ownershipType: "PRIVATE_LIMITED" } },
+    researchResult: research,
+  }));
+  let state = { round: 0, finalized: false, stage: "QUESTIONS", updatedAt: "t-a" };
+  mockLoadPocCaseState.mockImplementation(async () => state);
+  mockLoadPocCase.mockResolvedValue({ projection: { assessment: null } });
+  window.history.replaceState({}, "", DEMO_REVIEW_PATH);
+  render(<UboDemoRoot />);
+  const tick = async () => { await act(async () => { jest.advanceTimersByTime(30 * 1000); }); };
+  await tick();
+  await tick();
+  await tick();
+  expect(mockLoadPocCaseState).toHaveBeenCalledTimes(3);
+  expect(mockLoadPocCase).toHaveBeenCalledTimes(1);
+  state = { ...state, stage: "COMPLETE", updatedAt: "t-b" };
+  await tick();
+  expect(mockLoadPocCase).toHaveBeenCalledTimes(2);
+  for (let index = 0; index < 8; index += 1) await tick();
+  // Complete: the state is looked at every tenth tick (once in these eight), not every tick.
+  expect(mockLoadPocCaseState).toHaveBeenCalledTimes(5);
+  expect(mockLoadPocCase).toHaveBeenCalledTimes(2);
 });
 
 test("an open analyst page stops showing a finalised review once another tab reopens it", async () => {

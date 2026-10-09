@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { leaveCustomerSession, openCustomerLink, resumeCustomerSession } from "../../auth/customerSession";
+import { hadCustomerVisit, leaveCustomerSession, onCustomerSessionEnded, openCustomerLink, rememberCustomerVisit, resumeCustomerSession } from "../../auth/customerSession";
 
 /**
  * In front of the customer screens (docs/ubo/CUSTOMER-LINK-PLAN.md).
@@ -51,10 +51,22 @@ export default function CustomerGate({ children, fallback }) {
         if (active) setState({ phase: "not-customer" });
         return;
       }
-      if (active) setState({ phase: resumed.ok ? "customer" : "not-customer" });
+      // A session this tab held and the server now refuses - its link was
+      // replaced or withdrawn, or a lapsed sign-in cleared its cookie - is a
+      // customer to be told so, not an analyst for the staff gate.
+      const ended = !resumed.ok && (resumed.payload?.error === "customer_session_invalid" || hadCustomerVisit());
+      if (active) setState({ phase: resumed.ok ? "customer" : ended ? "ended" : "not-customer" });
     })().catch(() => { if (active) setState({ phase: "not-customer" }); });
     return () => { active = false; };
   }, [link]);
+
+  useEffect(() => {
+    if (state.phase !== "customer") return undefined;
+    rememberCustomerVisit();
+    // Refused while the page is open: a save, an upload or the page's own
+    // periodic check was turned away because the session ended.
+    return onCustomerSessionEnded(() => setState({ phase: "ended" }));
+  }, [state.phase]);
 
   if (state.phase === "checking") {
     return <main className="ubo-demo-main ubo-demo-empty"><span>Opening</span><h1>Opening your ownership review…</h1></main>;
@@ -65,6 +77,15 @@ export default function CustomerGate({ children, fallback }) {
         <span>Link not accepted</span>
         <h1>{state.error === "wrong_recipient" ? "This link was sent to a different email address" : "This link cannot be opened"}</h1>
         <p>{state.message || "Ask the person who sent it for a new link."}</p>
+      </main>
+    );
+  }
+  if (state.phase === "ended") {
+    return (
+      <main className="ubo-demo-main ubo-demo-empty">
+        <span>Link no longer active</span>
+        <h1>This link has been replaced or has ended</h1>
+        <p>Ask the person who sent it for a new link. If you were signed out, open the link you were sent again. Your answers so far are saved.</p>
       </main>
     );
   }

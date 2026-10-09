@@ -3,16 +3,21 @@ import { act, render } from "@testing-library/react";
 import {
   ACTIVE_POC_CASE_KEY,
   activePocCaseId,
+  BUSY_RECHECK_MS,
   CASE_STATE_CHECK_MS,
+  caseMovedOn,
   hydrateBrowserFromPocCase,
   loadPocCase,
+  loadPocCaseState,
   persistPocCase,
+  shownCaseRound,
   useReloadWhenFinalizedChanges,
 } from "./pocCaseClient";
 import { DEMO_SESSION_KEY } from "./demoSession";
 import { CUSTOMER_OWNERSHIP_CHART_SESSION_KEY } from "./customer/customerOwnershipChartSession";
 import { uboStore } from "./browserStore";
 import { expandSharedAnalyses } from "./customer/recalculationStorage";
+import { clearCustomerSession, onCustomerSessionEnded, setCustomerSession } from "../auth/customerSession";
 
 function response(body, ok = true) {
   return { ok, status: ok ? 200 : 503, json: async () => body };
@@ -95,7 +100,8 @@ test("rehydration compacts duplicated immutable snapshots and replaces stale cas
 });
 
 test("a duplicate browser submission carries the same idempotency key", async () => {
-  const fetchImpl = jest.fn().mockResolvedValue(response({ success: true, case: record }));
+  // A save answers with the case's round (api/ubo-poc-case.js savedRecord).
+  const fetchImpl = jest.fn().mockResolvedValue(response({ success: true, case: { ...record, projection: { ...record.projection, round: 0 } } }));
   const command = { caseId: "case-cross-session", idempotencyKey: "answer:q1:no", actorType: "CUSTOMER", payload: { resolution: { answers: { q1: { value: "NO" } } } } };
   await persistPocCase("SUBMIT_ANSWER", command, fetchImpl);
   await persistPocCase("SUBMIT_ANSWER", command, fetchImpl);
@@ -218,34 +224,158 @@ test("a write that never answers is given up on, and the next write to the case 
   }
 });
 
+// Review (2026-10-09): a save refused because the customer's link was replaced
+// failed with a generic message; the customer gate is told instead.
+test("a case read or write refused for an ended customer session is reported", async () => {
+  setCustomerSession({ session: "s-1", caseId: "case-1" });
+  const ended = jest.fn();
+  const stop = onCustomerSessionEnded(ended);
+  try {
+    const refused = jest.fn(async () => ({ ok: false, status: 401, json: async () => ({ error: "customer_session_invalid", message: "This link has expired or been withdrawn." }) }));
+    await expect(persistPocCase("SUBMIT_ANSWER", { caseId: "case-1", idempotencyKey: "answer:ended", payload: {} }, refused)).rejects.toMatchObject({ status: 401 });
+    await expect(loadPocCase("case-1", refused)).rejects.toMatchObject({ status: 401 });
+    expect(ended).toHaveBeenCalledTimes(2);
+  } finally {
+    stop();
+    clearCustomerSession();
+  }
+});
+
 // A customer page open before the analyst reopened the review stayed locked
 // until the customer happened to reload (review, 2026-10-09).
 describe("a customer page notices the server's case changing under it", () => {
-  const finalised = { projection: { assessment: { trace: { verificationAssessment: { finalized: true } } } } };
-  const reopened = { projection: { assessment: null, resolution: { answers: {} } } };
-  function Page({ shownFinalized, load, reload }) {
-    useReloadWhenFinalizedChanges("case-1", shownFinalized, { load, reload });
+  let checkNow;
+  function Page({ caseId = "case-1", shownFinalized, loadState, reload, hasUnsavedWork }) {
+    checkNow = useReloadWhenFinalizedChanges(caseId, shownFinalized, { loadState, reload, hasUnsavedWork });
     return null;
   }
+  const page = (props) => render(React.createElement(Page, props));
+  const shownAt = (caseId, round) => hydrateBrowserFromPocCase({ ...record, caseId, projection: { ...record.projection, round, demoCase: { ...record.projection.demoCase, demoCaseId: caseId } } });
+  beforeEach(() => window.sessionStorage.clear());
   afterEach(() => jest.useRealTimers());
 
   test("a page shown as finalised reloads once the server's case is reopened", async () => {
     jest.useFakeTimers();
-    const load = jest.fn(async () => reopened);
+    const loadState = jest.fn(async () => ({ round: 0, finalized: false }));
     const reload = jest.fn();
-    render(React.createElement(Page, { shownFinalized: true, load, reload }));
-    expect(load).not.toHaveBeenCalled();
+    page({ shownFinalized: true, loadState, reload });
+    expect(loadState).not.toHaveBeenCalled();
     await act(async () => { jest.advanceTimersByTime(CASE_STATE_CHECK_MS); });
-    expect(load).toHaveBeenCalledWith("case-1");
+    expect(loadState).toHaveBeenCalledWith("case-1");
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
   test("coming back to the page checks at once; a page that matches the server stays as it is", async () => {
-    const load = jest.fn(async () => finalised);
+    const loadState = jest.fn(async () => ({ round: 0, finalized: true }));
     const reload = jest.fn();
-    render(React.createElement(Page, { shownFinalized: true, load, reload }));
+    page({ shownFinalized: true, loadState, reload });
     await act(async () => { window.dispatchEvent(new Event("focus")); });
-    expect(load).toHaveBeenCalledTimes(1);
+    expect(loadState).toHaveBeenCalledTimes(1);
     expect(reload).not.toHaveBeenCalled();
   });
+
+  // Review (2026-10-09): only finalisation was compared, so a second tab was
+  // never refreshed after "Start questions again" in another and finalised
+  // from server answers it did not show.
+  test("a page reloads when another tab started a new round (a reset), though nothing was finalised", async () => {
+    shownAt("case-round", 2);
+    const loadState = jest.fn(async () => ({ round: 3, finalized: false }));
+    const reload = jest.fn();
+    page({ caseId: "case-round", shownFinalized: false, loadState, reload });
+    await act(async () => { await checkNow(); });
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  test("this tab's own reset moves the round it shows: no reload for it", async () => {
+    shownAt("case-own", 4);
+    const fetchImpl = jest.fn(async () => response({ success: true, case: { caseId: "case-own", projection: { round: 5 } } }));
+    await persistPocCase("RESET_ANSWERS", { caseId: "case-own", idempotencyKey: "reset:1", payload: {} }, fetchImpl);
+    const reload = jest.fn();
+    page({ caseId: "case-own", shownFinalized: false, loadState: async () => ({ round: 5, finalized: false }), reload });
+    await act(async () => { expect(await checkNow()).toBe("unchanged"); });
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  // Review (2026-10-09): a timer or focus reload while an answer was saving
+  // raised the page's own "Leave site?" prompt and lost typed input.
+  test("never reloads with input not yet sent; looks again shortly and reloads once it is sent", async () => {
+    jest.useFakeTimers();
+    shownAt("case-busy", 0);
+    let unsaved = true;
+    const reload = jest.fn();
+    page({ caseId: "case-busy", shownFinalized: false, loadState: async () => ({ round: 1, finalized: false }), reload, hasUnsavedWork: () => unsaved });
+    await act(async () => { expect(await checkNow()).toBe("deferred"); });
+    expect(reload).not.toHaveBeenCalled();
+    unsaved = false;
+    await act(async () => { jest.advanceTimersByTime(BUSY_RECHECK_MS); });
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  test("never reloads while this tab is writing to the case", async () => {
+    shownAt("case-writing", 0);
+    let answer;
+    const fetchImpl = jest.fn(() => new Promise((resolve) => { answer = resolve; }));
+    const write = persistPocCase("SUBMIT_ANSWER", { caseId: "case-writing", idempotencyKey: "answer:w", payload: {} }, fetchImpl);
+    const reload = jest.fn();
+    page({ caseId: "case-writing", shownFinalized: false, loadState: async () => ({ round: 1, finalized: false }), reload });
+    await act(async () => { expect(await checkNow()).toBe("deferred"); });
+    expect(reload).not.toHaveBeenCalled();
+    for (let tick = 0; tick < 50 && !answer; tick += 1) await Promise.resolve();
+    answer(response({ success: true, case: { caseId: "case-writing", projection: { round: 0 } } }));
+    await write;
+  });
+
+  // Review (2026-10-09): every focus - closing the file picker included - read
+  // the whole case, against the case read limit.
+  test("focus checks are spaced out", async () => {
+    const loadState = jest.fn(async () => ({ round: 0, finalized: false }));
+    page({ caseId: "case-focus", shownFinalized: false, loadState, reload: jest.fn() });
+    await act(async () => { window.dispatchEvent(new Event("focus")); });
+    await act(async () => { window.dispatchEvent(new Event("focus")); });
+    expect(loadState).toHaveBeenCalledTimes(1);
+  });
+
+  // Review (2026-10-09): a page that cannot show the server's state (its
+  // restore failed) reloaded every minute and on every focus.
+  test("reloads at most once for any one state of the case", async () => {
+    const reload = jest.fn();
+    const loadState = jest.fn(async () => ({ round: 7, finalized: false }));
+    shownAt("case-loop", 6);
+    const first = page({ caseId: "case-loop", shownFinalized: false, loadState, reload });
+    await act(async () => { await checkNow(); });
+    first.unmount();
+    shownAt("case-loop", 6); // the reloaded page still shows the old round
+    page({ caseId: "case-loop", shownFinalized: false, loadState, reload });
+    await act(async () => { expect(await checkNow()).toBe("changed"); });
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  test("the check reads the case's state, not the whole case", async () => {
+    const fetchImpl = jest.fn(async () => response({ success: true, state: { round: 2, finalized: false } }));
+    await expect(loadPocCaseState("case 1", fetchImpl)).resolves.toEqual({ round: 2, finalized: false });
+    expect(fetchImpl.mock.calls[0][0]).toBe("/api/ubo-poc-case?caseId=case%201&state=1");
+  });
+});
+
+// The server refuses a step made in a round that has since ended
+// (case_round_changed): each step says which round it was made in.
+test("answers, syncs, finalising and identity checks carry the round they were made in", async () => {
+  hydrateBrowserFromPocCase({ ...record, caseId: "case-rounds", projection: { ...record.projection, round: 3, demoCase: { ...record.projection.demoCase, demoCaseId: "case-rounds" } } });
+  const fetchImpl = jest.fn(async () => response({ success: true, case: { caseId: "case-rounds", projection: { round: 3 } } }));
+  for (const operation of ["SUBMIT_ANSWER", "SYNC_RESOLUTION", "FINALIZE_ASSESSMENT", "COMPLETE_IDV", "RESET_ANSWERS"]) {
+    await persistPocCase(operation, { caseId: "case-rounds", idempotencyKey: `k:${operation}`, payload: {} }, fetchImpl);
+  }
+  const rounds = fetchImpl.mock.calls.map(([, options]) => JSON.parse(options.body).round);
+  expect(rounds).toEqual([3, 3, 3, 3, undefined]);
+  expect(shownCaseRound("case-rounds")).toBe(3);
+});
+
+test("a step refused because the round changed says so in plain words, with its code", async () => {
+  const fetchImpl = jest.fn(async () => ({ ok: false, status: 409, json: async () => ({ success: false, code: "case_round_changed", message: "This review changed while you were working on it. Please reload the page to see where it stands." }) }));
+  const refused = persistPocCase("SUBMIT_ANSWER", { caseId: "case-moved", idempotencyKey: "answer:m", payload: {} }, fetchImpl);
+  await expect(refused).rejects.toMatchObject({ code: "case_round_changed", message: expect.stringMatching(/changed while you were working on it/) });
+  expect(fetchImpl).toHaveBeenCalledTimes(1);
+  expect(caseMovedOn("case_round_changed")).toBe(true);
+  expect(caseMovedOn("case_finalized")).toBe(true);
+  expect(caseMovedOn("case_write_timeout")).toBe(false);
 });

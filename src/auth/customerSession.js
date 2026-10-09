@@ -24,6 +24,41 @@ export function clearCustomerSession() {
   current = null;
 }
 
+// A customer's session can end while their page is open: the analyst made a
+// new link (which replaces the old one) or withdrew it, or it expired. The
+// page went on showing the case and its next save failed with a generic
+// message (review, 2026-10-09). Whatever reads a refusal reports it here, and
+// the customer gate shows the customer what happened.
+const endedListeners = new Set();
+const REFUSED_SESSION = /^customer_session_/;
+
+/** Reports a response; true when it says this customer's session has ended. */
+export function noteCustomerRefusal(status, payload) {
+  if (Number(status) !== 401 || !current || !REFUSED_SESSION.test(String(payload?.error || payload?.code || ""))) return false;
+  endedListeners.forEach((listener) => listener());
+  return true;
+}
+
+export function onCustomerSessionEnded(listener) {
+  endedListeners.add(listener);
+  return () => endedListeners.delete(listener);
+}
+
+// That this tab was showing a customer their review: nothing about the case
+// or the person, only so that after a lapsed sign-in (which clears the session
+// cookie) a reload tells them their access ended instead of showing the staff
+// screens. Per tab; a deliberate sign-out forgets it.
+const VISIT_KEY = "ubo-customer-visit";
+export function rememberCustomerVisit() {
+  try { window.sessionStorage.setItem(VISIT_KEY, "1"); } catch (_) { /* Storage blocked: the cookie's answer still applies. */ }
+}
+export function hadCustomerVisit() {
+  try { return window.sessionStorage.getItem(VISIT_KEY) === "1"; } catch (_) { return false; }
+}
+function forgetCustomerVisit() {
+  try { window.sessionStorage.removeItem(VISIT_KEY); } catch (_) { /* Nothing to forget. */ }
+}
+
 async function post(body) {
   const response = await fetch("/api/ubo-customer-link", {
     method: "POST",
@@ -84,6 +119,7 @@ export function leaveCustomerSession() {
  *  2026-10-09). Every sign-out button calls this; signing out through Clerk's
  *  own menu is caught by ClerkGate. */
 export function signOutEverywhere(redirectUrl) {
+  forgetCustomerVisit();
   try { leaveCustomerSession(); } catch (_) { /* No network here: signing out still goes ahead. */ }
   try {
     if (typeof window !== "undefined" && window.Clerk) window.Clerk.signOut({ redirectUrl });
