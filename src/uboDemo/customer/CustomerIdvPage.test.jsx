@@ -2,11 +2,11 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { uboStore } from "../browserStore";
-jest.mock("../pocCaseClient", () => ({ ...jest.requireActual("../pocCaseClient"), persistPocCase: (...args) => mockPersist(...args) }));
 import CustomerIdvPage from "./CustomerIdvPage";
 import { DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY } from "../demoSession";
 import { CUSTOMER_COMPLETE_PATH, CUSTOMER_QUESTIONS_PATH } from "./customerRoute";
 import { applyCurrentVerificationAssessment, DISCOVERY_STATE } from "./verificationAssessment";
+jest.mock("../pocCaseClient", () => ({ ...jest.requireActual("../pocCaseClient"), persistPocCase: (...args) => mockPersist(...args) }));
 
 const mockPersist = jest.fn(async () => ({ researchRelease: { mayProceed: true } }));
 

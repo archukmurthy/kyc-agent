@@ -2,6 +2,10 @@ import React from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { uboStore } from "./browserStore";
+import UboDemoRoot from "./UboDemoRoot";
+import { abortActiveDemoResearchJobs, accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory, runDemoResearch } from "./demoResearch";
+import { DEMO_AUDIT_PATH, DEMO_RESEARCH_PATH, DEMO_REVIEW_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
+import { bindDraftToReplay, CALCULATION_METHODS, DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY, LAB_REPLAY_KEY, OWNERSHIP_TYPES, emptyDemoDraft, importReplayLibrary, readLabReplays, replayOptionLabel, saveLabReplay, serializeReplayLibrary, writeDemoSession } from "./demoSession";
 const mockPersistPocCase = jest.fn();
 const mockOpenCustomerViewHandoff = jest.fn();
 const mockListSavedResearch = jest.fn(async () => []);
@@ -12,10 +16,6 @@ let mockCaseUpdates = 0;
 const mockLoadPocCaseState = jest.fn();
 jest.mock("./pocCaseClient", () => ({ ...jest.requireActual("./pocCaseClient"), persistPocCase: (...args) => mockPersistPocCase(...args), listSavedResearch: (...args) => mockListSavedResearch(...args), loadPocCase: (...args) => mockLoadPocCase(...args), loadPocCaseState: (...args) => mockLoadPocCaseState(...args), customerEngagement: (...args) => mockCustomerEngagement(...args) }));
 jest.mock("./customerHandoff", () => ({ ...jest.requireActual("./customerHandoff"), openCustomerViewHandoff: (...args) => mockOpenCustomerViewHandoff(...args) }));
-import UboDemoRoot from "./UboDemoRoot";
-import { abortActiveDemoResearchJobs, accountOpenItems, assertionSourceState, buildResearchRequest, compactResearchResult, DEMO_CALCULATION_FIXTURES, DEMO_GRAPH_DIMENSIONS, DEMO_GRAPH_SCOPES, demoCalculationPeople, demoOpenQuestions, demoSourceRelevantEntityIds, executableCustomerBundles, formatMeasurement, projectDemoGraph, relationshipAssertionPresentation, relationshipCategory, runDemoResearch } from "./demoResearch";
-import { DEMO_AUDIT_PATH, DEMO_RESEARCH_PATH, DEMO_REVIEW_PATH, DEMO_START_PATH, isUboDemoPath } from "./demoRoute";
-import { bindDraftToReplay, CALCULATION_METHODS, DEMO_SESSION_CONTRACT, DEMO_SESSION_KEY, LAB_REPLAY_KEY, OWNERSHIP_TYPES, emptyDemoDraft, importReplayLibrary, readLabReplays, replayOptionLabel, saveLabReplay, serializeReplayLibrary, writeDemoSession } from "./demoSession";
 
 const fact = { factId: "fact-1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: { name: "Owner Ltd" }, object: { name: "Target Ltd" }, measurement: { type: "RANGE", lowerBound: 25, upperBound: 50, lowerInclusive: false, upperInclusive: true }, qualifiers: { currentState: "CURRENT" }, evidenceReferences: [{ referenceId: "CH-PSC-1" }] };
 const projection = { contractVersion: "ubo-ownership-graph-projection-v2", projectionId: "graph-1", subjectEntityId: "target", nodes: [], relationships: [] };
@@ -41,16 +41,6 @@ function emptyReplay(replayId, savedAt, registrationNumber = "01471587") {
     companyContext: { ...record.companyContext, legalEntityName: "VODAFONE LIMITED", registrationNumber },
     subject: { ...record.subject, name: "VODAFONE LIMITED", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: registrationNumber }] },
     discoveryResult: { ...record.discoveryResult, candidateFacts: [] },
-  };
-}
-function britishAirwaysSession(replayId) {
-  return {
-    ...evaluatedSession,
-    sourceState: "REPLAY", sourceLabel: "Saved live replay · BRITISH AIRWAYS PLC · provisional demo result · no provider call",
-    companyContext: { legalEntityName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", jurisdiction: "GB", entityProfile: "COMPANY" },
-    replay: { replayId, originalSavedAt: "2026-09-15T08:00:00.000Z", replayedAt: "2026-09-15T09:00:00.000Z", transportCalls: 0 },
-    entityDirectory: [{ entityId: "ba-subject", party: { name: "BRITISH AIRWAYS PLC", externalIdentifiers: [{ namespace: "COMPANIES_HOUSE_COMPANY_NUMBER", value: "01777777" }] } }],
-    snapshots: [{ view: { ...evaluatedSession.snapshots[0].view, graph: { ...projection, subjectEntityId: "ba-subject", nodes: [{ entityId: "ba-subject", primaryName: "BRITISH AIRWAYS PLC" }], relationships: [] } } }],
   };
 }
 

@@ -80,7 +80,7 @@ export default function ChartResearchComparison({ researchResult, chartFacts, co
       headers: { "Content-Type": "application/json", ...auth },
       body: JSON.stringify({ candidates: pending.slice(0, 20) }),
     })).then(async (response) => {
-      const payload = await response.json();
+      const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload.success || payload.result?.decisionScope !== "PARTY_IDENTITY_ONLY") throw new Error(payload.message || "Identity matching is unavailable");
       if (!active) return;
       setAiResolutions((current) => {

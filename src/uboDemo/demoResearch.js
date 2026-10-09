@@ -72,7 +72,10 @@ async function readResearchResponse(response, notify) {
     if (!terminalResult) throw new Error("Research stream ended without a terminal result.");
     return terminalResult;
   }
-  const result = await response.json();
+  // A platform error page is not JSON: read as nothing, so the refusal below
+  // says "could not be completed" rather than showing a parser error.
+  const result = await response.json().catch(() => null);
+  if (!response.ok) return result;
   notify({ jobId: result?.jobId, stage: "complete", terminalState: result?.terminalState, message: "Research response received" });
   return result;
 }
