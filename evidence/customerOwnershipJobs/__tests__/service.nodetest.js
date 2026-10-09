@@ -267,3 +267,40 @@ test("a reading is not reused for a different company, its own case, or before i
   await assert.rejects(() => h.service.reuseReading({ sourceJobId: source.jobId, demoContext: { demoCaseId: "case-1", company } }), { code: "case_required" });
   await assert.rejects(() => h.service.reuseReading({ sourceJobId: "missing", demoContext: { demoCaseId: "case-2", company } }), { code: "job_not_found" });
 });
+
+// One job per purpose (2026-10-09). The cache key once named only the file, so
+// the chart and every evidence upload of it shared one job: a file sent as
+// evidence and then as the chart came back as the evidence job (ASSOCIATE_CHART
+// refused it as not_a_chart, forever), and one register sent for two requests
+// came back as the first request's job.
+const asEvidence = (concepts) => ({ ...input(), evidenceHandoff: { contractVersion: "ubo-external-evidence-handoff-v1", requestedConcepts: concepts } });
+
+test("the same file uploaded as evidence and then as the chart gets a chart job of its own", async () => {
+  const h = harness([usableResult()]);
+  const evidence = await h.service.start(asEvidence(["ECONOMIC_OWNERSHIP"]));
+  const chart = await h.service.start(input());
+  assert.notEqual(chart.jobId, evidence.jobId);
+  assert.equal(h.repository.jobs.get(chart.jobId).evidenceHandoff, null);
+  assert.equal(h.ingestion.operations.size, 1, "the stored file is shared");
+});
+
+test("one file sent for two different requests is read for each; the same request again is reused", async () => {
+  const h = harness([usableResult()]);
+  const first = await h.service.start(asEvidence(["ECONOMIC_OWNERSHIP"]));
+  const second = await h.service.start(asEvidence(["RELATIONSHIP_CURRENTNESS"]));
+  assert.notEqual(second.jobId, first.jobId);
+  assert.deepEqual(h.repository.jobs.get(second.jobId).evidenceHandoff.requestedConcepts, ["RELATIONSHIP_CURRENTNESS"]);
+  await h.service.process(first.jobId);
+  const again = await h.service.start(asEvidence(["ECONOMIC_OWNERSHIP"]));
+  assert.equal(again.jobId, first.jobId); assert.equal(again.reused, true);
+});
+
+test("a job made before the fix under the chart's key is not handed back for the chart", async () => {
+  const h = harness([usableResult()]);
+  const chart = await h.service.start(input());
+  // As the old key did: an evidence job holding the chart's key.
+  h.repository.jobs.get(chart.jobId).evidenceHandoff = { requestedConcepts: ["ECONOMIC_OWNERSHIP"] };
+  const again = await h.service.start(input());
+  assert.notEqual(again.jobId, chart.jobId);
+  assert.equal(h.repository.jobs.get(again.jobId).evidenceHandoff, null);
+});

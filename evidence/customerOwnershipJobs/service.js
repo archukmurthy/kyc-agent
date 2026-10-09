@@ -39,8 +39,14 @@ function derivedKey(key, ...parts) {
   return createHash("sha256").update(JSON.stringify([key, ...parts])).digest("hex");
 }
 
-function cacheKey({ digest, profile, provider, modelVersion }) {
-  return createHash("sha256").update(JSON.stringify([
+// What an upload is for: the ownership chart (null), or evidence for a request
+// of this kind (the concepts it was asked to establish, in a stable order).
+function purposeOf(evidenceHandoff) {
+  return evidenceHandoff ? [...(evidenceHandoff.requestedConcepts || [])].sort() : null;
+}
+
+function cacheKey({ digest, profile, provider, modelVersion, evidenceHandoff = null }) {
+  const parts = [
     digest,
     profile.profileVersion,
     profile.schemaVersion,
@@ -48,7 +54,14 @@ function cacheKey({ digest, profile, provider, modelVersion }) {
     profile.verificationStrategyVersion,
     provider,
     modelVersion,
-  ])).digest("hex");
+  ];
+  // Each purpose is its own reading: the key once named only the file, so a
+  // file sent as evidence and then as the chart came back as the evidence job
+  // (refused as not_a_chart, forever), and one register sent for two requests
+  // came back as the first request's job (2026-10-09). A chart keeps the key it
+  // always had, so the charts already read are still reused free.
+  if (evidenceHandoff) parts.push(["evidence", purposeOf(evidenceHandoff)]);
+  return createHash("sha256").update(JSON.stringify(parts)).digest("hex");
 }
 
 function publicJob(job) {
@@ -204,7 +217,7 @@ class CustomerOwnershipExtractionJobService {
     const providerConfiguration = selectSemanticProvider(digest, this.provider).configuration?.() || {};
     const provider = providerConfiguration.provider || (this.provider ? "injected" : "anthropic");
     const modelVersion = providerConfiguration.model || this.modelVersion;
-    const key = cacheKey({ digest, profile: this.profile, provider, modelVersion });
+    const key = cacheKey({ digest, profile: this.profile, provider, modelVersion, evidenceHandoff: input.evidenceHandoff });
     const correlationId = `customer-chart:${randomUUID()}`;
     const claim = (cacheKey) => this.repository.createOrGetJob({
       tenantId: this.tenantId, contextId: context.id, artifactId: stored.artifactId, artifactSha256: digest,
@@ -213,6 +226,11 @@ class CustomerOwnershipExtractionJobService {
       maxAttempts: this.maxAttempts, correlationId,
     });
     let claimed = await claim(key);
+    // A job made before purposes had keys of their own may hold this key for
+    // another purpose; this upload gets a job of its own beside it.
+    if (!claimed.created && JSON.stringify(purposeOf(claimed.job?.evidenceHandoff)) !== JSON.stringify(purposeOf(input.evidenceHandoff))) {
+      claimed = await claim(derivedKey(key, "purpose", purposeOf(input.evidenceHandoff)));
+    }
     // A complete reading of the same file is reused, free. A partial one is
     // read afresh when the file is uploaded again - otherwise a poor reading,
     // or one made before a reading fix, came back every time (end-to-end check,
