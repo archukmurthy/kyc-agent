@@ -25,6 +25,17 @@ export const casePointerStore = {
   getItem(key) { try { return window.sessionStorage.getItem(key); } catch (_) { return null; } },
   setItem(key, value) { try { window.sessionStorage.setItem(key, value); } catch (_) { /* The address still carries it. */ } },
   removeItem(key) { try { window.sessionStorage.removeItem(key); } catch (_) { /* Nothing to remove. */ } },
+  // The pointers under one prefix - to forget them together (a reset).
+  keys(prefix) {
+    try {
+      const found = [];
+      for (let index = 0; index < window.sessionStorage.length; index += 1) {
+        const key = window.sessionStorage.key(index);
+        if (key?.startsWith(prefix)) found.push(key);
+      }
+      return found;
+    } catch (_) { return []; }
+  },
 };
 
 // What earlier versions left in the browser, names included.

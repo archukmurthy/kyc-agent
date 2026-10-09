@@ -64,15 +64,7 @@ function readEvidenceJob(caseId, recordId) {
   } catch (_) { return null; }
 }
 function forgetEvidenceJobs(caseId) {
-  try {
-    const prefix = evidenceJobKey(caseId, "");
-    const keys = [];
-    for (let index = 0; index < window.sessionStorage.length; index += 1) {
-      const key = window.sessionStorage.key(index);
-      if (key?.startsWith(prefix)) keys.push(key);
-    }
-    keys.forEach((key) => casePointerStore.removeItem(key));
-  } catch (_) { /* Storage blocked: nothing was kept there either. */ }
+  casePointerStore.keys(evidenceJobKey(caseId, "")).forEach((key) => casePointerStore.removeItem(key));
 }
 function fileAsBase64(file) {
   return new Promise((resolve, reject) => {
