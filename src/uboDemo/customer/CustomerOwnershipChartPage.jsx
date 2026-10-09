@@ -31,7 +31,9 @@ const CHART_CALCULATION_SEMANTICS_VERSION = "ubo-demo-chart-calculation-v3";
 const ACCEPTED_TYPES = new Set(["application/pdf", "image/png", "image/jpeg"]);
 const MAX_BYTES = 3 * 1024 * 1024;
 export const RUNNING_POLL_MS = 4000;
-export const PROGRESS_POLL_MS = 3000;
+// The draft is a courtesy, and each look is a request against the hourly
+// status limit (600): at 3 s a long reading used about 55 of them.
+export const PROGRESS_POLL_MS = 5000;
 const TRANSIENT_LOOKS = 5;
 
 function fileAsBase64(file) {
@@ -417,16 +419,25 @@ export default function CustomerOwnershipChartPage() {
       // Processing answers only when the reading ends; meanwhile its draft is
       // asked for separately (a free status check).
       const stopWatching = watchProgress(job.jobId);
-      try { job = await postJob({ operation: "PROCESS_EXTRACTION_JOB", jobId: job.jobId }); }
-      catch (caught) {
+      let answered = null;
+      let caught = null;
+      try { answered = await postJob({ operation: "PROCESS_EXTRACTION_JOB", jobId: job.jobId }); }
+      catch (error) { caught = error; }
+      // Stopped before the job is checked again below: the draft's polling ran
+      // on alongside those checks, doubling the requests.
+      finally { stopWatching(); }
+      if (caught) {
         // A server error on this call is not the reading failing: the reading
         // runs on, and finishes, on the server (live end-to-end check,
         // 2026-10-08: an error was shown for a reading that had completed).
         // Ask what the job really is; only a real failure is shown.
         if (!caught.transient) throw caught;
-        job = await jobAfterTransientError(job, caught);
+        answered = await jobAfterTransientError(job, caught);
       }
-      finally { stopWatching(); }
+      // An answer naming no job (another instance finished it first) leaves
+      // the job as it was, to be asked about again - not a crash shown as an error.
+      if (answered) job = answered;
+      else await new Promise((resolve) => window.setTimeout(resolve, RUNNING_POLL_MS));
     }
     throw new Error("Analysis is still safely queued. Refresh this page to continue checking it.");
   };

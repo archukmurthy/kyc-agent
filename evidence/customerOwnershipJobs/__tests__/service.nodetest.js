@@ -418,6 +418,16 @@ test("in a case that reused a reading, the same chart again is free, and refused
   assert.equal(fresh.reused, false);
 });
 
+test("a reading finished first by another instance is answered as the job stands, not null", async () => {
+  const h = harness([usableResult()]);
+  const started = await h.service.start(input());
+  const complete = h.repository.completeJob.bind(h.repository);
+  // The other instance's write lands first; this one's then changes nothing.
+  h.repository.completeJob = async (args) => { await complete(args); return null; };
+  const job = await h.service.process(started.jobId);
+  assert.equal(job?.state, "COMPLETE");
+});
+
 test("a running job inside its lease is left alone", async () => {
   const h = harness([usableResult()]);
   const started = await h.service.start(input());

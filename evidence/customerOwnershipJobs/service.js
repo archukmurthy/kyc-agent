@@ -403,19 +403,23 @@ class CustomerOwnershipExtractionJobService {
       const completed = await this.repository.completeJob({ id: job.id, state, result });
       this.forgetProgress(job.id);
       console.info("[ubo-customer-extraction] job-complete", { jobId: job.id, correlationId: job.correlationId, state, attempt: job.attemptCount });
-      return publicJob(completed);
+      // Another instance that took the job over after its lease ran out may
+      // have finished it first: the write then changes nothing, and the job is
+      // answered as it now stands - it used to answer null, which the page read
+      // as a failure.
+      return completed ? publicJob(completed) : this.status(job.id);
     } catch (error) {
       const failure = reason(error);
       if (failure.retryable && job.attemptCount < job.maxAttempts) {
         const nextAttemptAt = new Date(this.now().getTime() + retryDelayMs(job)).toISOString();
         const retrying = await this.repository.markRetry({ id: job.id, code: failure.code, message: failure.safeMessage, upstreamStatus: failure.upstreamStatus, nextAttemptAt });
         console.warn("[ubo-customer-extraction] attempt-retrying", { jobId: job.id, correlationId: job.correlationId, attempt: job.attemptCount, code: failure.code, upstreamStatus: failure.upstreamStatus, nextAttemptAt });
-        return publicJob(retrying);
+        return retrying ? publicJob(retrying) : this.status(job.id);
       }
       this.forgetProgress(job.id);
       const failed = await this.repository.failJob({ id: job.id, code: failure.code, message: failure.safeMessage, upstreamStatus: failure.upstreamStatus });
       console.error("[ubo-customer-extraction] job-failed", { jobId: job.id, correlationId: job.correlationId, attempt: job.attemptCount, code: failure.code, upstreamStatus: failure.upstreamStatus });
-      return publicJob(failed);
+      return failed ? publicJob(failed) : this.status(job.id);
     }
   }
 }
