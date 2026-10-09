@@ -83,6 +83,11 @@ function validateRequest(input) {
   if (!input?.demoContext?.demoCaseId || !company?.legalName || !company?.registrationNumber || !company?.countryCode) {
     throw demoError("invalid_demo_context", "Seeded demo company and case context is required.");
   }
+  // These land in bounded columns (the subject's jurisdiction is VARCHAR(10)):
+  // an over-long value answered 500 from the database instead of this 400.
+  const bounded = { demoCaseId: [input.demoContext.demoCaseId, 200], legalName: [company.legalName, 300], registrationNumber: [company.registrationNumber, 64], countryCode: [company.countryCode, 10], countryName: [company.countryName || "", 100], referenceCaseId: [input.demoContext.referenceCaseId || "", 200] };
+  const tooLong = Object.keys(bounded).find((name) => String(bounded[name][0]).length > bounded[name][1]);
+  if (tooLong) throw demoError("invalid_demo_context", `The case's ${tooLong} is too long.`);
   if (!file?.originalFilename || !SUPPORTED_MEDIA.has(file.declaredMediaType) || !file.contentBase64) {
     throw demoError("invalid_file", "Upload one PDF, PNG or JPEG ownership chart.");
   }
@@ -1090,23 +1095,20 @@ async function analyseIngestedCustomerOwnershipChart({ input, ingestion, artifac
       integrity: { algorithm: "sha256", digest: ingestion.fingerprintValue },
     }],
   });
+  // Evidence says whether a failure could go differently next time. One it says
+  // cannot (the database refusing what was read, say) is not retried - each
+  // retry is another paid reading, and the job used to retry them all.
+  const evidenceFailure = (failure, fallback) => Object.assign(
+    demoError(failure?.code || "evidence_interpretation_failed", failure?.message || fallback, statusForEvidenceFailure(failure)),
+    failure?.retryable === false ? { retryable: false } : {},
+  );
   if (!interpretationEnvelope?.ok) {
-    const failure = interpretationEnvelope?.error;
-    throw demoError(
-      failure?.code || "evidence_interpretation_failed",
-      failure?.message || "Evidence could not interpret this ownership chart.",
-      statusForEvidenceFailure(failure),
-    );
+    throw evidenceFailure(interpretationEnvelope?.error, "Evidence could not interpret this ownership chart.");
   }
   if (interpretationEnvelope.result?.error
     || interpretationEnvelope.result?.operation?.status !== "completed"
     || interpretationEnvelope.result?.evidence?.integrityVerified !== true) {
-    const failure = interpretationEnvelope.result?.error;
-    throw demoError(
-      failure?.code || "evidence_interpretation_failed",
-      failure?.message || "Evidence could not complete a verified interpretation of this ownership chart.",
-      statusForEvidenceFailure(failure),
-    );
+    throw evidenceFailure(interpretationEnvelope.result?.error, "Evidence could not complete a verified interpretation of this ownership chart.");
   }
   if (!["COMPLETE", "PARTIAL", "NO_DATA", "INCONCLUSIVE"].includes(capabilityResult.outcome.state)) {
     throw demoError("ubo_candidate_mapping_failed", capabilityResult.outcome.message || "No UBO candidate facts could be mapped from this chart.", 422);

@@ -283,6 +283,28 @@ test("a server error while the reading runs is checked against the job before an
   await screen.findByRole("heading", { name: /Continue to questions/i }, { timeout: 8000 });
   expect(screen.queryByText(/couldn't complete the analysis/i)).toBeNull();
   expect(calls.filter((operation) => operation === "UPLOAD")).toHaveLength(1);
+  // The draft's own polling stops once processing has answered: it went on
+  // asking alongside the checks of the job.
+  expect(calls.filter((operation) => operation === "GET_EXTRACTION_JOB")).toHaveLength(1);
+}, 15000);
+
+test("an answer that names no job does not end the wait in an error", async () => {
+  seed();
+  let processed = 0;
+  window.fetch = jest.fn(async (_url, request) => {
+    const body = JSON.parse(request.body);
+    if (body.operation === "PROCESS_EXTRACTION_JOB") {
+      processed += 1;
+      return { ok: true, json: async () => ({ success: true, job: processed === 1 ? null : { jobId: "job-1", artifactId: "artifact-1", correlationId: "corr-1", state: "COMPLETE", result: analysis } }) };
+    }
+    return { ok: true, json: async () => ({ success: true, job: { jobId: "job-1", artifactId: "artifact-1", correlationId: "corr-1", state: "QUEUED" } }) };
+  });
+  const { container } = render(<CustomerOwnershipChartPage />);
+  const file = new File([Uint8Array.from([137, 80, 78, 71])], "ownership-chart.png", { type: "image/png" });
+  fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [file] } });
+  fireEvent.click(screen.getByRole("button", { name: /Upload and analyse/i }));
+  await screen.findByRole("heading", { name: /Continue to questions/i }, { timeout: 8000 });
+  expect(processed).toBe(2);
 }, 15000);
 
 test("refresh resumes the same persisted extraction job without uploading bytes again", async () => {

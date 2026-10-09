@@ -44,11 +44,13 @@ class PostgresCustomerExtractionJobRepository {
 
   async ensureContext({ tenantId, demoCaseId, company }) {
     return this.db.transaction(async (tx) => {
+      // The subject record is one per company, shared by every workspace: an
+      // upload names it once and never renames it (any caller's request did).
       const subjectResult = await tx.query(`INSERT INTO evidence_subject_references
         (subject_type,identifier_scheme,jurisdiction,identifier_value,display_name,external_system,external_reference)
         VALUES('legal_entity','company_registration',$1,$2,$3,'ubo_demo',$4)
         ON CONFLICT(subject_type,identifier_scheme,jurisdiction,identifier_value)
-        DO UPDATE SET display_name=EXCLUDED.display_name RETURNING id`,
+        DO UPDATE SET display_name=COALESCE(evidence_subject_references.display_name,EXCLUDED.display_name) RETURNING id`,
       [company.countryCode, company.registrationNumber, company.legalName, demoCaseId]);
       const subjectId = rows(subjectResult)[0].id;
       const contextId = randomUUID();
@@ -103,12 +105,65 @@ class PostgresCustomerExtractionJobRepository {
     return { created: false, job: mapJob(rows(existing)[0]) };
   }
 
+  /** A finished reading copied for another case, written finished in one
+   *  statement: it used to be created QUEUED, then claimed, then completed, and
+   *  a failure in between left a QUEUED copy that every later reuse returned.
+   *  Such an unfinished copy is finished here; a finished one is left as it is. */
+  async createCompletedCopy(record) {
+    const params = [randomUUID(),record.tenantId,record.contextId,record.artifactId,record.artifactSha256,record.cacheKey,
+      record.demoCaseId,JSON.stringify(record.company),record.profileVersion,record.schemaVersion,record.instructionVersion,
+      record.verificationStrategyVersion,record.provider,record.modelVersion,record.state,record.maxAttempts,record.correlationId,
+      JSON.stringify(record.result)];
+    const written = await this.db.query(`INSERT INTO evidence_customer_extraction_jobs
+      (id,tenant_id,context_id,artifact_id,artifact_sha256,cache_key,demo_case_id,company,evidence_handoff,
+       profile_version,schema_version,instruction_version,verification_strategy_version,provider,model_version,
+       state,attempt_count,max_attempts,correlation_id,result,completed_at)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,NULL,$9,$10,$11,$12,$13,$14,$15,0,$16,$17,$18::jsonb,NOW())
+      ON CONFLICT(tenant_id,context_id,cache_key) DO UPDATE SET state=EXCLUDED.state,result=EXCLUDED.result,
+        correlation_id=EXCLUDED.correlation_id,attempt_count=0,next_attempt_at=NULL,lease_expires_at=NULL,
+        last_reason_code=NULL,last_reason_message=NULL,upstream_status=NULL,completed_at=NOW(),updated_at=NOW()
+      WHERE evidence_customer_extraction_jobs.state NOT IN ('COMPLETE','PARTIAL') RETURNING *`, params);
+    if (rows(written).length) return mapJob(rows(written)[0]);
+    const existing = await this.db.query(`SELECT * FROM evidence_customer_extraction_jobs
+      WHERE tenant_id=$1 AND context_id=$2 AND cache_key=$3`, [record.tenantId, record.contextId, record.cacheKey]);
+    return mapJob(rows(existing)[0]);
+  }
+
+  /** The newest complete reading of this file as the chart, in this workspace,
+   *  made the same way (profile, provider, model) - this case's first. */
+  async findFinishedChartReading({ tenantId, artifactSha256, demoCaseId, profileVersion, schemaVersion, instructionVersion, verificationStrategyVersion, provider, modelVersion }) {
+    const result = await this.db.query(`SELECT * FROM evidence_customer_extraction_jobs
+      WHERE tenant_id=$1 AND artifact_sha256=$2 AND evidence_handoff IS NULL AND state='COMPLETE' AND result IS NOT NULL
+        AND profile_version=$4 AND schema_version=$5 AND instruction_version=$6 AND verification_strategy_version=$7
+        AND provider=$8 AND model_version=$9
+      ORDER BY (demo_case_id=$3) DESC, completed_at DESC LIMIT 1`,
+    [tenantId, artifactSha256, demoCaseId, profileVersion, schemaVersion, instructionVersion, verificationStrategyVersion, provider, modelVersion]);
+    return mapJob(rows(result)[0]);
+  }
+
+  /** The file digest of the chart a case records, read from the case (read
+   *  only) - so evidence can be told apart from the chart by its bytes. */
+  async caseChartDigest({ tenantId, demoCaseId }) {
+    const result = await this.db.query(`SELECT j.artifact_sha256 FROM ubo_poc_cases c
+      JOIN evidence_customer_extraction_jobs j ON j.id=c.latest_extraction_job_id AND j.tenant_id=c.tenant_id
+      WHERE c.case_id=$1 AND c.tenant_id=$2`, [demoCaseId, tenantId]);
+    return rows(result)[0]?.artifact_sha256 || null;
+  }
+
   async getJob({ id, tenantId }) {
     const result = await this.db.query("SELECT * FROM evidence_customer_extraction_jobs WHERE id=$1 AND tenant_id=$2", [id, tenantId]);
     return mapJob(rows(result)[0]);
   }
 
   async claimJob({ id, tenantId, leaseSeconds = 300 }) {
+    // A reading stopped mid-way on its last attempt (the function was killed)
+    // left the job RUNNING for good: nothing below would take it again, and
+    // Retry accepts only FAILED. Once its lease has run out it is FAILED, so
+    // the customer's Retry, a re-upload and support can all recover it.
+    await this.db.query(`UPDATE evidence_customer_extraction_jobs SET
+      state='FAILED',last_reason_code='lease_expired',last_reason_message='The reading stopped before it finished.',
+      next_attempt_at=NULL,lease_expires_at=NULL,completed_at=NOW(),updated_at=NOW()
+      WHERE id=$1 AND tenant_id=$2 AND state='RUNNING' AND lease_expires_at<NOW() AND attempt_count>=max_attempts`, [id, tenantId]);
     const result = await this.db.query(`UPDATE evidence_customer_extraction_jobs SET
       state='RUNNING',attempt_count=attempt_count+1,next_attempt_at=NULL,
       lease_expires_at=NOW()+($3::text||' seconds')::interval,updated_at=NOW()

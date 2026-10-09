@@ -123,6 +123,6 @@ test("transient persistence failure retries the same interpretation without anot
 
 test("constraint failures are not retried and expose a non-secret diagnostic reference", async () => {
   const repository = new TestRepository(); let calls = 0; repository.appendInterpretation = async () => { calls += 1; throw Object.assign(new Error("constraint failed"), { code: "23514", constraint: "evidence_facts_request_status_check", persistenceStage: "facts" }); };
-  await assert.rejects(() => service({ repository }).interpret({ artifactId: "artifact-real", tenantId: "nium" }), (error) => error.code === "database_persistence_failed" && error.details.persistenceCode === "23514" && error.details.persistenceConstraint === "evidence_facts_request_status_check" && error.details.persistenceStage === "facts" && error.details.retryAttempted === false && !!error.details.runId);
+  await assert.rejects(() => service({ repository }).interpret({ artifactId: "artifact-real", tenantId: "nium" }), (error) => error.code === "database_persistence_rejected" && error.details.persistenceCode === "23514" && error.details.persistenceConstraint === "evidence_facts_request_status_check" && error.details.persistenceStage === "facts" && error.details.retryAttempted === false && !!error.details.runId);
   assert.equal(calls, 1);
 });

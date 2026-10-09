@@ -21,12 +21,19 @@ const TRANSIENT_CODES = new Set([
 ]);
 const DETERMINISTIC_CODES = new Set([
   "provider_request_rejected",
+  "database_persistence_rejected",
   "malformed_provider_result",
   "provider_malformed_output",
   "evidence_result_not_usable",
   "INVALID_EXPLICIT_DECISION",
   "EVALUATION_PRECONDITION_FAILED",
 ]);
+
+// A copy of a finished reading for another case is never read: it carries this
+// mark, and processing or retrying one never reaches the provider.
+const REUSE_CORRELATION_PREFIX = "customer-chart-reuse:";
+const registrationKey = (company) => String(company?.registrationNumber || "").replace(/\s+/g, "").toUpperCase();
+const isReuseCopy =(job) => String(job?.correlationId || "").startsWith(REUSE_CORRELATION_PREFIX);
 
 // ponytail: a fixed bound on fresh readings of one file in one case; each is paid.
 const MAX_FRESH_READINGS = 5;
@@ -39,8 +46,14 @@ function derivedKey(key, ...parts) {
   return createHash("sha256").update(JSON.stringify([key, ...parts])).digest("hex");
 }
 
-function cacheKey({ digest, profile, provider, modelVersion }) {
-  return createHash("sha256").update(JSON.stringify([
+// What an upload is for: the ownership chart (null), or evidence for a request
+// of this kind (the concepts it was asked to establish, in a stable order).
+function purposeOf(evidenceHandoff) {
+  return evidenceHandoff ? [...(evidenceHandoff.requestedConcepts || [])].sort() : null;
+}
+
+function cacheKey({ digest, profile, provider, modelVersion, evidenceHandoff = null }) {
+  const parts = [
     digest,
     profile.profileVersion,
     profile.schemaVersion,
@@ -48,7 +61,14 @@ function cacheKey({ digest, profile, provider, modelVersion }) {
     profile.verificationStrategyVersion,
     provider,
     modelVersion,
-  ])).digest("hex");
+  ];
+  // Each purpose is its own reading: the key once named only the file, so a
+  // file sent as evidence and then as the chart came back as the evidence job
+  // (refused as not_a_chart, forever), and one register sent for two requests
+  // came back as the first request's job (2026-10-09). A chart keeps the key it
+  // always had, so the charts already read are still reused free.
+  if (evidenceHandoff) parts.push(["evidence", purposeOf(evidenceHandoff)]);
+  return createHash("sha256").update(JSON.stringify(parts)).digest("hex");
 }
 
 function publicJob(job) {
@@ -85,7 +105,9 @@ function reason(error) {
   const code = String(error?.code || "operation_failed");
   const upstreamStatus = Number.isInteger(error?.upstreamStatus) ? error.upstreamStatus
     : Number.isInteger(error?.statusCode) && [408, 429, 500, 502, 503, 504].includes(error.statusCode) ? error.statusCode : null;
-  const retryable = !DETERMINISTIC_CODES.has(code) && (error?.retryable === true
+  // A failure its source says cannot go differently is never retried: each
+  // attempt is another paid reading.
+  const retryable = !DETERMINISTIC_CODES.has(code) && error?.retryable !== false && (error?.retryable === true
     || TRANSIENT_CODES.has(code)
     || upstreamStatus === 408 || upstreamStatus === 429 || (upstreamStatus != null && upstreamStatus >= 500));
   const safeMessage = String(error?.safeReason || error?.message || code).slice(0, 500);
@@ -181,6 +203,28 @@ class CustomerOwnershipExtractionJobService {
   async start(rawInput) {
     const input = validateRequest(rawInput);
     const digest = sha256(input.file.bytes);
+    const caseId = input.demoContext.demoCaseId;
+    const providerConfiguration = selectSemanticProvider(digest, this.provider).configuration?.() || {};
+    const provider = providerConfiguration.provider || (this.provider ? "injected" : "anthropic");
+    const modelVersion = providerConfiguration.model || this.modelVersion;
+    if (input.evidenceHandoff) {
+      // Compared by the file itself: a case reusing another's reading holds
+      // its chart under that case's artifact, so the same file sent again had a
+      // new artifact id and passed as evidence for itself.
+      if ((await this.repository.caseChartDigest({ tenantId: this.tenantId, demoCaseId: caseId })) === digest) {
+        throw Object.assign(new Error("This is the ownership chart itself, so it cannot be evidence for it. Upload a different document."), { code: "chart_not_evidence", statusCode: 409 });
+      }
+    } else {
+      // The same chart already read completely in this workspace - for this
+      // case, or for another case about the same company (a case started from
+      // saved research) - is reused, free. It used to be stored and paid for
+      // again whenever the case's own upload was not the one first read.
+      const earlier = await this.repository.findFinishedChartReading({ tenantId: this.tenantId, artifactSha256: digest, demoCaseId: caseId, ...this.profile, provider, modelVersion });
+      if (earlier?.demoCaseId === caseId) return publicJob({ ...earlier, reused: true });
+      if (earlier && registrationKey(earlier.company) && registrationKey(earlier.company) === registrationKey(input.demoContext.company)) {
+        return this.reuseReading({ sourceJobId: earlier.id, demoContext: input.demoContext });
+      }
+    }
     const context = await this.repository.ensureContext({ tenantId: this.tenantId, demoCaseId: input.demoContext.demoCaseId, company: input.demoContext.company });
     let stored = await this.repository.findArtifact({ tenantId: this.tenantId, contextId: context.id, sha256: digest });
     let artifactReused = true;
@@ -201,10 +245,7 @@ class CustomerOwnershipExtractionJobService {
       stored = await this.repository.findArtifact({ tenantId: this.tenantId, contextId: context.id, sha256: ingestion.fingerprintValue });
     }
     if (!stored) throw Object.assign(new Error("The saved Evidence Artifact could not be reopened."), { code: "artifact_unavailable", statusCode: 503 });
-    const providerConfiguration = selectSemanticProvider(digest, this.provider).configuration?.() || {};
-    const provider = providerConfiguration.provider || (this.provider ? "injected" : "anthropic");
-    const modelVersion = providerConfiguration.model || this.modelVersion;
-    const key = cacheKey({ digest, profile: this.profile, provider, modelVersion });
+    const key = cacheKey({ digest, profile: this.profile, provider, modelVersion, evidenceHandoff: input.evidenceHandoff });
     const correlationId = `customer-chart:${randomUUID()}`;
     const claim = (cacheKey) => this.repository.createOrGetJob({
       tenantId: this.tenantId, contextId: context.id, artifactId: stored.artifactId, artifactSha256: digest,
@@ -213,6 +254,11 @@ class CustomerOwnershipExtractionJobService {
       maxAttempts: this.maxAttempts, correlationId,
     });
     let claimed = await claim(key);
+    // A job made before purposes had keys of their own may hold this key for
+    // another purpose; this upload gets a job of its own beside it.
+    if (!claimed.created && JSON.stringify(purposeOf(claimed.job?.evidenceHandoff)) !== JSON.stringify(purposeOf(input.evidenceHandoff))) {
+      claimed = await claim(derivedKey(key, "purpose", purposeOf(input.evidenceHandoff)));
+    }
     // A complete reading of the same file is reused, free. A partial one is
     // read afresh when the file is uploaded again - otherwise a poor reading,
     // or one made before a reading fix, came back every time (end-to-end check,
@@ -238,23 +284,22 @@ class CustomerOwnershipExtractionJobService {
     if (!usable) throw Object.assign(new Error("There is no finished chart reading to reuse."), { code: "job_not_found", statusCode: 404 });
     const caseId = String(demoContext?.demoCaseId || "");
     if (!caseId || caseId === source.demoCaseId) throw Object.assign(new Error("Choose the new case to reuse the reading for."), { code: "case_required", statusCode: 400 });
-    const registration = (company) => String(company?.registrationNumber || "").replace(/\s+/g, "").toUpperCase();
-    if (!registration(source.company) || registration(source.company) !== registration(demoContext.company)) {
+    if (!registrationKey(source.company) || registrationKey(source.company) !== registrationKey(demoContext.company)) {
       throw Object.assign(new Error("That chart was read for a different company."), { code: "chart_company_mismatch", statusCode: 409 });
     }
-    const claimed = await this.repository.createOrGetJob({
+    // Written finished, in one statement - never a queued copy a later step
+    // must finish (a failure in between left one that blocked the case).
+    const job = await this.repository.createCompletedCopy({
       tenantId: this.tenantId, contextId: source.contextId, artifactId: source.artifactId, artifactSha256: source.artifactSha256,
-      cacheKey: derivedKey(source.cacheKey, "reused-for", caseId), demoCaseId: caseId, company: demoContext.company, evidenceHandoff: null,
+      cacheKey: derivedKey(source.cacheKey, "reused-for", caseId), demoCaseId: caseId, company: demoContext.company,
       profileVersion: source.profileVersion, schemaVersion: source.schemaVersion, instructionVersion: source.instructionVersion,
       verificationStrategyVersion: source.verificationStrategyVersion, provider: source.provider, modelVersion: source.modelVersion,
-      maxAttempts: this.maxAttempts, correlationId: `customer-chart-reuse:${randomUUID()}`,
+      maxAttempts: this.maxAttempts, correlationId: `${REUSE_CORRELATION_PREFIX}${randomUUID()}`, state: source.state,
+      // The new case's customer sees this result: it names their case, not
+      // the one it was first read for.
+      result: { ...source.result, demoCaseId: caseId, referenceCaseId: String(demoContext.referenceCaseId || ""), company: demoContext.company },
     });
-    let job = claimed.job;
-    if (claimed.created) {
-      const running = await this.repository.claimJob({ id: job.id, tenantId: this.tenantId, leaseSeconds: this.leaseSeconds });
-      job = await this.repository.completeJob({ id: running.id, state: source.state, result: source.result });
-    }
-    console.info("[ubo-customer-extraction] job-reused", { jobId: job.id, sourceJobId: source.id, created: claimed.created });
+    console.info("[ubo-customer-extraction] job-reused", { jobId: job.id, sourceJobId: source.id });
     return publicJob({ ...job, reused: true });
   }
 
@@ -288,6 +333,8 @@ class CustomerOwnershipExtractionJobService {
   /** Retries a failed job. `retried` says whether it was queued again - the
    *  reading, and its cost, happen again only then. */
   async retry(jobId) {
+    // An unfinished copy is mended by reusing the reading again, not read.
+    if (isReuseCopy(await this.repository.getJob({ id: jobId, tenantId: this.tenantId }))) return { ...(await this.status(jobId)), retried: false };
     const job = await this.repository.retryFailed({ id: jobId, tenantId: this.tenantId, correlationId: `customer-chart:${randomUUID()}` });
     if (!job) return { ...(await this.status(jobId)), retried: false };
     console.info("[ubo-customer-extraction] job-retry", { jobId: job.id, correlationId: job.correlationId });
@@ -319,6 +366,12 @@ class CustomerOwnershipExtractionJobService {
     let job = await this.repository.getJob({ id: jobId, tenantId: this.tenantId });
     if (!job) throw Object.assign(new Error("Extraction job was not found."), { code: "job_not_found", statusCode: 404 });
     if (TERMINAL_STATES.has(job.state)) return publicJob({ ...job, reused: true });
+    // An unfinished copy (left by the old three-step reuse) would start a
+    // real, uncounted reading here. It fails instead; reusing again mends it.
+    if (isReuseCopy(job)) {
+      const failed = await this.repository.failJob({ id: job.id, code: "reuse_copy_incomplete", message: "This copy of an earlier reading was never finished; reuse the reading again.", upstreamStatus: null });
+      return publicJob(failed || job);
+    }
     const claimed = await this.repository.claimJob({ id: jobId, tenantId: this.tenantId, leaseSeconds: this.leaseSeconds });
     if (!claimed) return this.status(jobId);
     job = claimed;
@@ -350,19 +403,23 @@ class CustomerOwnershipExtractionJobService {
       const completed = await this.repository.completeJob({ id: job.id, state, result });
       this.forgetProgress(job.id);
       console.info("[ubo-customer-extraction] job-complete", { jobId: job.id, correlationId: job.correlationId, state, attempt: job.attemptCount });
-      return publicJob(completed);
+      // Another instance that took the job over after its lease ran out may
+      // have finished it first: the write then changes nothing, and the job is
+      // answered as it now stands - it used to answer null, which the page read
+      // as a failure.
+      return completed ? publicJob(completed) : this.status(job.id);
     } catch (error) {
       const failure = reason(error);
       if (failure.retryable && job.attemptCount < job.maxAttempts) {
         const nextAttemptAt = new Date(this.now().getTime() + retryDelayMs(job)).toISOString();
         const retrying = await this.repository.markRetry({ id: job.id, code: failure.code, message: failure.safeMessage, upstreamStatus: failure.upstreamStatus, nextAttemptAt });
         console.warn("[ubo-customer-extraction] attempt-retrying", { jobId: job.id, correlationId: job.correlationId, attempt: job.attemptCount, code: failure.code, upstreamStatus: failure.upstreamStatus, nextAttemptAt });
-        return publicJob(retrying);
+        return retrying ? publicJob(retrying) : this.status(job.id);
       }
       this.forgetProgress(job.id);
       const failed = await this.repository.failJob({ id: job.id, code: failure.code, message: failure.safeMessage, upstreamStatus: failure.upstreamStatus });
       console.error("[ubo-customer-extraction] job-failed", { jobId: job.id, correlationId: job.correlationId, attempt: job.attemptCount, code: failure.code, upstreamStatus: failure.upstreamStatus });
-      return publicJob(failed);
+      return failed ? publicJob(failed) : this.status(job.id);
     }
   }
 }
