@@ -132,3 +132,11 @@ test("a registry shareholder proven removed is shown as no longer an owner, not 
   expect(screen.getByText("Removed · evidence verified")).toBeInTheDocument();
   expect(screen.queryByText("Continue through ownership chain")).not.toBeInTheDocument();
 });
+
+// Live end-to-end check (2026-10-08): with several cases for one company, the
+// waiting screen did not say which case it was on.
+test("the waiting screen names its case, and on the audit page points to the ledger", () => {
+  render(<AnalystResolutionView mode="AUDIT" demoCase={{ demoCaseId: "demo-d4eaeb41-06e1-4a39", company: { legalName: "Vodafone Limited" } }} result={{ status: "COMPLETE" }} />);
+  expect(screen.getByText("Vodafone Limited · case d4eaeb41")).toBeInTheDocument();
+  expect(screen.getByText(/Every step so far is in the case ledger below/)).toBeInTheDocument();
+});
