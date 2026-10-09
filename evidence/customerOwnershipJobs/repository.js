@@ -131,6 +131,13 @@ class PostgresCustomerExtractionJobRepository {
 
   /** The newest complete reading of this file as the chart, in this workspace,
    *  made the same way (profile, provider, model) - this case's first. */
+  /** A job by its key, or null - never creates one. */
+  async findJobByKey({ tenantId, contextId, cacheKey }) {
+    const result = await this.db.query(`SELECT * FROM evidence_customer_extraction_jobs
+      WHERE tenant_id=$1 AND context_id=$2 AND cache_key=$3`, [tenantId, contextId, cacheKey]);
+    return mapJob(rows(result)[0]);
+  }
+
   async findFinishedChartReading({ tenantId, artifactSha256, demoCaseId, profileVersion, schemaVersion, instructionVersion, verificationStrategyVersion, provider, modelVersion }) {
     const result = await this.db.query(`SELECT * FROM evidence_customer_extraction_jobs
       WHERE tenant_id=$1 AND artifact_sha256=$2 AND evidence_handoff IS NULL AND state='COMPLETE' AND result IS NOT NULL

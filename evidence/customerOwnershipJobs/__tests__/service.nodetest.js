@@ -56,6 +56,10 @@ class MemoryJobs {
     const job = Object.assign(existing || { id: randomUUID(), createdAt: now }, { ...structuredClone(record), evidenceHandoff: null, attemptCount: 0, leaseExpiresAt: null, nextAttemptAt: null, completedAt: now, updatedAt: now });
     this.jobs.set(job.id, job); return structuredClone(job);
   }
+  async findJobByKey({ tenantId, contextId, cacheKey }) {
+    const job = [...this.jobs.values()].find((row) => row.tenantId === tenantId && row.contextId === contextId && row.cacheKey === cacheKey);
+    return job ? structuredClone(job) : null;
+  }
   async findFinishedChartReading({ tenantId, artifactSha256, demoCaseId, profileVersion, schemaVersion, instructionVersion, verificationStrategyVersion, provider, modelVersion }) {
     const same = [...this.jobs.values()].filter((job) => job.tenantId === tenantId && job.artifactSha256 === artifactSha256 && !job.evidenceHandoff && job.state === "COMPLETE" && job.result
       && job.profileVersion === profileVersion && job.schemaVersion === schemaVersion && job.instructionVersion === instructionVersion
@@ -434,4 +438,23 @@ test("a running job inside its lease is left alone", async () => {
   Object.assign(h.repository.jobs.get(started.jobId), { state: "RUNNING", attemptCount: 3, leaseExpiresAt: new Date(Date.now() + 60000).toISOString() });
   assert.equal((await h.service.process(started.jobId)).state, "RUNNING");
   assert.equal(h.calls(), 0);
+});
+
+// Review, 2026-10-09: evidence read before purposes had keys of their own is
+// reused for the same request, not read and paid for again.
+test("evidence read under the old file-only key is reused for the same request", async () => {
+  const h = harness([usableResult()]);
+  const first = await h.service.start(asEvidence(["RELATIONSHIP_CURRENTNESS"]));
+  await h.service.process(first.jobId);
+  // As it is in the live database: stored under the key that named only the file.
+  const { cacheKey } = require("../service.js");
+  const job = h.repository.jobs.get(first.jobId);
+  assert.ok(job.evidenceHandoff, "the first upload is evidence");
+  job.cacheKey = cacheKey({ digest: job.artifactSha256, profile: { profileVersion: job.profileVersion, schemaVersion: job.schemaVersion, instructionVersion: job.instructionVersion, verificationStrategyVersion: job.verificationStrategyVersion }, provider: job.provider, modelVersion: job.modelVersion });
+  const again = await h.service.start(asEvidence(["RELATIONSHIP_CURRENTNESS"]));
+  assert.equal(again.jobId, first.jobId);
+  assert.equal(again.reused, true);
+  assert.equal(h.calls(), 1, "not read again");
+  const otherRequest = await h.service.start(asEvidence(["SHAREHOLDING_PERCENTAGE"]));
+  assert.notEqual(otherRequest.jobId, first.jobId, "another request still gets its own reading");
 });

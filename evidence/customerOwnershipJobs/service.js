@@ -253,6 +253,16 @@ class CustomerOwnershipExtractionJobService {
       evidenceHandoff: input.evidenceHandoff, ...this.profile, provider, modelVersion,
       maxAttempts: this.maxAttempts, correlationId,
     });
+    // Evidence read before purposes had keys of their own sits under the key
+    // that named only the file. The same file for the same request is that
+    // reading again, free - it used to be read and paid for a second time
+    // (review, 2026-10-09).
+    if (input.evidenceHandoff && this.repository.findJobByKey) {
+      const before = await this.repository.findJobByKey({ tenantId: this.tenantId, contextId: context.id, cacheKey: cacheKey({ digest, profile: this.profile, provider, modelVersion }) });
+      if (before?.state === "COMPLETE" && before.demoCaseId === caseId && JSON.stringify(purposeOf(before.evidenceHandoff)) === JSON.stringify(purposeOf(input.evidenceHandoff))) {
+        return publicJob({ ...before, reused: true, artifactReused });
+      }
+    }
     let claimed = await claim(key);
     // A job made before purposes had keys of their own may hold this key for
     // another purpose; this upload gets a job of its own beside it.
@@ -277,7 +287,10 @@ class CustomerOwnershipExtractionJobService {
    *  for a new case started from saved research (owner decision 2026-10-08,
    *  option b). A copy of the job for the new case, pointing at the same
    *  stored file and carrying the same result - nothing is read again and
-   *  nothing is paid. Staff only; the route decides who asks. */
+   *  nothing is paid. Reached by staff asking for it (the route keeps
+   *  customers out of that), and by start() when anyone - a customer included
+   *  - uploads the very file already read for the same company in this
+   *  workspace: the reading is of their own bytes, rewritten to their case. */
   async reuseReading({ sourceJobId, demoContext }) {
     const source = await this.repository.getJob({ id: sourceJobId, tenantId: this.tenantId });
     const usable = source && (source.state === "COMPLETE" || source.state === "PARTIAL") && !source.evidenceHandoff && source.result;
