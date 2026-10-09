@@ -18,6 +18,11 @@ const { createEvidencePlatformExtractionAdapter } = require("../../integrations/
 const { CAPABILITY_CONTRACT_VERSION } = require("../../ubo-control/contracts/constants.js");
 const { buildPlan } = require("./demoAutoReview.js");
 const { applyDemoAutoReviewDecisions, startReviewReplay } = require("./reviewLabEngine.js");
+
+// Evidence's outcomes marked "not retryable" that a second reading can still
+// change: its name for a failure it did not classify, and an AI reading that
+// found nothing usable (a reading is not deterministic).
+const MAY_DIFFER_NEXT_TIME = new Set(["operation_failed", "incomplete_interpretation"]);
 const {
   DIGEST: REVIEWED_BETTERCOMMS_DIGEST,
   buildBettercommsServiceResult,
@@ -1095,12 +1100,15 @@ async function analyseIngestedCustomerOwnershipChart({ input, ingestion, artifac
       integrity: { algorithm: "sha256", digest: ingestion.fingerprintValue },
     }],
   });
-  // Evidence says whether a failure could go differently next time. One it says
-  // cannot (the database refusing what was read, say) is not retried - each
-  // retry is another paid reading, and the job used to retry them all.
+  // A failure that would go the same way next time (a file the reader cannot
+  // use, the database refusing what was read) is not retried - each retry is
+  // another paid reading. But Evidence also says "not retryable" for every
+  // failure it has no name for, and taking its word made a passing glitch
+  // fail the job at once, so the customer's retry was paid again (review,
+  // 2026-10-09).
   const evidenceFailure = (failure, fallback) => Object.assign(
     demoError(failure?.code || "evidence_interpretation_failed", failure?.message || fallback, statusForEvidenceFailure(failure)),
-    failure?.retryable === false ? { retryable: false } : {},
+    failure?.retryable === false && !MAY_DIFFER_NEXT_TIME.has(failure?.code) ? { retryable: false } : {},
   );
   if (!interpretationEnvelope?.ok) {
     throw evidenceFailure(interpretationEnvelope?.error, "Evidence could not interpret this ownership chart.");

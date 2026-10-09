@@ -729,3 +729,12 @@ test("a failure Evidence marks as not retryable reaches the job as not retryable
   const unavailable = { ...provider({}), async extract() { throw Object.assign(new Error("down"), { code: "provider_unavailable" }); } };
   await assert.rejects(analyseCustomerOwnershipChart(input(), { provider: unavailable }), (error) => error.retryable === undefined);
 });
+
+// Review, 2026-10-09: Evidence marks failures it has no name for, and readings
+// that found nothing, as not retryable; a second attempt can still succeed, so
+// the job retries them itself rather than failing and making the customer pay
+// for a manual retry.
+test("an unclassified failure or an empty reading is left to the job's retry rules", async () => {
+  const unknown = { ...provider({}), async extract() { throw Object.assign(new Error("odd"), { code: "something_unmapped" }); } };
+  await assert.rejects(analyseCustomerOwnershipChart(input(), { provider: unknown }), (error) => error.retryable === undefined);
+});
