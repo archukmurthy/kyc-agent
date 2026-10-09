@@ -21,13 +21,14 @@ function fakeRes() {
 
 const ANALYST = { kind: "staff", userId: "user_analyst", tenantId: "trial-acme-1a2b3c4d", role: "analyst" };
 let saved;
+const { createMemoryStore } = require("../../lib/storage");
 let store;
 beforeEach(() => {
   saved = { secret: process.env.SESSION_SECRET, vercel: process.env.VERCEL };
   process.env.SESSION_SECRET = "customer-link-route-test-secret";
   delete process.env.VERCEL;
-  store = new Map();
-  customerLink.__setDeps({ storage: { get: async (k) => store.get(k) ?? null, set: async (k, v) => { store.set(k, v); } } });
+  store = createMemoryStore();
+  customerLink.__setDeps({ storage: store });
 });
 afterEach(() => {
   for (const [key, name] of [["secret", "SESSION_SECRET"], ["vercel", "VERCEL"]]) {
@@ -87,7 +88,7 @@ function signedInAs(email) {
 }
 
 test("the person the link was made for opens it and gets a session for that one case", async () => {
-  const { token } = customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+  const { token } = await customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
   const res = await call(handler({ clerk: signedInAs("Customer@Example.test") }), { action: "open", link: token });
   assert.strictEqual(res.statusCode, 200);
   const { payload } = await customerLink.verifyCustomerSession(res.body.session);
@@ -95,7 +96,7 @@ test("the person the link was made for opens it and gets a session for that one 
 });
 
 test("a forwarded link opened by someone else is refused", async () => {
-  const { token } = customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+  const { token } = await customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
   const res = await call(handler({ clerk: signedInAs("colleague@example.test") }), { action: "open", link: token });
   assert.strictEqual(res.statusCode, 403);
   assert.strictEqual(res.body.error, "wrong_recipient");
@@ -103,7 +104,7 @@ test("a forwarded link opened by someone else is refused", async () => {
 });
 
 test("opening needs a signed-in person when sign-in is on", async () => {
-  const { token } = customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+  const { token } = await customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
   const clerk = { isConfigured: () => true, verifyClerkSession: async () => ({ ok: false }), verifiedEmailFor: async () => null };
   assert.strictEqual((await call(handler({ clerk }), { action: "open", link: token })).statusCode, 401);
 });
@@ -111,12 +112,12 @@ test("opening needs a signed-in person when sign-in is on", async () => {
 test("a hosted deployment with sign-in off opens nothing", async () => {
   // Nobody could prove who they are, so the link alone would be the key.
   process.env.VERCEL = "1";
-  const { token } = customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+  const { token } = await customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
   assert.strictEqual((await call(handler(), { action: "open", link: token })).statusCode, 503);
 });
 
 test("local development with sign-in off opens with the link alone", async () => {
-  const { token } = customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+  const { token } = await customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
   assert.strictEqual((await call(handler(), { action: "open", link: token })).statusCode, 200);
 });
 
@@ -149,7 +150,7 @@ function withHeaders() {
 }
 
 test("opening a link sets an HttpOnly cookie that only this route receives", async () => {
-  const { token } = customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+  const { token } = await customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
   const res = withHeaders();
   await handler({ clerk: signedInAs("customer@example.test") })({ method: "POST", headers: {}, body: { action: "open", link: token } }, res);
   const cookie = cookieFrom(res);
@@ -187,7 +188,7 @@ function clerkAs(userId, email) {
 }
 
 test("the session is bound to the person who opened the link, and only they can resume it", async () => {
-  const { token } = customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+  const { token } = await customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
   const opened = await call(handler({ clerk: clerkAs("user_customer", "customer@example.test") }), { action: "open", link: token });
   assert.strictEqual((await customerLink.verifyCustomerSession(opened.body.session)).payload.sub, "user_customer");
   const cookie = { cookie: `ubo_customer_session=${opened.body.session}` };
@@ -197,7 +198,7 @@ test("the session is bound to the person who opened the link, and only they can 
 });
 
 test("a link to a case that no longer exists does not open", async () => {
-  const { token } = customerLink.mintLink({ caseId: "deleted-case", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+  const { token } = await customerLink.mintLink({ caseId: "deleted-case", tenantId: ANALYST.tenantId, email: "customer@example.test" });
   const res = await call(handler({ clerk: clerkAs("user_customer", "customer@example.test") }), { action: "open", link: token });
   assert.strictEqual(res.statusCode, 404);
 });
@@ -218,7 +219,7 @@ test("a production build never opens a link on the link alone, wherever it runs"
   const savedEnv = process.env.NODE_ENV;
   process.env.NODE_ENV = "production";
   try {
-    const { token } = customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+    const { token } = await customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
     assert.strictEqual((await call(handler(), { action: "open", link: token })).statusCode, 503);
   } finally {
     process.env.NODE_ENV = savedEnv;
@@ -226,7 +227,7 @@ test("a production build never opens a link on the link alone, wherever it runs"
 });
 
 test("the cookie is Secure on any HTTPS request", async () => {
-  const { token } = customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
+  const { token } = await customerLink.mintLink({ caseId: "case-1", tenantId: ANALYST.tenantId, email: "customer@example.test" });
   const res = withHeaders();
   await handler({ clerk: clerkAs("user_customer", "customer@example.test") })({ method: "POST", headers: { "x-forwarded-proto": "https" }, body: { action: "open", link: token } }, res);
   assert.match(cookieFrom(res), /; Secure/);
@@ -262,6 +263,35 @@ test("making and withdrawing a link is recorded on the case's ledger, without th
     [ANALYST.tenantId, "case-1", "CUSTOMER_LINK_REVOKED", "ANALYST", "user_analyst"],
   ]);
   assert.ok(!JSON.stringify(recorded).includes("customer@example.test"));
+});
+
+// Review, 2026-10-09: the panel says a new link replaces the old one; it did
+// not, and the ledger then said "no link out" while the first still worked.
+test("a new link withdraws the earlier one, on the ledger as a withdrawal", async () => {
+  const recorded = [];
+  const h = route.createHandler({
+    applyCors: () => false,
+    enforceRateLimit: async () => true,
+    requireStaff: async () => ANALYST,
+    caseExists: async () => true,
+    recordLinkEvent: async (tenantId, event) => { recorded.push(event.eventType); },
+    clerk: signedInAs("customer@example.test"),
+  });
+  const first = (await call(h, { action: "create", caseId: "case-1", email: "customer@example.test" })).body;
+  const opened = (await call(h, { action: "open", link: first.token })).body;
+  const second = (await call(h, { action: "create", caseId: "case-1", email: "customer@example.test" })).body;
+  assert.strictEqual(second.replaced, true);
+  assert.strictEqual((await call(h, { action: "open", link: first.token })).statusCode, 401, "the earlier link is dead");
+  assert.strictEqual((await customerLink.verifyCustomerSession(opened.session)).valid, false, "and the session opened from it");
+  assert.strictEqual((await call(h, { action: "open", link: second.token })).statusCode, 200);
+  assert.deepStrictEqual(recorded, ["CUSTOMER_LINK_ISSUED", "CUSTOMER_LINK_REVOKED", "CUSTOMER_LINK_ISSUED"]);
+});
+
+test("a link made straight after a withdrawal opens", async () => {
+  const h = handler({ clerk: signedInAs("customer@example.test") });
+  await call(h, { action: "revoke", caseId: "case-1" });
+  const { token } = (await call(h, { action: "create", caseId: "case-1", email: "customer@example.test" })).body;
+  assert.strictEqual((await call(h, { action: "open", link: token })).statusCode, 200);
 });
 
 test("a link the ledger could not record is not handed out", async () => {

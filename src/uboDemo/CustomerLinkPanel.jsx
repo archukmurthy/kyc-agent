@@ -63,7 +63,7 @@ export default function CustomerLinkPanel({ caseId, prepare, notice, linkStatus 
     try {
       if (prepare) await prepare();
       const made = await post({ action: "create", caseId, email });
-      setState({ kind: "made", url: customerLinkUrl(made.token), expiresAt: made.expiresAt, email });
+      setState({ kind: "made", url: customerLinkUrl(made.token), expiresAt: made.expiresAt, email, replaced: Boolean(made.replaced) });
     } catch (cause) {
       setState({ kind: "error", message: cause.message });
     }
@@ -83,10 +83,10 @@ export default function CustomerLinkPanel({ caseId, prepare, notice, linkStatus 
     <section className="ubo-demo-customer-link" aria-label="Send the customer a link">
       <h2>Send the customer their link</h2>
       {notice && <p role="status" className="ubo-demo-link-notice">{notice}</p>}
-      <p>Only the address you enter can open it - they confirm it with a code we email them. It lasts 30 days, and you can withdraw it.</p>
+      <p>Only the address you enter can open it - they confirm it with a code we email them. It lasts 30 days, and you can withdraw it. A case has one link at a time: making a new one stops the earlier one working.</p>
       {alreadySent && state.kind === "idle" && (
         <div role="status">
-          <p>A link for this case has already been made. For security it cannot be shown again: withdraw it, or make a new one below.</p>
+          <p>A link for this case has already been made. For security it cannot be shown again: withdraw it, or make a new one below - the new one replaces it, and the customer signs in again with the new link.</p>
           <button type="button" className="ubo-demo-secondary" onClick={withdraw}>Withdraw every link for this case</button>
         </div>
       )}
@@ -100,6 +100,7 @@ export default function CustomerLinkPanel({ caseId, prepare, notice, linkStatus 
       {state.kind === "made" && (
         <div role="status">
           <p>Only <strong>{state.email}</strong> can open this link, until {new Date(state.expiresAt).toLocaleDateString()}. Copy it and send it to them.</p>
+          {state.replaced && <p>The earlier link for this case no longer works, and anyone using it has been signed out of the case.</p>}
           <input readOnly aria-label="Customer link" value={state.url} onFocus={(event) => event.target.select()} />
           <button type="button" className="ubo-demo-secondary" onClick={copy}>
             {copied ? "Copied" : "Copy link"}
