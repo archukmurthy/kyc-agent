@@ -197,7 +197,7 @@ test("retry uses a new job and falls back to the same-company last successful re
   const firstJobId = JSON.parse(window.fetch.mock.calls[0][1].body).jobId;
   // The first result was saved with the case on the server; that is where the fallback comes from.
   const saved = JSON.parse(uboStore.getItem(DEMO_SESSION_KEY));
-  mockListSavedResearch.mockResolvedValue([{ caseId: saved.demoCase.demoCaseId, company: saved.demoCase.company, status: "PARTIAL", updatedAt: "2026-10-03T07:00:00.000Z" }]);
+  mockListSavedResearch.mockResolvedValue([{ caseId: saved.demoCase.demoCaseId, company: saved.demoCase.company, status: "PARTIAL", researchedAt: "2026-10-03T07:00:00.000Z" }]);
   mockLoadPocCase.mockResolvedValue({ projection: { researchResult: saved.researchResult } });
   fireEvent.click(screen.getByRole("button", { name: "Run again" }));
   expect(await screen.findByText("CACHED FALLBACK — LIVE REFRESH FAILED")).toBeInTheDocument();
@@ -697,7 +697,7 @@ test("a genuine failure still says something went wrong", async () => {
 
 // Saved research comes from this workspace's cases on the server (it survives a
 // reload, another browser and another day): starting from it makes no provider call.
-const savedBritishAirways = { caseId: "case-ba", company: { legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", countryCode: "GB" }, status: "PARTIAL", updatedAt: "2026-10-03T07:00:00.000Z" };
+const savedBritishAirways = { caseId: "case-ba", company: { legalName: "BRITISH AIRWAYS PLC", registrationNumber: "01777777", countryCode: "GB" }, status: "PARTIAL", researchedAt: "2026-10-03T07:00:00.000Z" };
 
 test("saved research from this workspace starts a new case without a provider call", async () => {
   mockListSavedResearch.mockResolvedValue([savedBritishAirways]);
@@ -919,7 +919,7 @@ test("after a reload, failed live research still falls back to the workspace's s
   const research = compactResearchResult(evaluatedSession, "LIVE", "EFFECTIVE_INTEREST");
   mockListSavedResearch.mockResolvedValue([
     { caseId: "case-other", company: { legalName: "Other Limited", registrationNumber: "09999999", countryCode: "GB" }, status: "PARTIAL", updatedAt: "2026-10-03T08:00:00.000Z" },
-    { caseId: "case-acme", company: { legalName: "ACME HOLDINGS LTD", registrationNumber: "00445790", countryCode: "GB" }, status: "PARTIAL", updatedAt: "2026-10-03T07:00:00.000Z" },
+    { caseId: "case-acme", company: { legalName: "ACME HOLDINGS LTD", registrationNumber: "00445790", countryCode: "GB" }, status: "PARTIAL", researchedAt: "2026-10-03T07:00:00.000Z" },
   ]);
   mockLoadPocCase.mockResolvedValue({ projection: { researchResult: { ...research, ownershipResolutionTrace: { fromTheOldCustomer: true } } } });
   window.fetch = jest.fn(async () => { const error = new Error("provider unavailable"); error.code = "PROVIDER_UNAVAILABLE"; throw error; });
@@ -935,7 +935,7 @@ test("after a reload, failed live research still falls back to the workspace's s
 // made the customer's chart describe a different company. A completed
 // research run gives the case the registry's name for its own number.
 test("completed research gives a misspelt case the registry's company name, keeping what was typed", async () => {
-  mockListSavedResearch.mockResolvedValue([{ caseId: "case-voda", company: { legalName: "Vodaphone LTD", registrationNumber: "01471587", countryCode: "GB" }, status: "PARTIAL", updatedAt: "2026-10-03T07:00:00.000Z" }]);
+  mockListSavedResearch.mockResolvedValue([{ caseId: "case-voda", company: { legalName: "Vodaphone LTD", registrationNumber: "01471587", countryCode: "GB" }, status: "PARTIAL", researchedAt: "2026-10-03T07:00:00.000Z" }]);
   const research = compactResearchResult(evaluatedSession, "LIVE", "EFFECTIVE_INTEREST");
   research.candidateSources = [...research.candidateSources, { sourceRecordId: "registry", candidateFacts: [{ factId: "registry-context", type: "ENTITY_ATTRIBUTE", attribute: "REGISTRY_CONTEXT", value: { legalName: "VODAFONE LIMITED", registrationNumber: "01471587", companyType: "ltd" } }] }];
   mockLoadPocCase.mockResolvedValue({ projection: { researchResult: research } });
