@@ -731,7 +731,6 @@ function customerAssertionsFromEvidence(candidateFacts, diagram, artifact) {
       }],
     });
   });
-  typedRelationships.forEach((fact, index) => { if (!usedTypedFacts.has(index)) assertions.push(structuredClone(fact)); });
   return deduplicateChartCandidateFacts(assertions);
 }
 

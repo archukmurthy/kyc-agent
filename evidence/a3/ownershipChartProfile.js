@@ -314,8 +314,17 @@ function mergeById(left, right, idKey) {
       if (sameParty.length === 1) key = sameParty[0][0];
     } else {
       const connectorLabel = normalized(item?.visibleLabel || item?.relationshipLabel || item?.label);
-      const sameConnector = connectorLabel ? [...rows.entries()].filter(([, existing]) => normalized(existing.visibleLabel || existing.relationshipLabel || existing.label) === connectorLabel) : [];
-      if (sameConnector.length === 1) key = sameConnector[0][0];
+      const subjectId = canonicalInventoryId(item?.subjectInventoryId || item?.subject_inventory_id, "party");
+      const objectId = canonicalInventoryId(item?.objectInventoryId || item?.object_inventory_id, "party");
+      const sameEndpoints = subjectId && objectId ? [...rows.entries()].filter(([, existing]) => (
+        canonicalInventoryId(existing.subjectInventoryId || existing.subject_inventory_id, "party") === subjectId
+        && canonicalInventoryId(existing.objectInventoryId || existing.object_inventory_id, "party") === objectId
+      )) : [];
+      if (sameEndpoints.length === 1) key = sameEndpoints[0][0];
+      else if (!subjectId || !objectId) {
+        const sameConnector = connectorLabel ? [...rows.entries()].filter(([, existing]) => normalized(existing.visibleLabel || existing.relationshipLabel || existing.label) === connectorLabel) : [];
+        if (sameConnector.length === 1) key = sameConnector[0][0];
+      }
     }
     const cleaned = { ...item, [idKey]: key };
     if (idKey === "connectorId") {

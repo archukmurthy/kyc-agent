@@ -238,6 +238,27 @@ test("verification inventory IDs with different punctuation reconcile by unique 
   ]);
 });
 
+test("repeated percentage labels on different endpoints remain distinct connectors", () => {
+  const primary = {
+    facts: [], requestedConceptOutcomes: [], completeness: { state: "incomplete", limitations: [] }, ownershipDataStatus: "OWNERSHIP_RELATIONSHIPS_PRESENT",
+    ownershipPartyInventory: [party("P1", "Gary"), party("P2", "Thomas"), party("P3", "Manjit"), party("P4", "TDR LLP", "legal_entity")],
+    ownershipConnectorInventory: [
+      { connectorId: "C1", subjectInventoryId: "P1", objectInventoryId: "P4", visibleLabel: "33.33%" },
+      { connectorId: "C2", subjectInventoryId: "P2", objectInventoryId: "P4", visibleLabel: "33.33%" },
+      { connectorId: "C3", subjectInventoryId: "P3", objectInventoryId: "P4", visibleLabel: "33.33%" },
+    ],
+  };
+  const verification = {
+    ...primary,
+    completeness: { state: "complete", limitations: [] },
+    ownershipConnectorInventory: primary.ownershipConnectorInventory.map((item) => ({ ...item, connectorId: item.connectorId.toLowerCase().replace("c", "connector_") })),
+  };
+  const merged = mergeOwnershipSemanticExtractions(primary, verification);
+  assert.deepEqual(merged.ownershipConnectorInventory.map(({ subjectInventoryId, objectInventoryId }) => [subjectInventoryId, objectInventoryId]), [
+    ["P1", "P4"], ["P2", "P4"], ["P3", "P4"],
+  ]);
+});
+
 test("equivalent padded connector IDs do not create false gaps or a second provider pass", () => {
   const facts = [relationship("fact-1", "party_001", "party_003")];
   facts[0].typedRelationship.sourceSpecificMetadata.connectorInventoryId = "conn_001";
