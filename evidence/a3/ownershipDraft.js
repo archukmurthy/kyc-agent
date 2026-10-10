@@ -115,15 +115,40 @@ function inventoryConnector(item) {
   };
 }
 
-function ownershipDraft(text) {
+function ownershipInventoryDraft(text) {
   const source = String(text || "");
   const candidates = [
     ...completeObjectsAfter(source, "ownership_party_inventory"),
     ...completeObjectsAfter(source, "ownership_connector_inventory"),
     ...encodedValues(source).flatMap(objectsOfArrays),
   ].filter((item) => item && typeof item === "object" && !Array.isArray(item));
-  const connectorItems = candidates.map(inventoryConnector).filter((item) => item.subjectInventoryId && item.objectInventoryId);
-  const partyItems = candidates.filter((item) => !inventoryConnector(item).subjectInventoryId).map(inventoryParty).filter((item) => item.inventoryId && item.visibleLabel);
+  const rawConnectors = candidates.map(inventoryConnector).filter((item) => item.subjectInventoryId && item.objectInventoryId);
+  const rawParties = candidates.filter((item) => !inventoryConnector(item).subjectInventoryId).map(inventoryParty).filter((item) => item.inventoryId && item.visibleLabel);
+  const partiesById = new Map();
+  rawParties.forEach((item) => {
+    const current = partiesById.get(item.inventoryId);
+    if (!current) { partiesById.set(item.inventoryId, item); return; }
+    partiesById.set(item.inventoryId, {
+      ...current,
+      ...item,
+      visibleLabel: item.visibleLabel || current.visibleLabel,
+      partyType: item.partyType === "unknown_or_other" ? current.partyType : item.partyType,
+    });
+  });
+  const connectorsByStatement = new Map();
+  rawConnectors.forEach((item) => {
+    const statementKey = `${item.subjectInventoryId}|${item.objectInventoryId}`;
+    if (connectorsByStatement.has(statementKey)) return;
+    connectorsByStatement.set(statementKey, {
+      ...item,
+      connectorId: item.connectorId || `draft:${item.subjectInventoryId}->${item.objectInventoryId}`,
+    });
+  });
+  return { partyInventory: [...partiesById.values()], connectorInventory: [...connectorsByStatement.values()] };
+}
+
+function ownershipDraft(text) {
+  const { partyInventory: partyItems, connectorInventory: connectorItems } = ownershipInventoryDraft(text);
   const labels = new Map();
   const parties = [];
   partyItems.forEach((item) => {
@@ -144,4 +169,4 @@ function ownershipDraft(text) {
   return { parties, connections };
 }
 
-module.exports = { canonicalPartyType, inventoryConnector, inventoryParty, ownershipDraft, completeObjectsAfter };
+module.exports = { canonicalPartyType, inventoryConnector, inventoryParty, ownershipDraft, ownershipInventoryDraft, completeObjectsAfter };

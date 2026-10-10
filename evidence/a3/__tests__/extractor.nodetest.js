@@ -258,6 +258,34 @@ test("ownership inventories embedded as Facts complete skeletal top-level invent
   assert.equal(result.ownershipConnectorInventory[0].objectInventoryId, "party:party_002");
 });
 
+test("finished ownership stream rows omitted from the top-level inventory remain customer-source connectors", async () => {
+  const parties = [
+    { inventory_id: "P1", visible_label: "Alice Morgan", party_type: "natural_person" },
+    { inventory_id: "P2", visible_label: "Holdco Limited", party_type: "legal_entity" },
+    { inventory_id: "P3", visible_label: "Target Limited", party_type: "legal_entity" },
+  ];
+  const connectors = [
+    { connector_id: "C1", subject_inventory_id: "P1", object_inventory_id: "P2", percentage_text: "40%" },
+    { connector_id: "C2", subject_inventory_id: "P2", object_inventory_id: "P3", percentage_text: "percentage unclear" },
+  ];
+  const response = {
+    ownership_party_inventory: parties,
+    // Reproduces the live ASDA defect: the final top-level inventory was a
+    // subset even though the finished structured response contained both.
+    ownership_connector_inventory: [connectors[0]],
+    facts: [{ concept: "economic_ownership", value_json: JSON.stringify({ observed_relationships: connectors }), raw: "", requested: false, value_found: true, semantic_role: "business_fact", sampled: false, supporting_artifact_ids_json: "[]" }],
+    requested_concept_outcomes: [], completeness: { state: "incomplete", limitations: [] },
+  };
+  const adapter = new AnthropicSemanticProvider({ apiKey: "x", model: "m", fetchImpl: async () => ({ ok: true, status: 200, async json() { return { content: [{ type: "text", text: JSON.stringify(response) }] }; } }) });
+  const result = await adapter.extract({ decodedText: "ownership", requestedConcepts: [], context: { schemaReference: "ownership-chart-extraction-v2" } });
+  assert.deepEqual(result.ownershipConnectorInventory.map(({ connectorId, subjectInventoryId, objectInventoryId, percentageText }) => ({ connectorId, subjectInventoryId, objectInventoryId, percentageText })), connectors.map((item) => ({
+    connectorId: item.connector_id,
+    subjectInventoryId: item.subject_inventory_id,
+    objectInventoryId: item.object_inventory_id,
+    percentageText: item.percentage_text,
+  })));
+});
+
 test("ownership percentage transport is repaired only from the same explicit structured Fact", () => {
   const factValue = {
     relationship: "ECONOMIC_OWNERSHIP",
@@ -339,6 +367,7 @@ test("an out-of-range typed transport value is repaired only from the same conne
   assert.equal(reconcilePercentageCandidate(malformedTransport, untypedMagnitude.value).value.value, 4000);
   assert.equal(explicitPercentagePointsFromConnector({ percentage_points: 4000 }), null);
   assert.equal(explicitPercentagePointsFromConnector({ label: "0.40" }), null);
+  assert.equal(explicitPercentagePointsFromConnector({ percentage_text: "100% (single label shared by split)" }), null);
 });
 
 test("typed-row inventory metadata hydrates party types and repairs only the matching explicit connector percentage", () => {
@@ -370,6 +399,17 @@ test("typed-row inventory metadata hydrates party types and repairs only the mat
   assert.equal(repaired.object.partyType, "legal_entity");
   assert.equal(repaired.value.value, 90);
   assert.ok(validateTypedRelationshipCandidate(repaired, { factId: "fact-asda-90", createdAt: "2026-10-10T00:00:00.000Z" }).relationship);
+
+  const byEndpoints = relationshipValueForCandidate({
+    relationship: "ECONOMIC_OWNERSHIP",
+    subject: { name: "Asda Storm Limited" },
+    object: { name: "Asda Delivery Limited" },
+    value: { kind: "EXACT", measurement_type: "percentage", exact_value: 9000 },
+  }, "economic_ownership", parties, [
+    { connector_id: "C13", subject_inventory_id: "P13", object_inventory_id: "P16", percentage_text: "90%" },
+  ], { ...candidate, sourceSpecificMetadata: {} });
+  assert.equal(reconcilePercentageCandidate({ ...candidate, sourceSpecificMetadata: {} }, byEndpoints.value).value.value, 90);
+  assert.equal(byEndpoints.inventoryIds.connectorInventoryId, "C13");
 });
 
 test("ownership Fact inventory IDs deterministically hydrate the typed relationship candidate", () => {

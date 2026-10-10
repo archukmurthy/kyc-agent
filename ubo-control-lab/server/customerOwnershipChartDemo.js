@@ -650,6 +650,7 @@ function exactSourcePartyKey(label, partyType) {
 
 function explicitInventoryPercentage(item) {
   const text = String(item?.percentageText || "").trim();
+  if (/\b(shared|unclear|ambiguous)\b|single label/i.test(text)) return { type: "UNKNOWN", reason: "Percentage not established" };
   const matches = [...text.matchAll(/(?:^|\s)(\d+(?:\.\d+)?)\s*%(?=\s|$)/g)];
   if (matches.length !== 1) return { type: "UNKNOWN", reason: "Percentage not established" };
   const value = Number(matches[0][1]);

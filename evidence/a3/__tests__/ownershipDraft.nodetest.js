@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { ownershipDraft } = require("../ownershipDraft");
+const { ownershipDraft, ownershipInventoryDraft } = require("../ownershipDraft");
 
 const answer = JSON.stringify({
   ownership_data_status: "OWNERSHIP_RELATIONSHIPS_PRESENT",
@@ -45,6 +45,29 @@ test("inventories sent as facts with value_json strings are read too, as far as 
   // Cut part-way through the second party's escaped JSON.
   const cut = full.indexOf("Alice") + 2;
   assert.deepEqual(ownershipDraft(full.slice(0, cut)), { parties: [{ label: "Vodafone Group Plc", type: "legal_entity" }], connections: [] });
+});
+
+test("the finished draft preserves structured connector identities for final customer assertions", () => {
+  const parties = [
+    { inventory_id: "P1", visible_label: "Alice Morgan", party_type: "natural_person" },
+    { inventory_id: "P2", visible_label: "Holdco Limited", party_type: "legal_entity" },
+    { inventory_id: "P3", visible_label: "Target Limited", party_type: "legal_entity" },
+  ];
+  const relationships = [
+    { connector_id: "C1", subject_inventory_id: "P1", object_inventory_id: "P2", percentage_text: "40%" },
+    { connector_id: "C2", subject_inventory_id: "P2", object_inventory_id: "P3", percentage_text: "percentage unclear" },
+  ];
+  const output = JSON.stringify({
+    ownership_party_inventory: parties,
+    ownership_connector_inventory: [relationships[0]],
+    facts: [{ concept: "economic_ownership", value_json: JSON.stringify({ observed_relationships: relationships }) }],
+  });
+  assert.deepEqual(ownershipInventoryDraft(output).connectorInventory.map(({ connectorId, subjectInventoryId, objectInventoryId, percentageText }) => ({ connectorId, subjectInventoryId, objectInventoryId, percentageText })), relationships.map((item) => ({
+    connectorId: item.connector_id,
+    subjectInventoryId: item.subject_inventory_id,
+    objectInventoryId: item.object_inventory_id,
+    percentageText: item.percentage_text,
+  })));
 });
 
 test("party types are read however the provider writes them", () => {

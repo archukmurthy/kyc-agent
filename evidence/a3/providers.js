@@ -1,7 +1,7 @@
 "use strict";
 
 const { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE } = require("./anthropicOutputSchema");
-const { canonicalPartyType, inventoryConnector, inventoryParty, ownershipDraft } = require("./ownershipDraft");
+const { canonicalPartyType, inventoryConnector, inventoryParty, ownershipDraft, ownershipInventoryDraft } = require("./ownershipDraft");
 
 class SemanticExtractionProvider {
   capabilities() { return { contentKinds: ["text"], maxRequestBytes: null }; }
@@ -331,6 +331,7 @@ function explicitPercentagePointsFromConnector(connector) {
   for (const field of ["percentage_text", "connector_label", "relationship_label", "source_label", "label"]) {
     const text = typeof connector[field] === "string" ? connector[field].trim() : "";
     if (!text) continue;
+    if (/\b(shared|unclear|ambiguous)\b|single label/i.test(text)) return null;
     const matches = [...text.matchAll(/(?:^|\s)(\d+(?:\.\d+)?)\s*%(?=\s|$)/g)];
     if (matches.length !== 1) continue;
     const parsed = Number(matches[0][1]);
@@ -347,10 +348,22 @@ function relationshipValueForCandidate(value, concept, partyInventory = [], conn
   const findByName = (name) => partyInventory.find((item) => normalizedName(item?.name || item?.visible_label || item?.description) === normalizedName(name));
   const inventoryReferences = value.inventory_references && typeof value.inventory_references === "object" ? value.inventory_references : {};
   const candidateMetadata = candidate?.sourceSpecificMetadata || {};
-  let subjectInventoryId = value.subject_party_inventory_id || value.subject_party_id || value.from_party_inventory_id || value.source_party_inventory_id || inventoryReferences.subject_party_id || inventoryReferences.subject_inventory_id || candidateMetadata.subjectInventoryId || candidateMetadata.subject_inventory_id;
-  let objectInventoryId = value.object_party_inventory_id || value.object_party_id || value.to_party_inventory_id || value.target_party_inventory_id || inventoryReferences.object_party_id || inventoryReferences.object_inventory_id || candidateMetadata.objectInventoryId || candidateMetadata.object_inventory_id;
+  const inventoryIdForParty = (source) => {
+    const name = source && typeof source === "object" ? source.name || source.description : source;
+    const matched = findByName(name);
+    return matched?.inventory_id || matched?.party_id || matched?.id || "";
+  };
+  let subjectInventoryId = value.subject_party_inventory_id || value.subject_party_id || value.from_party_inventory_id || value.source_party_inventory_id || inventoryReferences.subject_party_id || inventoryReferences.subject_inventory_id || candidateMetadata.subjectInventoryId || candidateMetadata.subject_inventory_id || inventoryIdForParty(value.subject);
+  let objectInventoryId = value.object_party_inventory_id || value.object_party_id || value.to_party_inventory_id || value.target_party_inventory_id || inventoryReferences.object_party_id || inventoryReferences.object_inventory_id || candidateMetadata.objectInventoryId || candidateMetadata.object_inventory_id || inventoryIdForParty(value.object);
   const connectorInventoryId = value.connector_inventory_id || value.relationship_connector_inventory_id || value.connector_id || value.inventory_id || inventoryReferences.connector_id || inventoryReferences.connector_inventory_id || candidateMetadata.connectorInventoryId || candidateMetadata.connector_inventory_id;
-  const connector = connectorInventory.find((item) => canonicalId(item?.connector_id || item?.inventory_id || item?.id) === canonicalId(connectorInventoryId));
+  let connector = connectorInventory.find((item) => canonicalId(item?.connector_id || item?.inventory_id || item?.id) === canonicalId(connectorInventoryId));
+  if (!connector && subjectInventoryId && objectInventoryId) {
+    const endpointMatches = connectorInventory.filter((item) => (
+      canonicalId(item?.subject_inventory_id || item?.subject_party_inventory_id || item?.source_party_inventory_id || item?.from_party_inventory_id) === canonicalId(subjectInventoryId)
+      && canonicalId(item?.object_inventory_id || item?.object_party_inventory_id || item?.target_party_inventory_id || item?.to_party_inventory_id) === canonicalId(objectInventoryId)
+    ));
+    if (endpointMatches.length === 1) connector = endpointMatches[0];
+  }
   subjectInventoryId ||= connector?.subject_inventory_id || connector?.subject_party_inventory_id;
   objectInventoryId ||= connector?.object_inventory_id || connector?.object_party_inventory_id;
   const inventoryPercentagePoints = explicitPercentagePointsFromConnector(connector);
@@ -383,7 +396,7 @@ function relationshipValueForCandidate(value, concept, partyInventory = [], conn
         inventory_percentage_unit: "percentage_points",
       }),
     },
-    inventoryIds: { subjectInventoryId: canonicalId(subjectInventoryId), objectInventoryId: canonicalId(objectInventoryId), connectorInventoryId: canonicalId(connectorInventoryId).replace(/^(?:connector:)+/i, "") },
+    inventoryIds: { subjectInventoryId: canonicalId(subjectInventoryId), objectInventoryId: canonicalId(objectInventoryId), connectorInventoryId: canonicalId(connectorInventoryId || connector?.connector_id || connector?.inventory_id || connector?.id).replace(/^(?:connector:)+/i, "") },
   };
 }
 
@@ -576,13 +589,24 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
       });
       return [...rows.entries()].map(([id, item]) => ({ ...item, [idFields[0]]: id }));
     };
+    // The completed stream may contain structurally valid inventory rows in a
+    // Fact value even when the provider omits them from its final top-level
+    // inventory. The customer saw those rows in the live draft; dropping them
+    // here made the final assertions and reconstructed chart shrink. Preserve
+    // the same finished structured rows as source assertions. Typed Evidence
+    // validation below remains the independent gate for operative UBO facts.
+    const streamedInventory = context.schemaReference === "ownership-chart-extraction-v2"
+      ? ownershipInventoryDraft(text)
+      : { partyInventory: [], connectorInventory: [] };
     const rawPartyInventory = mergeInventory([
       ...(Array.isArray(parsed.ownership_party_inventory) ? parsed.ownership_party_inventory : []),
       ...inventoryFacts("ownership_party_inventory"),
+      ...streamedInventory.partyInventory.map((item) => ({ inventory_id: item.inventoryId, visible_label: item.visibleLabel, party_type: item.partyType, disposition: item.disposition })),
     ], ["inventory_id", "party_id", "id"], "party");
     const rawConnectorInventory = mergeInventory([
       ...(Array.isArray(parsed.ownership_connector_inventory) ? parsed.ownership_connector_inventory : []),
       ...inventoryFacts("ownership_connector_inventory"),
+      ...streamedInventory.connectorInventory.map((item) => ({ connector_id: item.connectorId, subject_inventory_id: item.subjectInventoryId, object_inventory_id: item.objectInventoryId, relationship_label: item.visibleLabel, percentage_text: item.percentageText, disposition: item.disposition })),
     ], ["connector_id", "inventory_id", "id"], "connector");
     const facts = parsed.facts.map((item, sourceIndex) => ({ item, sourceIndex })).filter(({ item }) => item && item.concept && (item.value_json !== undefined || item.value !== undefined)).map(({ item, sourceIndex }) => {
       const request = requestByConcept.get(item.concept); const isRequested = item.requested === true && !!request;
@@ -621,7 +645,7 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
     const providerUsage = { model: payload.model || this.model, effort: request.output_config?.effort || null, inputTokens: payload.usage?.input_tokens ?? null, outputTokens: payload.usage?.output_tokens ?? null, durationMs: Date.now() - requestStartedAt, partyTypeWords,
       // The live draft read from the finished answer against the parse: the
       // two should agree; a gap here means the customer saw less than was found.
-      ...(streaming ? { draftPartyCount: ownershipDraft(text).parties.length, parsedPartyCount: ownershipPartyInventory.filter((item) => item.visibleLabel && item.disposition !== "INTENTIONALLY_NON_OWNERSHIP").length } : {}) };
+      ...(streaming ? { draftPartyCount: ownershipDraft(text).parties.length, parsedPartyCount: ownershipPartyInventory.filter((item) => item.visibleLabel && item.disposition !== "INTENTIONALLY_NON_OWNERSHIP").length, draftConnectorCount: ownershipDraft(text).connections.length, parsedConnectorCount: ownershipConnectorInventory.filter((item) => item.subjectInventoryId && item.objectInventoryId && item.disposition !== "INTENTIONALLY_NON_OWNERSHIP").length } : {}) };
     return { facts, requestedConceptOutcomes, completeness, support: parsed.support || null, ownershipDataStatus: parsed.ownership_data_status || ownershipDataStatusFact || "NOT_APPLICABLE", ownershipPartyInventory, ownershipConnectorInventory, providerAttemptCount: attemptsUsed, providerUsage };
   }
 }
