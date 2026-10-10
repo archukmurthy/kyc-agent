@@ -749,14 +749,15 @@ function reconcileSourceGraphInventory(sourceGraph, diagram) {
   const unresolvedParties = diagram.unresolvedParties || [];
   const unresolvedRelationships = diagram.unresolvedRelationships || [];
   const mappedPartyCount = materialParties.length - unresolvedParties.length;
-  const mappedConnectorCount = materialConnectors.length - unresolvedRelationships.length;
   const validatedRelationships = validatedSourceRelationships(sourceGraph);
   const projectedRelationships = sourceGraph?.relationships || [];
   const mappedCandidateFactCount = validatedRelationships.length;
   const accountedPartyCount = mappedPartyCount + unresolvedParties.length;
-  const accountedConnectorCount = projectedRelationships.length + unresolvedRelationships.length;
+  const projectedConnectorIds = new Set(projectedRelationships.map((edge) => edge.qualifiers?.evidenceSourceSpecificMetadata?.connectorInventoryId).filter(Boolean).map(String));
+  const unresolvedConnectorIdsForCoverage = new Set(unresolvedRelationships.map(({ connectorId }) => String(connectorId)));
+  const accountedConnectorCount = materialConnectors.filter(({ connectorId }) => projectedConnectorIds.has(String(connectorId)) || unresolvedConnectorIdsForCoverage.has(String(connectorId))).length;
   const silentPartyLossCount = 0; // Material inventory parties are projected explicitly below, including disconnected/ambiguous parties.
-  const silentConnectorLossCount = Math.max(0, mappedConnectorCount - projectedRelationships.length);
+  const silentConnectorLossCount = Math.max(0, materialConnectors.length - accountedConnectorCount);
   if (silentPartyLossCount || silentConnectorLossCount || accountedPartyCount < materialParties.length || accountedConnectorCount < materialConnectors.length) {
     throw demoError("SOURCE_GRAPH_INCOMPLETE", "The UBO source projection did not account for every material Evidence inventory item.", 422);
   }

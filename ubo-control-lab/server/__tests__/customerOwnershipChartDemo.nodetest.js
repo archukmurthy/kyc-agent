@@ -666,12 +666,12 @@ test("ASDA customer assertions and source reconstruction share every structurall
     providerDisposition: index === 6 ? "UNRESOLVED" : "RESOLVED",
   }));
   const unresolvedParties = [];
-  const unresolvedRelationships = connectors.slice(5, 8).map((item) => ({ ...item, resolution: "UNRESOLVED_RELATIONSHIP" }));
+  const unresolvedRelationships = [connectors[1], ...connectors.slice(5, 8)].map((item) => ({ ...item, resolution: "UNRESOLVED_RELATIONSHIP" }));
   const diagram = {
     inventory: { parties, connectors },
     unresolvedParties,
     unresolvedRelationships,
-    metrics: { inventoryPartyCount: 16, extractedTypedRelationshipCount: 1, unresolvedPartyCount: 0, unresolvedConnectorCount: 3 },
+    metrics: { inventoryPartyCount: 16, extractedTypedRelationshipCount: 1, unresolvedPartyCount: 0, unresolvedConnectorCount: 4 },
   };
   const candidateFacts = [{
     factId: "asda-c1",
@@ -710,7 +710,7 @@ test("ASDA customer assertions and source reconstruction share every structurall
     new Set(["C1", "C2", "C3", "C4", "C5", "C9", "C10", "C11", "C12", "C13", "C14", "C15"]),
     "the reconstructed chart contains every connector whose direction and endpoints are structurally determined",
   );
-  assert.equal(graph.unresolved.length, 3);
+  assert.equal(graph.unresolved.length, 4);
   assert.deepEqual(graph.inventoryReconciliation, {
     contractVersion: "ubo-source-inventory-reconciliation-v2",
     evidencePartyCount: 16,
@@ -725,7 +725,7 @@ test("ASDA customer assertions and source reconstruction share every structurall
     renderedConnectorCount: 12,
     silentCustomerAssertionLossCount: 0,
     unresolvedPartyCount: 0,
-    unresolvedRelationshipCount: 3,
+    unresolvedRelationshipCount: 4,
     accountedPartyCount: 16,
     accountedConnectorCount: 15,
     silentPartyLossCount: 0,
