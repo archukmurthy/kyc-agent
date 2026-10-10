@@ -681,7 +681,7 @@ test("ASDA-style dense inventory is losslessly split between source graph facts 
     object: { name: "Tdr Capital Llp", entityType: "LEGAL_ENTITY", sourcePartyId: "artifact-asda:P4" },
     measurement: { type: "EXACT", value: 33.33 },
     qualifiers: { currentState: "UNKNOWN", evidenceSourceSpecificMetadata: { connectorInventoryId: "C1", subjectInventoryId: "P1", objectInventoryId: "P4" } },
-    evidenceReferences: [{ referenceId: "artifact-asda" }],
+    evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-asda" }],
   }];
   const graph = reconcileSourceGraphInventory(buildSourceGraph(candidateFacts, {
     legalName: "Asda Delivery Limited", registrationNumber: "03873501", countryCode: "GB",
@@ -691,17 +691,34 @@ test("ASDA-style dense inventory is losslessly split between source graph facts 
   assert.equal(connectors.length, 15);
   assert.equal(diagram.metrics.extractedTypedRelationshipCount, 1);
   assert.equal(candidateFacts.length, 1);
-  assert.equal(graph.nodes.length, 3);
-  assert.equal(graph.relationships.length, 1);
+  assert.equal(graph.nodes.length, 16, "every extracted customer party is represented; the onboarding subject and P16 are one display entity");
+  assert.equal(graph.relationships.length, 12, "every connector with structurally determined endpoints is reconstructed");
+  assert.equal(graph.relationships.filter(({ calculationEligible }) => calculationEligible !== false).length, 1);
+  assert.equal(graph.relationships.filter(({ calculationEligible }) => calculationEligible === false).length, 11);
+  assert.deepEqual(
+    new Set(graph.nodes.map(({ displayName }) => displayName)),
+    new Set(parties.map(({ visibleLabel }) => visibleLabel)),
+    "the reconstructed chart contains every extracted customer party",
+  );
+  assert.deepEqual(
+    new Set(graph.relationships.map((edge) => edge.qualifiers?.evidenceSourceSpecificMetadata?.connectorInventoryId)),
+    new Set(["C1", "C2", "C3", "C4", "C5", "C9", "C10", "C11", "C12", "C13", "C14", "C15"]),
+    "the reconstructed chart contains every connector whose direction and endpoints are structurally determined",
+  );
   assert.equal(graph.unresolved.length, 28);
   assert.deepEqual(graph.inventoryReconciliation, {
-    contractVersion: "ubo-source-inventory-reconciliation-v1",
+    contractVersion: "ubo-source-inventory-reconciliation-v2",
     evidencePartyCount: 16,
     evidenceConnectorCount: 15,
     mappedPartyCount: 2,
     mappedCandidateFactCount: 1,
-    sourceGraphNodeCount: 3,
-    sourceGraphEdgeCount: 1,
+    sourceGraphNodeCount: 16,
+    sourceGraphEdgeCount: 12,
+    displayOnlyRelationshipCount: 11,
+    ambiguousRelationshipCount: 3,
+    structurallyDeterminedConnectorCount: 12,
+    renderedConnectorCount: 12,
+    silentCustomerAssertionLossCount: 0,
     unresolvedPartyCount: 14,
     unresolvedRelationshipCount: 14,
     accountedPartyCount: 16,
@@ -711,6 +728,22 @@ test("ASDA-style dense inventory is losslessly split between source graph facts 
   });
   assert.equal(graph.unresolved.find(({ connectorInventoryId }) => connectorInventoryId === "C7").reasonCode, "PROVIDER_DIRECTION_UNRESOLVED");
   assert.equal(graph.unresolved.filter(({ displayName }) => /Level 4/.test(displayName)).length, 3, "visually similar truncated entities stay explicit and distinct");
+  assert.equal(graph.relationships.some(({ sourceEntityId, targetEntityId }) => sourceEntityId === targetEntityId), false);
+  const displayOnly = graph.relationships.find(({ relationshipId }) => relationshipId.endsWith(":C2"));
+  assert.deepEqual(displayOnly.measurement, { type: "UNKNOWN", reason: "Percentage not established" });
+  assert.equal(displayOnly.evidenceStatus, "CUSTOMER_SOURCE_ASSERTION");
+  assert.equal(displayOnly.calculationEligible, false);
+  const analysis = buildChartAnalysis({
+    candidateFacts,
+    operationEvidenceReferences: [],
+    issues: [],
+    company: { legalName: "Asda Delivery Limited", registrationNumber: "03873501", countryCode: "GB", ownershipType: "PRIVATE_LIMITED" },
+    artifact: { artifactId: "artifact-asda", capturedAt: "2026-09-16T00:00:00.000Z" },
+    requestId: "asda-operative-separation",
+  });
+  assert.equal(analysis.view.graph.relationships.some(({ relationshipId, supportingClaimIds = [] }) =>
+    String(relationshipId).includes("customer-source") || supportingClaimIds.some((id) => String(id).includes("customer-source"))), false,
+  "display-only customer assertions never enter the operative chart calculation");
 });
 
 test("source graph reconciliation fails closed when a validated Evidence relationship is lost downstream", () => {

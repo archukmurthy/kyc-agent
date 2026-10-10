@@ -635,6 +635,31 @@ function unresolvedRelationshipReason(item) {
   return "TYPED_RELATIONSHIP_NOT_VALIDATED";
 }
 
+function inventoryPartyCategory(partyType) {
+  if (partyType === "natural_person") return "NATURAL_PERSON";
+  if (partyType === "legal_entity") return "LEGAL_ENTITY";
+  if (partyType === "trust_or_legal_arrangement") return "TRUST_OR_LEGAL_ARRANGEMENT";
+  return "UNKNOWN_OR_OTHER";
+}
+
+function exactSourcePartyKey(label, partyType) {
+  return `${inventoryPartyCategory(partyType)}|${String(label || "").trim().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ")}`;
+}
+
+function explicitInventoryPercentage(item) {
+  const text = String(item?.percentageText || "").trim();
+  const matches = [...text.matchAll(/(?:^|\s)(\d+(?:\.\d+)?)\s*%(?=\s|$)/g)];
+  if (matches.length !== 1) return { type: "UNKNOWN", reason: "Percentage not established" };
+  const value = Number(matches[0][1]);
+  return Number.isFinite(value) && value >= 0 && value <= 100
+    ? { type: "EXACT", value }
+    : { type: "UNKNOWN", reason: "Percentage not established" };
+}
+
+function validatedSourceRelationships(graph) {
+  return (graph?.relationships || []).filter(({ calculationEligible }) => calculationEligible !== false);
+}
+
 // Evidence owns inventory and relationship validation. UBO may project only
 // validated CandidateFacts as graph edges, but it must carry every remaining
 // material inventory item explicitly so a rejected relationship cannot vanish
@@ -647,8 +672,9 @@ function reconcileSourceGraphInventory(sourceGraph, diagram) {
   const unresolvedRelationships = diagram.unresolvedRelationships || [];
   const mappedPartyCount = materialParties.length - unresolvedParties.length;
   const mappedConnectorCount = materialConnectors.length - unresolvedRelationships.length;
-  const relationshipEndpointCount = new Set((sourceGraph.relationships || []).flatMap(({ sourceEntityId, targetEntityId }) => [sourceEntityId, targetEntityId]).filter(Boolean)).size;
-  const mappedCandidateFactCount = (sourceGraph.relationships || []).length;
+  const validatedRelationships = validatedSourceRelationships(sourceGraph);
+  const relationshipEndpointCount = new Set(validatedRelationships.flatMap(({ sourceEntityId, targetEntityId }) => [sourceEntityId, targetEntityId]).filter(Boolean)).size;
+  const mappedCandidateFactCount = validatedRelationships.length;
   const accountedPartyCount = mappedPartyCount + unresolvedParties.length;
   const accountedConnectorCount = mappedCandidateFactCount + unresolvedRelationships.length;
   const silentPartyLossCount = Math.max(0, mappedPartyCount - relationshipEndpointCount);
@@ -680,17 +706,124 @@ function reconcileSourceGraphInventory(sourceGraph, diagram) {
       resolutionStatus: "EXPLICIT_UNRESOLVED",
     })),
   ];
+  const nodes = (sourceGraph.nodes || []).map((node) => structuredClone(node));
+  const relationships = (sourceGraph.relationships || []).map((edge) => ({ ...structuredClone(edge), calculationEligible: edge.calculationEligible !== false }));
+  const partyEntityIds = new Map();
+  relationships.forEach((edge) => {
+    const metadata = edge.qualifiers?.evidenceSourceSpecificMetadata || {};
+    if (metadata.subjectInventoryId) partyEntityIds.set(String(metadata.subjectInventoryId), edge.sourceEntityId);
+    if (metadata.objectInventoryId) partyEntityIds.set(String(metadata.objectInventoryId), edge.targetEntityId);
+  });
+  nodes.forEach((node) => (node.canonicalResolution?.sourcePartyIds || []).forEach((sourcePartyId) => {
+    const inventoryId = String(sourcePartyId).split(":").at(-1);
+    if (inventoryId) partyEntityIds.set(inventoryId, node.entityId);
+  }));
+  const initialNodesByExactKey = new Map();
+  nodes.forEach((node) => {
+    const key = `${node.category || "UNKNOWN_OR_OTHER"}|${String(node.displayName || "").trim().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ")}`;
+    const values = initialNodesByExactKey.get(key) || [];
+    values.push(node.entityId);
+    initialNodesByExactKey.set(key, values);
+  });
+  const subjectId = sourceGraph.subject?.entityId || null;
+  const subjectName = sourceGraph.subject?.displayName || "";
+  materialParties.forEach((party) => {
+    if (partyEntityIds.has(party.inventoryId)) return;
+    if (party.partyType === "legal_entity" && subjectId && normalizedPartyName(party.visibleLabel) === normalizedPartyName(subjectName)) {
+      partyEntityIds.set(party.inventoryId, subjectId);
+      return;
+    }
+    const exactMatches = initialNodesByExactKey.get(exactSourcePartyKey(party.visibleLabel, party.partyType)) || [];
+    if (exactMatches.length === 1) {
+      partyEntityIds.set(party.inventoryId, exactMatches[0]);
+      return;
+    }
+    const sourceIdentity = party.sourcePartyId || party.inventoryId;
+    const entityId = `source-entity:${createHash("sha256").update(`SOURCE_PARTY|${sourceIdentity}`).digest("hex").slice(0, 20)}`;
+    nodes.push({
+      entityId,
+      displayName: party.visibleLabel || "Unknown source party",
+      category: inventoryPartyCategory(party.partyType),
+      jurisdiction: null,
+      semantics: ["CUSTOMER_SOURCE_ASSERTION"],
+      sourceAliases: [{
+        name: party.visibleLabel || "Unknown source party",
+        entityType: inventoryPartyCategory(party.partyType),
+        provenance: { source: "EVIDENCE_INVENTORY", inventoryPartyId: party.inventoryId, sourcePartyId: party.sourcePartyId || null },
+      }],
+      canonicalResolution: { priority: "SOURCE_SCOPED_PARTY", sourcePartyIds: [sourceIdentity] },
+    });
+    partyEntityIds.set(party.inventoryId, entityId);
+  });
+  const edgeByConnectorId = new Map();
+  relationships.forEach((edge) => {
+    const connectorId = edge.qualifiers?.evidenceSourceSpecificMetadata?.connectorInventoryId;
+    if (connectorId) edgeByConnectorId.set(String(connectorId), edge);
+  });
+  const unresolvedConnectorIds = new Set(unresolvedRelationships.map(({ connectorId }) => String(connectorId)));
+  const renderedConnectorIds = new Set(edgeByConnectorId.keys());
+  let displayOnlyRelationshipCount = 0;
+  let ambiguousRelationshipCount = 0;
+  materialConnectors.forEach((connector) => {
+    const connectorId = String(connector.connectorId);
+    if (renderedConnectorIds.has(connectorId)) return;
+    const sourceEntityId = partyEntityIds.get(String(connector.subjectInventoryId || ""));
+    const targetEntityId = partyEntityIds.get(String(connector.objectInventoryId || ""));
+    if (!sourceEntityId || !targetEntityId) {
+      ambiguousRelationshipCount += 1;
+      return;
+    }
+    if (!unresolvedConnectorIds.has(connectorId)) return;
+    relationships.push({
+      relationshipId: `customer-source:${connector.sourceConnectorId || connectorId}`,
+      sourceEntityId,
+      targetEntityId,
+      relationshipType: "ECONOMIC_OWNERSHIP",
+      dimension: "ECONOMIC",
+      measurement: explicitInventoryPercentage(connector),
+      temporalState: "UNKNOWN",
+      resolutionStatus: "SOURCE_ASSERTION_UNVALIDATED",
+      evidenceStatus: "CUSTOMER_SOURCE_ASSERTION",
+      calculationEligible: false,
+      indicators: ["NOT_VALIDATED_FOR_UBO_CALCULATION"],
+      qualifiers: {
+        sourceAssertionOnly: true,
+        sourceLabel: connector.visibleLabel || null,
+        sourceLocator: structuredClone(connector.sourceLocator || {}),
+        evidenceSourceSpecificMetadata: {
+          connectorInventoryId: connectorId,
+          subjectInventoryId: connector.subjectInventoryId,
+          objectInventoryId: connector.objectInventoryId,
+        },
+      },
+      support: { claimCount: 0, claimIds: [], evidenceReferences: [] },
+    });
+    renderedConnectorIds.add(connectorId);
+    displayOnlyRelationshipCount += 1;
+  });
+  const structurallyDeterminedConnectorCount = materialConnectors.filter((connector) => partyEntityIds.has(String(connector.subjectInventoryId || "")) && partyEntityIds.has(String(connector.objectInventoryId || ""))).length;
+  const silentCustomerAssertionLossCount = Math.max(0, structurallyDeterminedConnectorCount - renderedConnectorIds.size);
+  if (silentCustomerAssertionLossCount) {
+    throw demoError("SOURCE_GRAPH_INCOMPLETE", "The customer source reconstruction did not account for every structurally determined Evidence connector.", 422);
+  }
   return {
     ...sourceGraph,
+    nodes,
+    relationships,
     unresolved,
     inventoryReconciliation: {
-      contractVersion: "ubo-source-inventory-reconciliation-v1",
+      contractVersion: "ubo-source-inventory-reconciliation-v2",
       evidencePartyCount: materialParties.length,
       evidenceConnectorCount: materialConnectors.length,
       mappedPartyCount,
       mappedCandidateFactCount,
-      sourceGraphNodeCount: sourceGraph.nodes?.length || 0,
-      sourceGraphEdgeCount: sourceGraph.relationships?.length || 0,
+      sourceGraphNodeCount: nodes.length,
+      sourceGraphEdgeCount: relationships.length,
+      displayOnlyRelationshipCount,
+      ambiguousRelationshipCount,
+      structurallyDeterminedConnectorCount,
+      renderedConnectorCount: renderedConnectorIds.size,
+      silentCustomerAssertionLossCount,
       unresolvedPartyCount: unresolvedParties.length,
       unresolvedRelationshipCount: unresolvedRelationships.length,
       accountedPartyCount,
@@ -700,13 +833,15 @@ function reconcileSourceGraphInventory(sourceGraph, diagram) {
     },
     summary: {
       ...(sourceGraph.summary || {}),
+      totalEntities: nodes.length,
+      totalRelationships: relationships.length,
       unresolvedBranches: unresolvedRelationships.length,
     },
   };
 }
 
 function sourceGraphCoverage(graph) {
-  const relationships = graph?.relationships || [];
+  const relationships = validatedSourceRelationships(graph);
   const subjectEntityId = graph?.subject?.entityId || null;
   if (!relationships.length) return {
     state: "NO_RELATIONSHIPS",
@@ -1029,7 +1164,7 @@ function presentation(candidateFacts, issues = []) {
 
 function extractionQualityFor({ interpretation, capabilityResult, sourceGraph, sourceCoverage }) {
   const diagram = interpretation?.ownershipDiagramCompleteness || null;
-  const ownershipEdgeCount = sourceGraph?.relationships?.length || 0;
+  const ownershipEdgeCount = validatedSourceRelationships(sourceGraph).length;
   const issues = capabilityResult?.issues || [];
   const rejectionReasonCodes = [...new Set([
     ...(diagram?.relationshipValidationFailures || []).flatMap((item) => item.reasonCodes || []),

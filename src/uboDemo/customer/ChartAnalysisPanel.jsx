@@ -84,6 +84,7 @@ function sourceOwnershipSteps(projection) {
   if (!projection) return [];
   const labels = new Map((projection.nodes || []).map((node) => [node.entityId, node.displayName || node.primaryName || node.name || node.entityId]));
   return (projection.relationships || [])
+    .filter((edge) => edge.calculationEligible !== false)
     .filter((edge) => dimensionOf(edge) === "OWNERSHIP")
     .map((edge) => ({
       relationshipId: edge.relationshipId,

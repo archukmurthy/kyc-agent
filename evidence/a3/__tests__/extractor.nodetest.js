@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SemanticExtractionProvider, mapTypedRelationshipCandidate, normalizeRelationshipUnit, reconcilePercentageCandidate, relationshipValueForCandidate } = require("../providers");
+const { AnthropicSemanticProvider, DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SemanticExtractionProvider, explicitPercentagePointsFromConnector, mapTypedRelationshipCandidate, normalizeRelationshipUnit, reconcilePercentageCandidate, relationshipValueForCandidate } = require("../providers");
 const { runIndependentVerification, runSemanticExtraction, supportState } = require("../extractor");
 const { validateTypedRelationshipCandidate } = require("../../r4/domain");
 const { DeterministicProfileDiscoveryProvider, PROFILE_DISCOVERY_SOURCE } = require("./profileDiscoveryFixture");
@@ -304,6 +304,41 @@ test("ownership percentage transport is repaired only from the same explicit str
   });
   assert.equal(snakeCaseRelationship.subject.partyType, "natural_person");
   assert.equal(snakeCaseRelationship.object.partyType, "legal_entity");
+});
+
+test("an out-of-range typed transport value is repaired only from the same connector's explicit percent text", () => {
+  const parties = [
+    { inventory_id: "P1", name: "Alice Morgan", party_type: "natural_person" },
+    { inventory_id: "P2", name: "Target Limited", party_type: "legal_entity" },
+  ];
+  const ordinaryFact = {
+    relationship: "ECONOMIC_OWNERSHIP",
+    subject: { name: "Alice Morgan", party_type: "natural_person" },
+    object: { name: "Target Limited", party_type: "legal_entity" },
+    value: { kind: "EXACT", measurement_type: "percentage", exact_value: 4000 },
+    inventory_references: { subject_party_id: "P1", object_party_id: "P2", connector_id: "C1" },
+  };
+  const malformedTransport = {
+    relationshipType: "ECONOMIC_OWNERSHIP",
+    subject: { partyType: "natural_person", name: "Alice Morgan" },
+    object: { partyType: "legal_entity", name: "Target Limited" },
+    value: { kind: "EXACT", measurementType: "percentage", value: 4000, unit: "percentage_points" },
+  };
+  const enriched = relationshipValueForCandidate(ordinaryFact, "economic_ownership", parties, [
+    { connector_id: "C1", subject_inventory_id: "P1", object_inventory_id: "P2", percentage_text: "40%" },
+  ]);
+  const repaired = reconcilePercentageCandidate(malformedTransport, enriched.value);
+  assert.equal(repaired.value.value, 40);
+  assert.equal(repaired.value.unit, "percentage_points");
+  assert.equal(repaired.sourceSpecificMetadata.providerTransportPercentageReconciledFromConnectorInventory, true);
+  assert.equal(explicitPercentagePointsFromConnector({ percentage_text: "40%" }), 40);
+
+  const untypedMagnitude = relationshipValueForCandidate(ordinaryFact, "economic_ownership", parties, [
+    { connector_id: "C1", subject_inventory_id: "P1", object_inventory_id: "P2", percentage_text: "4000" },
+  ]);
+  assert.equal(reconcilePercentageCandidate(malformedTransport, untypedMagnitude.value).value.value, 4000);
+  assert.equal(explicitPercentagePointsFromConnector({ percentage_points: 4000 }), null);
+  assert.equal(explicitPercentagePointsFromConnector({ label: "0.40" }), null);
 });
 
 test("ownership Fact inventory IDs deterministically hydrate the typed relationship candidate", () => {

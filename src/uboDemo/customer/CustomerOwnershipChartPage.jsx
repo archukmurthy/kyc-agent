@@ -506,7 +506,7 @@ export default function CustomerOwnershipChartPage() {
     const hasCurrentExtractionSemantics = result?.evidence?.ownershipDiagramCompleteness?.verificationStrategyVersion
       === CURRENT_OWNERSHIP_EXTRACTION_PROFILE.verificationStrategyVersion;
     const hasSourceInventoryReconciliation = result?.sourceGraph?.inventoryReconciliation?.contractVersion
-      === "ubo-source-inventory-reconciliation-v1";
+      === "ubo-source-inventory-reconciliation-v2";
     if (!artifactId || !hasStructuredFacts || (hasCalculationRecords && hasCurrentCalculationSemantics && hasCurrentExtractionSemantics && hasSourceInventoryReconciliation) || reevaluationAttempts.current.has(artifactId)) return;
     reevaluationAttempts.current.add(artifactId);
     let active = true;

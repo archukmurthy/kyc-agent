@@ -261,10 +261,16 @@ function reconcilePercentageCandidate(candidate, value) {
   const explicitPercentageValue = sourceValue?.kind === "EXACT"
     && ["percentage_points", "percentage", "percent"].includes(String(sourceValue?.unit || value.unit || "").toLowerCase())
     && typeof (sourceValue.exact_value ?? sourceValue.value) === "number";
+  const inventoryPercentage = value.inventory_percentage_points;
+  const explicitInventoryPercentage = value.inventory_percentage_unit === "percentage_points"
+    && typeof inventoryPercentage === "number" && inventoryPercentage >= 0 && inventoryPercentage <= 100;
+  const sourceExact = sourceValue?.exact_value ?? sourceValue?.value ?? value.percentage;
+  const exact = typeof sourceExact === "number" && sourceExact >= 0 && sourceExact <= 100
+    ? sourceExact
+    : explicitInventoryPercentage ? inventoryPercentage : sourceExact;
   if (!candidate) {
-    const exact = sourceValue?.exact_value ?? sourceValue?.value ?? value.percentage;
     if (!explicitRelationshipValue || !sourceSubject?.name || !sourceObject?.name
-      || !((sourceValue?.kind === "EXACT" && sourceValue?.measurement_type === "percentage") || explicitPercentageValue || typeof value.percentage === "number")
+      || !((sourceValue?.kind === "EXACT" && sourceValue?.measurement_type === "percentage") || explicitPercentageValue || typeof value.percentage === "number" || explicitInventoryPercentage)
       || typeof exact !== "number" || exact < 0 || exact > 100) return null;
     return {
       directionEstablished: true,
@@ -274,17 +280,18 @@ function reconcilePercentageCandidate(candidate, value) {
       value: { kind: "EXACT", measurementType: "percentage", value: exact, unit: "percentage_points" },
       temporal: { state: "unknown" },
       qualifications: [],
-      sourceSpecificMetadata: { deterministicTypedRelationshipFromStructuredFactValue: true },
+      sourceSpecificMetadata: explicitInventoryPercentage && exact === inventoryPercentage
+        ? { deterministicTypedRelationshipFromConnectorInventory: true }
+        : { deterministicTypedRelationshipFromStructuredFactValue: true },
     };
   }
   const normalized = (text) => String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
-  const exact = sourceValue?.exact_value ?? sourceValue?.value ?? value.percentage;
   const candidateSubjectName = candidate.subject?.name || sourceSubject?.name;
   const candidateObjectName = candidate.object?.name || sourceObject?.name;
   const sameAssertion = (!candidate.relationshipType || explicitRelationship === candidate.relationshipType)
     && normalized(sourceSubject?.name) === normalized(candidateSubjectName)
     && normalized(sourceObject?.name) === normalized(candidateObjectName)
-    && ((sourceValue?.kind === "EXACT" && sourceValue?.measurement_type === "percentage") || explicitPercentageValue || typeof value.percentage === "number")
+    && ((sourceValue?.kind === "EXACT" && sourceValue?.measurement_type === "percentage") || explicitPercentageValue || typeof value.percentage === "number" || explicitInventoryPercentage)
     && typeof exact === "number" && exact >= 0 && exact <= 100;
   if (!sameAssertion) return candidate;
   const hydrated = {
@@ -308,11 +315,31 @@ function reconcilePercentageCandidate(candidate, value) {
     value: { ...(candidate.value || {}), kind: "EXACT", measurementType: "percentage", value: exact, unit: "percentage_points" },
     temporal: candidate.temporal?.state ? candidate.temporal : { state: "unknown" },
     qualifications: Array.isArray(candidate.qualifications) ? candidate.qualifications : [],
-    sourceSpecificMetadata: { ...(candidate.sourceSpecificMetadata || {}), providerTransportPercentageReconciledFromFactValue: true },
+    sourceSpecificMetadata: {
+      ...(candidate.sourceSpecificMetadata || {}),
+      ...(explicitInventoryPercentage && exact === inventoryPercentage
+        ? { providerTransportPercentageReconciledFromConnectorInventory: true }
+        : { providerTransportPercentageReconciledFromFactValue: true }),
+    },
   };
 }
 
-function relationshipValueForCandidate(value, concept, partyInventory = []) {
+function explicitPercentagePointsFromConnector(connector) {
+  if (!connector || typeof connector !== "object") return null;
+  const supplied = connector.percentage_points ?? connector.percentage;
+  if (typeof supplied === "number" && supplied >= 0 && supplied <= 100) return supplied;
+  for (const field of ["percentage_text", "connector_label", "relationship_label", "source_label", "label"]) {
+    const text = typeof connector[field] === "string" ? connector[field].trim() : "";
+    if (!text) continue;
+    const matches = [...text.matchAll(/(?:^|\s)(\d+(?:\.\d+)?)\s*%(?=\s|$)/g)];
+    if (matches.length !== 1) continue;
+    const parsed = Number(matches[0][1]);
+    if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 100) return parsed;
+  }
+  return null;
+}
+
+function relationshipValueForCandidate(value, concept, partyInventory = [], connectorInventory = []) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return { value, inventoryIds: {} };
   const canonicalId = (input) => String(input || "").replace(/^(?:party:)+/i, "").trim();
   const normalizedName = (input) => String(input || "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -322,6 +349,8 @@ function relationshipValueForCandidate(value, concept, partyInventory = []) {
   const subjectInventoryId = value.subject_party_inventory_id || value.subject_party_id || value.from_party_inventory_id || value.source_party_inventory_id || inventoryReferences.subject_party_id || inventoryReferences.subject_inventory_id;
   const objectInventoryId = value.object_party_inventory_id || value.object_party_id || value.to_party_inventory_id || value.target_party_inventory_id || inventoryReferences.object_party_id || inventoryReferences.object_inventory_id;
   const connectorInventoryId = value.connector_inventory_id || value.relationship_connector_inventory_id || value.connector_id || value.inventory_id || inventoryReferences.connector_id || inventoryReferences.connector_inventory_id;
+  const connector = connectorInventory.find((item) => canonicalId(item?.connector_id || item?.inventory_id || item?.id) === canonicalId(connectorInventoryId));
+  const inventoryPercentagePoints = explicitPercentagePointsFromConnector(connector);
   const party = (source, inventoryId) => {
     const supplied = source && typeof source === "object" ? source : typeof source === "string" ? { name: source } : {};
     const inventory = byId.get(canonicalId(inventoryId)) || findByName(supplied.name) || {};
@@ -346,6 +375,10 @@ function relationshipValueForCandidate(value, concept, partyInventory = []) {
       object: party(value.object, objectInventoryId),
       percentage,
       unit: value.unit || (typeof percentage === "number" ? "percentage_points" : undefined),
+      ...(inventoryPercentagePoints == null ? {} : {
+        inventory_percentage_points: inventoryPercentagePoints,
+        inventory_percentage_unit: "percentage_points",
+      }),
     },
     inventoryIds: { subjectInventoryId: canonicalId(subjectInventoryId), objectInventoryId: canonicalId(objectInventoryId), connectorInventoryId: canonicalId(connectorInventoryId).replace(/^(?:connector:)+/i, "") },
   };
@@ -553,7 +586,7 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
       const encodedSupportIds = item.supporting_artifact_ids_json === undefined ? item.supporting_artifact_ids : parsedJson(item.supporting_artifact_ids_json, []);
       const value = factValue(item);
       const candidate = shallowTransport ? relationshipsByFact.get(sourceIndex) || null : mapTypedRelationshipCandidate(item.typed_relationship);
-      const enriched = relationshipValueForCandidate(value, item.concept, rawPartyInventory);
+      const enriched = relationshipValueForCandidate(value, item.concept, rawPartyInventory, rawConnectorInventory);
       let typedRelationshipCandidate = reconcilePercentageCandidate(candidate, enriched.value);
       if (typedRelationshipCandidate && Object.values(enriched.inventoryIds).some(Boolean)) typedRelationshipCandidate = {
         ...typedRelationshipCandidate,
@@ -590,4 +623,4 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
   }
 }
 
-module.exports = { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE, AnthropicSemanticProvider, DEFAULT_CHART_READING_MODEL, DEFAULT_MAX_OUTPUT_TOKENS, acceptsEffort, chartReadingModel, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SEMANTIC_DISCOVERY_OBJECTIVE, SemanticExtractionProvider, mapTypedRelationshipCandidate, normalizeRelationshipUnit, parseProviderJson, reconcilePercentageCandidate, withInventoryPartyTypes, relationshipValueForCandidate };
+module.exports = { ANTHROPIC_EVIDENCE_OUTPUT_SCHEMA, ANTHROPIC_R4_INSTRUCTION_REFERENCE, AnthropicSemanticProvider, DEFAULT_CHART_READING_MODEL, DEFAULT_MAX_OUTPUT_TOKENS, acceptsEffort, chartReadingModel, DEFAULT_PROVIDER_TIMEOUT_MS, FixtureSemanticProvider, SEMANTIC_DISCOVERY_OBJECTIVE, SemanticExtractionProvider, explicitPercentagePointsFromConnector, mapTypedRelationshipCandidate, normalizeRelationshipUnit, parseProviderJson, reconcilePercentageCandidate, withInventoryPartyTypes, relationshipValueForCandidate };

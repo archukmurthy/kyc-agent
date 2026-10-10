@@ -53,7 +53,7 @@ const analysis = {
       { entityId: "company-1", displayName: "Better Comms VOIP Ltd", category: "LEGAL_ENTITY", semantics: ["SUBJECT"] },
     ],
     relationships: [{ relationshipId: "fact-1", sourceEntityId: "person-1", targetEntityId: "company-1", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC", measurement: { type: "EXACT", value: 75 }, indicators: [], qualifiers: {}, support: { claimCount: 1, claimIds: ["fact-1"], evidenceReferences: [] } }],
-    inventoryReconciliation: { contractVersion: "ubo-source-inventory-reconciliation-v1", evidencePartyCount: 2, evidenceConnectorCount: 1, mappedPartyCount: 2, mappedCandidateFactCount: 1, sourceGraphNodeCount: 2, sourceGraphEdgeCount: 1, unresolvedPartyCount: 0, unresolvedRelationshipCount: 0, accountedPartyCount: 2, accountedConnectorCount: 1, silentPartyLossCount: 0, silentConnectorLossCount: 0 },
+    inventoryReconciliation: { contractVersion: "ubo-source-inventory-reconciliation-v2", evidencePartyCount: 2, evidenceConnectorCount: 1, mappedPartyCount: 2, mappedCandidateFactCount: 1, sourceGraphNodeCount: 2, sourceGraphEdgeCount: 1, unresolvedPartyCount: 0, unresolvedRelationshipCount: 0, accountedPartyCount: 2, accountedConnectorCount: 1, silentPartyLossCount: 0, silentConnectorLossCount: 0 },
     calculations: [], qualifications: [], unresolved: [], conflicts: [], reviews: [],
     decision: { snapshotId: "source-1", snapshotHash: "sha256:abc", checkpoint: { type: "SOURCE_INTERPRETATION" }, orchestrationState: "SOURCE_INTERPRETATION_ONLY" },
     summary: { totalEntities: 2, totalRelationships: 1, qualifyingPeople: 0, unresolvedBranches: 0, conflicts: 0, reviewRequirements: 0 },
