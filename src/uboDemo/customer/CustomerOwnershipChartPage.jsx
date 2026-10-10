@@ -237,7 +237,11 @@ function ExistingResearchAssertions({ researchResult }) {
 
 function ChartAssertions({ result }) {
   const [expanded, setExpanded] = useState(false);
-  if (result.candidateFacts?.length) return <AssertionDetails entries={result.candidateFacts.map((fact) => ({ fact: { ...fact, issues: (result.assertions || []).find((item) => item.factId === fact.factId)?.issues || [] }, source: { sourceLabel: "Customer-uploaded Evidence Artifact", artifactId: result.artifact?.artifactId } }))} eyebrow="Evidence → UBO handoff" title="Assertions extracted from your ownership chart" sourceNotice="Candidate information is shown in full. It is not analyst-approved or independently verified." variant="customer" collapseButton />;
+  const ownershipFacts = Array.isArray(result.customerOwnershipAssertions)
+    ? result.customerOwnershipAssertions
+    : (result.candidateFacts || []).filter((fact) => fact.type === "RELATIONSHIP");
+  const facts = [...ownershipFacts, ...(result.candidateFacts || []).filter((fact) => fact.type !== "RELATIONSHIP")];
+  if (facts.length) return <AssertionDetails entries={facts.map((fact) => ({ fact: { ...fact, issues: (result.assertions || []).find((item) => item.factId === fact.factId)?.issues || [] }, source: { sourceLabel: "Customer-uploaded Evidence Artifact", artifactId: result.artifact?.artifactId } }))} eyebrow="Evidence → UBO handoff" title="Assertions extracted from your ownership chart" sourceNotice="Candidate information is shown in full. It is not analyst-approved or independently verified." variant="customer" collapseButton />;
   return <section className="ubo-customer-card ubo-customer-assertions"><div className="ubo-demo-assertion-heading"><div><small>Legacy browser cache</small><strong>Assertions extracted from your ownership chart</strong><span>{result.assertions?.length || 0} reduced assertions</span></div><button className="ubo-customer-collapse-button" type="button" aria-expanded={expanded} aria-controls="ubo-customer-legacy-assertions" onClick={() => setExpanded((value) => !value)}>{expanded ? "Collapse" : "Expand"}</button></div>{expanded && <div id="ubo-customer-legacy-assertions"><p className="ubo-customer-source-notice">This earlier cached result retained only reduced display text. Full CandidateFact detail and engine inputs are unavailable in this cache and have not been invented.</p><div>{(result.assertions || []).map((assertion, index) => <article key={assertion.factId || index}><span>{assertion.category}</span><p>{assertion.statement}</p><small>{assertion.supportStateLabel} · Candidate assertion · legacy detail unavailable</small></article>)}</div></div>}</section>;
 }
 
@@ -507,7 +511,8 @@ export default function CustomerOwnershipChartPage() {
       === CURRENT_OWNERSHIP_EXTRACTION_PROFILE.verificationStrategyVersion;
     const hasSourceInventoryReconciliation = result?.sourceGraph?.inventoryReconciliation?.contractVersion
       === "ubo-source-inventory-reconciliation-v2";
-    if (!artifactId || !hasStructuredFacts || (hasCalculationRecords && hasCurrentCalculationSemantics && hasCurrentExtractionSemantics && hasSourceInventoryReconciliation) || reevaluationAttempts.current.has(artifactId)) return;
+    const hasCustomerOwnershipAssertions = Array.isArray(result?.customerOwnershipAssertions);
+    if (!artifactId || !hasStructuredFacts || (hasCalculationRecords && hasCurrentCalculationSemantics && hasCurrentExtractionSemantics && hasSourceInventoryReconciliation && hasCustomerOwnershipAssertions) || reevaluationAttempts.current.has(artifactId)) return;
     reevaluationAttempts.current.add(artifactId);
     let active = true;
     (async () => {

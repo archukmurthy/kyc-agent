@@ -579,6 +579,7 @@ function buildSourceGraph(candidateFacts, company, artifact, requestId) {
     const sourceEntityId = canonicalEntities.endpointIds.get(`${index}:subject`)
       || addNode(fact.subject, graphCategory(fact.subject) === "NATURAL_PERSON" ? ["NOT_CONFIRMED_UBO"] : []);
     const targetEntityId = canonicalEntities.endpointIds.get(`${index}:object`) || addNode(fact.object);
+    const customerSourceAssertionOnly = fact.qualifiers?.customerSourceAssertionOnly === true;
     return {
       relationshipId: fact.factId,
       sourceEntityId,
@@ -588,12 +589,13 @@ function buildSourceGraph(candidateFacts, company, artifact, requestId) {
       ...(fact.measurement ? { measurement: structuredClone(fact.measurement) } : {}),
       temporalState: fact.qualifiers?.currentState || "UNKNOWN",
       resolutionStatus: "SOURCE_ASSERTION",
-      evidenceStatus: "SOURCE_SUPPORTED",
-      indicators: [],
+      evidenceStatus: customerSourceAssertionOnly ? "CUSTOMER_SOURCE_ASSERTION" : "SOURCE_SUPPORTED",
+      calculationEligible: !customerSourceAssertionOnly,
+      indicators: customerSourceAssertionOnly ? ["NOT_VALIDATED_FOR_UBO_CALCULATION"] : [],
       qualifiers: structuredClone(fact.qualifiers || {}),
       support: {
-        claimCount: 1,
-        claimIds: [fact.factId],
+        claimCount: customerSourceAssertionOnly ? 0 : 1,
+        claimIds: customerSourceAssertionOnly ? [] : [fact.factId],
         evidenceReferences: structuredClone(fact.evidenceReferences || []),
       },
     };
@@ -654,6 +656,82 @@ function explicitInventoryPercentage(item) {
   return Number.isFinite(value) && value >= 0 && value <= 100
     ? { type: "EXACT", value }
     : { type: "UNKNOWN", reason: "Percentage not established" };
+}
+
+function customerAssertionsFromEvidence(candidateFacts, diagram, artifact) {
+  const typedRelationships = deduplicateChartCandidateFacts(candidateFacts).filter((fact) => fact.type === "RELATIONSHIP");
+  const parties = (diagram?.inventory?.parties || []).filter(({ providerDisposition }) => providerDisposition !== "INTENTIONALLY_NON_OWNERSHIP");
+  const connectors = (diagram?.inventory?.connectors || []).filter(({ providerDisposition }) => providerDisposition !== "INTENTIONALLY_NON_OWNERSHIP");
+  if (!parties.length || !connectors.length) return typedRelationships;
+
+  const partyById = new Map(parties.map((party) => [String(party.inventoryId), party]));
+  const usedTypedFacts = new Set();
+  const partyForAssertion = (party) => ({
+    name: party.visibleLabel || "Unknown source party",
+    entityType: inventoryPartyCategory(party.partyType),
+    sourcePartyId: party.sourcePartyId || `${artifact.artifactId}:${party.inventoryId}`,
+    sourcePartySnapshot: { description: party.visibleLabel || "Unknown source party" },
+  });
+  const typedFactFor = (connector, subjectParty, objectParty) => {
+    const byConnector = typedRelationships.map((fact, index) => ({ fact, index })).filter(({ fact, index }) => (
+      !usedTypedFacts.has(index) && chartConnectorId(fact) === String(connector.connectorId)
+    ));
+    if (byConnector.length === 1) return byConnector[0];
+    const byEndpoints = typedRelationships.map((fact, index) => ({ fact, index })).filter(({ fact, index }) => (
+      !usedTypedFacts.has(index)
+      && normalizedPartyName(fact.subject?.name || fact.subject?.sourcePartySnapshot?.description) === normalizedPartyName(subjectParty.visibleLabel)
+      && normalizedPartyName(fact.object?.name || fact.object?.sourcePartySnapshot?.description) === normalizedPartyName(objectParty.visibleLabel)
+    ));
+    return byEndpoints.length === 1 ? byEndpoints[0] : null;
+  };
+
+  const assertions = [];
+  connectors.forEach((connector) => {
+    const subjectParty = partyById.get(String(connector.subjectInventoryId || ""));
+    const objectParty = partyById.get(String(connector.objectInventoryId || ""));
+    if (!subjectParty || !objectParty) return;
+    const matched = typedFactFor(connector, subjectParty, objectParty);
+    const metadata = {
+      ...(matched?.fact.qualifiers?.evidenceSourceSpecificMetadata || {}),
+      connectorInventoryId: String(connector.connectorId),
+      subjectInventoryId: String(connector.subjectInventoryId),
+      objectInventoryId: String(connector.objectInventoryId),
+    };
+    if (matched) {
+      usedTypedFacts.add(matched.index);
+      assertions.push({
+        ...structuredClone(matched.fact),
+        subject: { ...structuredClone(matched.fact.subject), sourcePartyId: partyForAssertion(subjectParty).sourcePartyId },
+        object: { ...structuredClone(matched.fact.object), sourcePartyId: partyForAssertion(objectParty).sourcePartyId },
+        qualifiers: { ...(structuredClone(matched.fact.qualifiers) || {}), evidenceSourceSpecificMetadata: metadata },
+      });
+      return;
+    }
+    assertions.push({
+      factId: `customer-source:${connector.sourceConnectorId || `${artifact.artifactId}:${connector.connectorId}`}`,
+      type: "RELATIONSHIP",
+      subject: partyForAssertion(subjectParty),
+      relationship: "ECONOMIC_OWNERSHIP",
+      object: partyForAssertion(objectParty),
+      measurement: explicitInventoryPercentage(connector),
+      qualifiers: {
+        currentState: "UNKNOWN",
+        evidenceSupportState: "needs_verification",
+        customerSourceAssertionOnly: true,
+        sourceLabel: connector.visibleLabel || null,
+        sourceLocator: structuredClone(connector.sourceLocator || {}),
+        evidenceSourceSpecificMetadata: metadata,
+      },
+      evidenceReferences: [{
+        system: "evidence-platform-v1",
+        referenceType: "ARTIFACT",
+        referenceId: artifact.artifactId,
+        ...(artifact.digest ? { integrity: { algorithm: "sha256", digest: artifact.digest } } : {}),
+      }],
+    });
+  });
+  typedRelationships.forEach((fact, index) => { if (!usedTypedFacts.has(index)) assertions.push(structuredClone(fact)); });
+  return deduplicateChartCandidateFacts(assertions);
 }
 
 function validatedSourceRelationships(graph) {
@@ -789,7 +867,7 @@ function reconcileSourceGraphInventory(sourceGraph, diagram) {
   });
   const unresolvedConnectorIds = new Set(unresolvedRelationships.map(({ connectorId }) => String(connectorId)));
   const renderedConnectorIds = new Set(edgeByConnectorId.keys());
-  let displayOnlyRelationshipCount = 0;
+  let displayOnlyRelationshipCount = relationships.filter(({ calculationEligible }) => calculationEligible === false).length;
   let ambiguousRelationshipCount = 0;
   materialConnectors.forEach((connector) => {
     const connectorId = String(connector.connectorId);
@@ -1125,17 +1203,29 @@ function reevaluateSavedCustomerOwnershipChart(rawInput) {
   const issues = savedResult.ubo?.issues || [];
   const requestId = `saved-chart-analysis:${artifact.artifactId}`;
   const candidateFacts = deduplicateChartCandidateFacts(structuredClone(savedResult.candidateFacts));
+  const customerOwnershipAssertions = customerAssertionsFromEvidence(
+    candidateFacts,
+    savedResult.evidence?.ownershipDiagramCompleteness,
+    artifact,
+  );
+  const displayed = presentation([
+    ...customerOwnershipAssertions,
+    ...candidateFacts.filter((fact) => fact.type !== "RELATIONSHIP"),
+  ], issues);
   const sourceGraph = reconcileSourceGraphInventory(
-    buildSourceGraph(candidateFacts, company, artifact, requestId),
+    buildSourceGraph(customerOwnershipAssertions, company, artifact, requestId),
     savedResult.evidence?.ownershipDiagramCompleteness,
   );
   return {
     ...structuredClone(savedResult),
     company: structuredClone(company),
     candidateFacts,
+    customerOwnershipAssertions,
     sourceGraph,
     sourceCoverage: sourceGraphCoverage(sourceGraph),
     chartAnalysis: buildChartAnalysis({ candidateFacts, operationEvidenceReferences, issues, company, artifact, requestId }),
+    owners: displayed.owners,
+    assertions: displayed.assertions,
   };
 }
 
@@ -1395,12 +1485,26 @@ async function analyseIngestedCustomerOwnershipChart({ input, ingestion, artifac
   }
   const candidateFacts = deduplicateChartCandidateFacts(capabilityResult.candidateFacts);
   const normalizedCapabilityResult = { ...capabilityResult, candidateFacts };
-  const displayed = presentation(candidateFacts, capabilityResult.issues);
-  const sourceGraph = reconcileSourceGraphInventory(buildSourceGraph(candidateFacts, input.demoContext.company, {
+  const artifactProjection = {
     artifactId: ingestion.artifactId,
     digest: ingestion.fingerprintValue,
     capturedAt: ingestion.capturedAt,
-  }, requestId), interpretationEnvelope.result.ownershipDiagramCompleteness);
+  };
+  const customerOwnershipAssertions = customerAssertionsFromEvidence(
+    candidateFacts,
+    interpretationEnvelope.result.ownershipDiagramCompleteness,
+    artifactProjection,
+  );
+  const displayed = presentation([
+    ...customerOwnershipAssertions,
+    ...candidateFacts.filter((fact) => fact.type !== "RELATIONSHIP"),
+  ], capabilityResult.issues);
+  const sourceGraph = reconcileSourceGraphInventory(buildSourceGraph(
+    customerOwnershipAssertions,
+    input.demoContext.company,
+    artifactProjection,
+    requestId,
+  ), interpretationEnvelope.result.ownershipDiagramCompleteness);
   const sourceCoverage = sourceGraphCoverage(sourceGraph);
   const extractionQuality = extractionQualityFor({
     interpretation: interpretationEnvelope.result,
@@ -1452,6 +1556,7 @@ async function analyseIngestedCustomerOwnershipChart({ input, ingestion, artifac
       downstreamDecision: "NOT_PERFORMED",
     },
     candidateFacts: structuredClone(candidateFacts),
+    customerOwnershipAssertions: structuredClone(customerOwnershipAssertions),
     certification: certificationFrom(candidateFacts),
     sourceGraph,
     sourceCoverage,
@@ -1472,6 +1577,7 @@ module.exports = Object.freeze({
   analyseIngestedCustomerOwnershipChart,
   buildChartAnalysis,
   buildSourceGraph,
+  customerAssertionsFromEvidence,
   reconcileSourceGraphInventory,
   deduplicateChartCandidateFacts,
   chartRequestedConcepts,

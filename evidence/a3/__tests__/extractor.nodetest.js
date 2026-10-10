@@ -341,6 +341,37 @@ test("an out-of-range typed transport value is repaired only from the same conne
   assert.equal(explicitPercentagePointsFromConnector({ label: "0.40" }), null);
 });
 
+test("typed-row inventory metadata hydrates party types and repairs only the matching explicit connector percentage", () => {
+  const parties = [
+    { inventory_id: "P13", visible_label: "Asda Storm Limited", party_type: "legal_entity" },
+    { inventory_id: "P16", visible_label: "Asda Delivery Limited", party_type: "legal_entity" },
+  ];
+  const candidate = {
+    directionEstablished: true,
+    relationshipType: "ECONOMIC_OWNERSHIP",
+    subject: { name: "Asda Storm Limited" },
+    object: { name: "Asda Delivery Limited" },
+    value: { kind: "EXACT", measurementType: "percentage", value: 9000, unit: "percentage_points" },
+    temporal: { state: "unknown" },
+    qualifications: [],
+    sourceSpecificMetadata: { connectorInventoryId: "C13" },
+  };
+  const enriched = relationshipValueForCandidate({
+    relationship: "ECONOMIC_OWNERSHIP",
+    subject: { name: "Asda Storm Limited" },
+    object: { name: "Asda Delivery Limited" },
+    value: { kind: "EXACT", measurement_type: "percentage", exact_value: 9000 },
+  }, "economic_ownership", parties, [
+    { connector_id: "C13", subject_inventory_id: "P13", object_inventory_id: "P16", percentage_text: "90%" },
+  ], candidate);
+  const repaired = reconcilePercentageCandidate(candidate, enriched.value);
+  assert.deepEqual(enriched.inventoryIds, { subjectInventoryId: "P13", objectInventoryId: "P16", connectorInventoryId: "C13" });
+  assert.equal(repaired.subject.partyType, "legal_entity");
+  assert.equal(repaired.object.partyType, "legal_entity");
+  assert.equal(repaired.value.value, 90);
+  assert.ok(validateTypedRelationshipCandidate(repaired, { factId: "fact-asda-90", createdAt: "2026-10-10T00:00:00.000Z" }).relationship);
+});
+
 test("ownership Fact inventory IDs deterministically hydrate the typed relationship candidate", () => {
   const enriched = relationshipValueForCandidate({
     percentage_points: 40,

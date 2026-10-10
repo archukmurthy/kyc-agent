@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, buildChartAnalysis, buildSourceGraph, deduplicateChartCandidateFacts, presentation, reconcileSourceGraphInventory, reevaluateSavedCustomerOwnershipChart, selectSemanticProvider, sourceGraphCoverage, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
+const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, buildChartAnalysis, buildSourceGraph, customerAssertionsFromEvidence, deduplicateChartCandidateFacts, presentation, reconcileSourceGraphInventory, reevaluateSavedCustomerOwnershipChart, selectSemanticProvider, sourceGraphCoverage, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
 const { DIGEST: REVIEWED_BETTERCOMMS_DIGEST } = require("../../fixtures/bettercomms-source-reviewed.js");
 const api = require("../../../api/ubo-demo-customer-ownership-chart.js");
 
@@ -630,7 +630,7 @@ test("same-name natural people remain distinct when Evidence supplies separate s
   assert.notEqual(graph.relationships[0].sourceEntityId, graph.relationships[1].sourceEntityId);
 });
 
-test("ASDA-style dense inventory is losslessly split between source graph facts and explicit unresolved items", () => {
+test("ASDA customer assertions and source reconstruction share every structurally determined connector", () => {
   const labels = [
     ["P1", "Mr Gary Lindsay", "natural_person"],
     ["P2", "Mr Thomas Andrew Mitc...", "natural_person"],
@@ -653,8 +653,8 @@ test("ASDA-style dense inventory is losslessly split between source graph facts 
   const connectorPairs = [
     ["P1", "P4", "33.33%"], ["P2", "P4", null], ["P3", "P4", null], ["P4", "P5", "100%"], ["P4", "P6", null],
     ["P5 or P6 (unclear)", "P7", "100%"], ["P5 or P6 (unclear)", "P8", null], ["P6 (unclear)", "P9", "100%"],
-    ["P8", "P10", null], ["P10", "P11", "100%"], ["P11", "P12", null], ["P12", "P13", null], ["P13", "P16", null],
-    ["P14", "P16", "90%"], ["P15", "P16", "5%"],
+    ["P8", "P10", null], ["P10", "P11", "100%"], ["P11", "P12", null], ["P12", "P13", null], ["P13", "P16", "90%"],
+    ["P14", "P16", "5%"], ["P15", "P16", "5%"],
   ];
   const connectors = connectorPairs.map(([subjectInventoryId, objectInventoryId, percentageText], index) => ({
     connectorId: `C${index + 1}`,
@@ -683,7 +683,10 @@ test("ASDA-style dense inventory is losslessly split between source graph facts 
     qualifiers: { currentState: "UNKNOWN", evidenceSourceSpecificMetadata: {} },
     evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-asda" }],
   }];
-  const graph = reconcileSourceGraphInventory(buildSourceGraph(candidateFacts, {
+  const customerOwnershipAssertions = customerAssertionsFromEvidence(candidateFacts, diagram, {
+    artifactId: "artifact-asda", digest: "asda-digest", capturedAt: "2026-09-16T00:00:00.000Z",
+  });
+  const graph = reconcileSourceGraphInventory(buildSourceGraph(customerOwnershipAssertions, {
     legalName: "Asda Delivery Limited", registrationNumber: "03873501", countryCode: "GB",
   }, { artifactId: "artifact-asda", digest: "asda-digest", capturedAt: "2026-09-16T00:00:00.000Z" }, "asda-regression"), diagram);
 
@@ -691,7 +694,9 @@ test("ASDA-style dense inventory is losslessly split between source graph facts 
   assert.equal(connectors.length, 15);
   assert.equal(diagram.metrics.extractedTypedRelationshipCount, 1);
   assert.equal(candidateFacts.length, 1);
+  assert.equal(customerOwnershipAssertions.length, 12, "every structurally determined connector becomes one customer assertion");
   assert.equal(graph.nodes.length, 16, "every extracted customer party is represented; the onboarding subject and P16 are one display entity");
+  assert.equal(graph.relationships.length, customerOwnershipAssertions.length, "the assertion list and reconstructed chart cannot diverge");
   assert.equal(graph.relationships.length, 12, "every connector with structurally determined endpoints is reconstructed");
   assert.equal(graph.relationships.filter(({ calculationEligible }) => calculationEligible !== false).length, 1);
   assert.equal(graph.relationships.filter(({ calculationEligible }) => calculationEligible === false).length, 11);
@@ -733,6 +738,11 @@ test("ASDA-style dense inventory is losslessly split between source graph facts 
   assert.deepEqual(displayOnly.measurement, { type: "UNKNOWN", reason: "Percentage not established" });
   assert.equal(displayOnly.evidenceStatus, "CUSTOMER_SOURCE_ASSERTION");
   assert.equal(displayOnly.calculationEligible, false);
+  const asdaDeliveryEdges = graph.relationships.filter((edge) => edge.targetEntityId === graph.subject.entityId);
+  const asdaDeliverySources = new Map(asdaDeliveryEdges.map((edge) => [graph.nodes.find((node) => node.entityId === edge.sourceEntityId)?.displayName, edge.measurement]));
+  assert.deepEqual(asdaDeliverySources.get("Asda Storm Limited"), { type: "EXACT", value: 90 });
+  assert.deepEqual(asdaDeliverySources.get("Alice Morgan"), { type: "EXACT", value: 5 });
+  assert.deepEqual(asdaDeliverySources.get("Sophia Patel"), { type: "EXACT", value: 5 });
   const analysis = buildChartAnalysis({
     candidateFacts,
     operationEvidenceReferences: [],

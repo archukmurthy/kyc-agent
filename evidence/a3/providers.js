@@ -339,17 +339,20 @@ function explicitPercentagePointsFromConnector(connector) {
   return null;
 }
 
-function relationshipValueForCandidate(value, concept, partyInventory = [], connectorInventory = []) {
+function relationshipValueForCandidate(value, concept, partyInventory = [], connectorInventory = [], candidate = null) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return { value, inventoryIds: {} };
-  const canonicalId = (input) => String(input || "").replace(/^(?:party:)+/i, "").trim();
+  const canonicalId = (input) => String(input || "").replace(/^(?:(?:party|connector):)+/i, "").trim();
   const normalizedName = (input) => String(input || "").trim().toLowerCase().replace(/\s+/g, " ");
   const byId = new Map(partyInventory.map((item) => [canonicalId(item?.inventory_id || item?.party_id || item?.id), item]));
   const findByName = (name) => partyInventory.find((item) => normalizedName(item?.name || item?.visible_label || item?.description) === normalizedName(name));
   const inventoryReferences = value.inventory_references && typeof value.inventory_references === "object" ? value.inventory_references : {};
-  const subjectInventoryId = value.subject_party_inventory_id || value.subject_party_id || value.from_party_inventory_id || value.source_party_inventory_id || inventoryReferences.subject_party_id || inventoryReferences.subject_inventory_id;
-  const objectInventoryId = value.object_party_inventory_id || value.object_party_id || value.to_party_inventory_id || value.target_party_inventory_id || inventoryReferences.object_party_id || inventoryReferences.object_inventory_id;
-  const connectorInventoryId = value.connector_inventory_id || value.relationship_connector_inventory_id || value.connector_id || value.inventory_id || inventoryReferences.connector_id || inventoryReferences.connector_inventory_id;
+  const candidateMetadata = candidate?.sourceSpecificMetadata || {};
+  let subjectInventoryId = value.subject_party_inventory_id || value.subject_party_id || value.from_party_inventory_id || value.source_party_inventory_id || inventoryReferences.subject_party_id || inventoryReferences.subject_inventory_id || candidateMetadata.subjectInventoryId || candidateMetadata.subject_inventory_id;
+  let objectInventoryId = value.object_party_inventory_id || value.object_party_id || value.to_party_inventory_id || value.target_party_inventory_id || inventoryReferences.object_party_id || inventoryReferences.object_inventory_id || candidateMetadata.objectInventoryId || candidateMetadata.object_inventory_id;
+  const connectorInventoryId = value.connector_inventory_id || value.relationship_connector_inventory_id || value.connector_id || value.inventory_id || inventoryReferences.connector_id || inventoryReferences.connector_inventory_id || candidateMetadata.connectorInventoryId || candidateMetadata.connector_inventory_id;
   const connector = connectorInventory.find((item) => canonicalId(item?.connector_id || item?.inventory_id || item?.id) === canonicalId(connectorInventoryId));
+  subjectInventoryId ||= connector?.subject_inventory_id || connector?.subject_party_inventory_id;
+  objectInventoryId ||= connector?.object_inventory_id || connector?.object_party_inventory_id;
   const inventoryPercentagePoints = explicitPercentagePointsFromConnector(connector);
   const party = (source, inventoryId) => {
     const supplied = source && typeof source === "object" ? source : typeof source === "string" ? { name: source } : {};
@@ -586,7 +589,7 @@ class AnthropicSemanticProvider extends SemanticExtractionProvider {
       const encodedSupportIds = item.supporting_artifact_ids_json === undefined ? item.supporting_artifact_ids : parsedJson(item.supporting_artifact_ids_json, []);
       const value = factValue(item);
       const candidate = shallowTransport ? relationshipsByFact.get(sourceIndex) || null : mapTypedRelationshipCandidate(item.typed_relationship);
-      const enriched = relationshipValueForCandidate(value, item.concept, rawPartyInventory, rawConnectorInventory);
+      const enriched = relationshipValueForCandidate(value, item.concept, rawPartyInventory, rawConnectorInventory, candidate);
       let typedRelationshipCandidate = reconcilePercentageCandidate(candidate, enriched.value);
       if (typedRelationshipCandidate && Object.values(enriched.inventoryIds).some(Boolean)) typedRelationshipCandidate = {
         ...typedRelationshipCandidate,

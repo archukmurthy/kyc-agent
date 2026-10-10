@@ -77,6 +77,7 @@ const analysis = {
     },
   },
   candidateFacts: [{ factId: "fact-1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: { name: "Mitchell Fortescue", entityType: "NATURAL_PERSON" }, object: { name: "Better Holdco", entityType: "LEGAL_ENTITY" }, measurement: { type: "EXACT", value: 75 }, qualifiers: { currentState: "CURRENT" }, evidenceReferences: [{ referenceId: "artifact-1" }] }],
+  customerOwnershipAssertions: [{ factId: "fact-1", type: "RELATIONSHIP", relationship: "ECONOMIC_OWNERSHIP", subject: { name: "Mitchell Fortescue", entityType: "NATURAL_PERSON" }, object: { name: "Better Holdco", entityType: "LEGAL_ENTITY" }, measurement: { type: "EXACT", value: 75 }, qualifiers: { currentState: "CURRENT" }, evidenceReferences: [{ referenceId: "artifact-1" }] }],
   owners: [{ name: "Mitchell Fortescue", partyType: "NATURAL_PERSON", relationshipLabel: "Economic ownership in Better Holdco", measurement: { type: "EXACT", value: 75 } }],
   assertions: [{ factId: "fact-1", category: "Economic ownership", statement: "Mitchell Fortescue → economic ownership (75%) → Better Holdco", supportStateLabel: "supported" }],
 };
@@ -148,6 +149,37 @@ test("an incomplete empty extraction never appears successful or enables questio
   expect(screen.getByText(/Could not confidently reconstruct the complete ownership structure/i)).toBeInTheDocument();
   expect(screen.queryByRole("link", { name: /Continue to questions/i })).not.toBeInTheDocument();
   expect(screen.getAllByRole("button", { name: /Replace chart/i }).length).toBeGreaterThan(0);
+});
+
+test("customer ownership assertions and the reconstructed chart render from the same relationship list", () => {
+  seed();
+  const sourceOnly = {
+    factId: "customer-source:C2",
+    type: "RELATIONSHIP",
+    relationship: "ECONOMIC_OWNERSHIP",
+    subject: { name: "Alice Morgan", entityType: "NATURAL_PERSON" },
+    object: { name: "Better Holdco", entityType: "LEGAL_ENTITY" },
+    measurement: { type: "UNKNOWN", reason: "Percentage not established" },
+    qualifiers: { customerSourceAssertionOnly: true, currentState: "UNKNOWN" },
+    evidenceReferences: [{ referenceId: "artifact-1" }],
+  };
+  const result = {
+    ...analysis,
+    customerOwnershipAssertions: [...analysis.customerOwnershipAssertions, sourceOnly],
+    sourceGraph: {
+      ...analysis.sourceGraph,
+      nodes: [...analysis.sourceGraph.nodes, { entityId: "person-2", displayName: "Alice Morgan", category: "NATURAL_PERSON", semantics: ["NOT_CONFIRMED_UBO"] }],
+      relationships: [...analysis.sourceGraph.relationships, { relationshipId: sourceOnly.factId, sourceEntityId: "person-2", targetEntityId: "company-1", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC", measurement: sourceOnly.measurement, calculationEligible: false, indicators: ["NOT_VALIDATED_FOR_UBO_CALCULATION"], qualifiers: sourceOnly.qualifiers, support: { claimCount: 0, claimIds: [], evidenceReferences: [] } }],
+    },
+  };
+  writeCustomerOwnershipChartSession({ context: readCustomerDemoContext(), result });
+  window.history.replaceState({}, "", `${CUSTOMER_OWNERSHIP_CHART_PATH}?view=analysis`);
+  render(<CustomerOwnershipChartPage />);
+  const assertions = screen.getByText("Assertions extracted from your ownership chart").closest("section");
+  expect(within(assertions).getByText("2 assertions")).toBeInTheDocument();
+  fireEvent.click(within(assertions).getByRole("button", { name: "Expand" }));
+  expect(within(assertions).getByText(/Alice Morgan → economic ownership/i)).toBeInTheDocument();
+  expect(result.sourceGraph.relationships).toHaveLength(result.customerOwnershipAssertions.length);
 });
 
 test("the top ownership-analysis link opens a restored analysis directly", () => {
@@ -567,6 +599,7 @@ test("a saved graph without source-inventory reconciliation is re-evaluated with
   seed();
   const stale = {
     ...analysis,
+    customerOwnershipAssertions: undefined,
     sourceGraph: { ...analysis.sourceGraph, inventoryReconciliation: undefined },
   };
   writeCustomerOwnershipChartSession({ context: readCustomerDemoContext(), result: stale });
