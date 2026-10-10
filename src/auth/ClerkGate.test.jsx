@@ -34,3 +34,15 @@ test("a signed-out page asks the server to clear the customer session cookie", a
     delete window.fetch;
   }
 });
+
+test("an explicitly enabled UBO Preview renders the product without Clerk", () => {
+  const saved = process.env.REACT_APP_UBO_PREVIEW_DEMO_MODE;
+  process.env.REACT_APP_UBO_PREVIEW_DEMO_MODE = "true";
+  try {
+    const { getByText } = render(<ClerkGate><div>the preview product</div></ClerkGate>);
+    expect(getByText("the preview product")).toBeInTheDocument();
+  } finally {
+    if (saved === undefined) delete process.env.REACT_APP_UBO_PREVIEW_DEMO_MODE;
+    else process.env.REACT_APP_UBO_PREVIEW_DEMO_MODE = saved;
+  }
+});

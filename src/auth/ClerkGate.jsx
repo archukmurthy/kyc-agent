@@ -38,7 +38,11 @@ function currentUrl() {
 }
 
 export function isClerkEnabled() {
-  return Boolean(PUBLISHABLE_KEY);
+  // A branch-scoped UBO Preview may deliberately use the server's fixed demo
+  // tenant instead of Clerk. Even if a shared Preview key exists, this explicit
+  // browser flag keeps that one build on the matching demo path. The server
+  // independently refuses the fallback outside VERCEL_ENV=preview.
+  return Boolean(PUBLISHABLE_KEY) && process.env.REACT_APP_UBO_PREVIEW_DEMO_MODE !== "true";
 }
 
 export default function ClerkGate({ children }) {
