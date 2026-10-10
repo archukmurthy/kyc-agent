@@ -5,6 +5,13 @@ export const CUSTOMER_HANDOFF_READY = "ubo-demo-customer-handoff-ready-v1";
 export const CUSTOMER_HANDOFF_DELIVERY = "ubo-demo-customer-handoff-delivery-v1";
 export const CUSTOMER_HANDOFF_ACCEPTED = "ubo-demo-customer-handoff-accepted-v1";
 
+// The engine can record hundreds or thousands of equivalent calculation
+// routes for a dense control graph. The aggregate result and every graph
+// relationship are durable; this ceiling applies only to the expanded,
+// analyst-facing route examples carried through the browser save request.
+// Keeping the total counts makes truncation explicit on restore.
+export const MAX_DURABLE_PATHS_PER_BASIS = 256;
+
 function withoutKeys(value, keys) {
   const omitted = new Set(keys);
   return Object.fromEntries(Object.entries(value || {}).filter(([key]) => !omitted.has(key)));
@@ -16,17 +23,16 @@ function compactPath(path = {}) {
     state: path.state,
     relationshipIds: path.relationshipIds || [],
     contribution: path.contribution || null,
-    majoritySteps: (path.majoritySteps || []).map((step) => ({
-      relationshipId: step.relationshipId,
-      relationshipType: step.relationshipType,
-      measurement: step.measurement || null,
-      fromEntityId: step.fromEntityId,
-      toEntityId: step.toEntityId,
-    })),
+    // The referenced relationships already contain type, measurement and
+    // endpoints. Persist their IDs rather than copying the same rich objects
+    // into every combinatorial attribution chain.
+    majorityStepRelationshipIds: (path.majoritySteps || []).map(({ relationshipId }) => relationshipId).filter(Boolean),
   };
 }
 
 function compactQualificationBasis(basis = {}) {
+  const orderedPaths = basis.orderedPathReferences || [];
+  const attributionChains = basis.attributionChains || [];
   return {
     basisId: basis.basisId,
     personEntityId: basis.personEntityId,
@@ -43,8 +49,15 @@ function compactQualificationBasis(basis = {}) {
       cycles: (basis.recordedCalculation.cycles || []).map(({ cycleId }) => ({ cycleId })),
     } : null,
     aggregatedTargetRightValue: basis.aggregatedTargetRightValue || null,
-    orderedPathReferences: (basis.orderedPathReferences || []).map(compactPath),
-    attributionChains: (basis.attributionChains || []).map(compactPath),
+    orderedPathReferences: orderedPaths.slice(0, MAX_DURABLE_PATHS_PER_BASIS).map(compactPath),
+    attributionChains: attributionChains.slice(0, MAX_DURABLE_PATHS_PER_BASIS).map(compactPath),
+    pathInventory: {
+      orderedPathCount: orderedPaths.length,
+      attributionChainCount: attributionChains.length,
+      persistedOrderedPathCount: Math.min(orderedPaths.length, MAX_DURABLE_PATHS_PER_BASIS),
+      persistedAttributionChainCount: Math.min(attributionChains.length, MAX_DURABLE_PATHS_PER_BASIS),
+      truncated: orderedPaths.length > MAX_DURABLE_PATHS_PER_BASIS || attributionChains.length > MAX_DURABLE_PATHS_PER_BASIS,
+    },
     reviewDependencies: basis.reviewDependencies || [],
     governance: basis.governance ? { requiredSignoffIds: basis.governance.requiredSignoffIds || [] } : null,
   };

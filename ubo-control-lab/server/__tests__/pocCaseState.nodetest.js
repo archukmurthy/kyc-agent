@@ -223,6 +223,66 @@ test("case restore removes repeated immutable analysis internals without losing 
   assert.ok(JSON.stringify(compact).length < 20_000);
 });
 
+test("case restore bounds dense route evidence while preserving the recorded result and graph", () => {
+  const relationships = Array.from({ length: 12 }, (_, index) => ({
+    relationshipId: `edge-${index}`,
+    subjectEntityId: `entity-${index}`,
+    objectEntityId: index === 11 ? "target" : `entity-${index + 1}`,
+    relationshipType: "VOTING_RIGHTS",
+    measurement: { type: "EXACT", value: 60 },
+  }));
+  const routes = Array.from({ length: 800 }, (_, index) => ({
+    pathId: `route-${index}`,
+    state: "VALID",
+    relationshipIds: relationships.map(({ relationshipId }) => relationshipId),
+    contribution: { type: "EXACT", value: 40 },
+    majoritySteps: relationships.map((relationship) => ({ ...relationship, repeatedProviderTrace: "x".repeat(5000) })),
+  }));
+  const basis = {
+    basisId: "dense-control-basis",
+    personEntityId: "person",
+    route: "PSC_CONDITION_ATTRIBUTION",
+    assessmentState: "SATISFIED",
+    recordedCalculation: { value: { type: "EXACT", value: 40 } },
+    attributionChains: routes,
+  };
+  const compact = compactCaseRecordForTransport({
+    caseId: "dense-case",
+    projection: {
+      researchResult: {
+        status: "COMPLETE",
+        candidateSources: [{ candidateFacts: [{ factId: "fact-1" }] }],
+        view: {
+          graph: {
+            subjectEntityId: "target",
+            nodes: [{ entityId: "person" }, { entityId: "target" }],
+            relationships,
+            qualificationBasisRecords: [basis],
+            personQualificationAssessments: [{ personEntityId: "person", routeStatus: "ROUTE_SATISFIED" }],
+          },
+          qualificationBases: [basis],
+          qualifications: [{ personEntityId: "person", routeStatus: "ROUTE_SATISFIED" }],
+        },
+      },
+    },
+  });
+
+  const saved = compact.projection.researchResult.view.qualificationBases[0];
+  assert.deepEqual(saved.recordedCalculation.value, { type: "EXACT", value: 40 });
+  assert.deepEqual(compact.projection.researchResult.view.graph.relationships, relationships);
+  assert.equal(saved.attributionChains.length, 256);
+  assert.equal(saved.attributionChains[0].majoritySteps, undefined);
+  assert.deepEqual(saved.attributionChains[0].majorityStepRelationshipIds, relationships.map(({ relationshipId }) => relationshipId));
+  assert.deepEqual(saved.pathInventory, {
+    orderedPathCount: 0,
+    persistedOrderedPathCount: 0,
+    attributionChainCount: 800,
+    persistedAttributionChainCount: 256,
+    truncated: true,
+  });
+  assert.ok(JSON.stringify(compact).length < 1_000_000);
+});
+
 // Review of the rounds fix (2026-10-09): a case reopened before rounds existed
 // has no round, and its old finalisation was recorded under the bare key. The
 // next finalisation, with the same inputs, must not be taken for that one.

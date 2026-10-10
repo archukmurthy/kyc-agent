@@ -5,6 +5,7 @@ import {
   CUSTOMER_HANDOFF_DELIVERY,
   CUSTOMER_HANDOFF_READY,
   compactResearchResultForTransfer,
+  MAX_DURABLE_PATHS_PER_BASIS,
   listenForCustomerHandoff,
   openCustomerViewHandoff,
   resolveCustomerDemoUrl,
@@ -37,6 +38,58 @@ test("research transfer removes duplicated immutable internals while preserving 
   expect(compact.view.qualificationBases[0]).toEqual(expect.objectContaining({ personEntityId: "person", assessmentState: "SATISFIED", orderedPathReferences: [expect.objectContaining({ relationshipIds: ["edge-1"] })] }));
   expect(compact.view.qualifications[0]).toEqual(expect.objectContaining({ personEntityId: "person", routeStatus: "ROUTE_SATISFIED" }));
   expect(JSON.stringify(compact).length).toBeLessThan(10000);
+});
+
+test("dense control-route expansions stay below the case-save ceiling without changing the recorded aggregate or graph", () => {
+  const relationships = Array.from({ length: 12 }, (_, index) => ({
+    relationshipId: `edge-${index}`,
+    subjectEntityId: `entity-${index}`,
+    objectEntityId: index === 11 ? "target" : `entity-${index + 1}`,
+    relationshipType: "VOTING_RIGHTS",
+    measurement: { type: "EXACT", value: 60 },
+  }));
+  const routes = Array.from({ length: 800 }, (_, index) => ({
+    pathId: `route-${index}`,
+    state: "VALID",
+    relationshipIds: relationships.map(({ relationshipId }) => relationshipId),
+    contribution: { type: "EXACT", value: 40 },
+    majoritySteps: relationships.map((relationship) => ({ ...relationship, repeatedProviderTrace: "x".repeat(5000) })),
+  }));
+  const basis = {
+    basisId: "dense-control-basis",
+    personEntityId: "person",
+    route: "PSC_CONDITION_ATTRIBUTION",
+    assessmentState: "SATISFIED",
+    recordedCalculation: { value: { type: "EXACT", value: 40 } },
+    attributionChains: routes,
+  };
+  const compact = compactResearchResultForTransfer({
+    status: "COMPLETE",
+    candidateSources: [{ candidateFacts: [{ factId: "fact-1" }] }],
+    view: {
+      graph: {
+        subjectEntityId: "target",
+        nodes: [{ entityId: "person" }, { entityId: "target" }],
+        relationships,
+        qualificationBasisRecords: [basis],
+        personQualificationAssessments: [{ personEntityId: "person", routeStatus: "ROUTE_SATISFIED" }],
+      },
+      qualificationBases: [basis],
+      qualifications: [{ personEntityId: "person", routeStatus: "ROUTE_SATISFIED" }],
+    },
+  });
+  const saved = compact.view.qualificationBases[0];
+  expect(saved.recordedCalculation.value).toEqual({ type: "EXACT", value: 40 });
+  expect(compact.view.graph.relationships).toEqual(relationships);
+  expect(saved.attributionChains).toHaveLength(MAX_DURABLE_PATHS_PER_BASIS);
+  expect(saved.attributionChains[0].majoritySteps).toBeUndefined();
+  expect(saved.attributionChains[0].majorityStepRelationshipIds).toEqual(relationships.map(({ relationshipId }) => relationshipId));
+  expect(saved.pathInventory).toEqual(expect.objectContaining({
+    attributionChainCount: 800,
+    persistedAttributionChainCount: MAX_DURABLE_PATHS_PER_BASIS,
+    truncated: true,
+  }));
+  expect(JSON.stringify(compact).length).toBeLessThan(1000000);
 });
 
 test("customer URL uses the consolidated same-host route and a configured deployment URL takes precedence", () => {

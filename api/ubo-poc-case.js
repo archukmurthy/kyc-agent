@@ -52,11 +52,25 @@ function commandCaseId(body) {
   return String(body?.caseId || body?.payload?.demoCase?.demoCaseId || "").trim();
 }
 
+function requestCorrelationId(req) {
+  const offered = String(req.headers?.["x-correlation-id"] || "");
+  return /^[A-Za-z0-9:._-]{8,100}$/.test(offered) ? offered : randomUUID();
+}
+
+function safeFailureReason(error, method) {
+  if (["42P01", "42703"].includes(error?.code)) return "DATABASE_SCHEMA_MISMATCH";
+  if (error?.code === "42501") return "DATABASE_PERMISSION_DENIED";
+  if (/^(08|57P0)/.test(String(error?.code || "")) || ["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND"].includes(error?.code)) return "DATABASE_UNAVAILABLE";
+  return method === "GET" ? "CASE_RESTORE_FAILED" : "CASE_SAVE_FAILED";
+}
+
 const DEFAULT_GATES = { applyCors, requireUboCaller, enforceRateLimit };
 
 function createHandler(factory = dependencies, gates = DEFAULT_GATES) {
   return async function uboPocCase(req, res) {
     if (gates.applyCors(req, res)) return undefined;
+    const correlationId = requestCorrelationId(req);
+    res.setHeader("X-Correlation-Id", correlationId);
     if (!(await gates.enforceRateLimit(req, res, "ubo-poc-case"))) return undefined;
     const actor = await gates.requireUboCaller(req, res, { requireTenant: true });
     if (!actor) return undefined;
@@ -64,7 +78,15 @@ function createHandler(factory = dependencies, gates = DEFAULT_GATES) {
     if (!tenantId) return res.status(400).json({ success: false, error: "tenant_required" });
 
     if (req.method === "POST" && Buffer.byteLength(JSON.stringify(req.body || {})) > MAX_BODY_BYTES) {
-      return res.status(413).json({ success: false, code: "case_payload_too_large", message: "This case update is too large to save." });
+      console.error("[ubo-poc-case] request-failed", {
+        caseId: commandCaseId(req.body) || null,
+        correlationId,
+        operation: req.body?.operation || null,
+        reasonCode: "CASE_SAVE_FAILED",
+        code: "case_payload_too_large",
+        statusCode: 413,
+      });
+      return res.status(413).json({ success: false, code: "case_payload_too_large", reasonCode: "CASE_SAVE_FAILED", correlationId, message: "Case persistence is unavailable because this research result is too large to save safely." });
     }
 
     // A customer's session names one case. Another case answers exactly as a
@@ -95,10 +117,7 @@ function createHandler(factory = dependencies, gates = DEFAULT_GATES) {
 
     // One id for this whole request, in the audit ledger and the response; a
     // caller's own is used when it is a plain id.
-    const offered = String(req.headers?.["x-correlation-id"] || "");
-    const correlationId = /^[A-Za-z0-9:._-]{8,100}$/.test(offered) ? offered : randomUUID();
     const receivedAt = new Date().toISOString();
-    res.setHeader("X-Correlation-Id", correlationId);
 
     let active;
     try {
@@ -159,10 +178,20 @@ function createHandler(factory = dependencies, gates = DEFAULT_GATES) {
       res.setHeader("Allow", "GET, POST");
       return res.status(405).json({ success: false, error: "Method not allowed" });
     } catch (error) {
-      console.error("[ubo-poc-case] request-failed", { code: error.code || "poc_case_request_failed", statusCode: error.statusCode || 500 });
+      const reasonCode = safeFailureReason(error, req.method);
+      console.error("[ubo-poc-case] request-failed", {
+        caseId: requested || null,
+        correlationId,
+        operation: req.body?.operation || (req.method === "GET" ? "RESTORE_CASE" : null),
+        reasonCode,
+        code: error.code || "poc_case_request_failed",
+        statusCode: error.statusCode || 500,
+      });
       return res.status(error.statusCode || 500).json({
         success: false,
         code: error.code || "poc_case_request_failed",
+        reasonCode,
+        correlationId,
         message: error.statusCode && error.statusCode < 500 ? error.message : "The case could not be saved or restored right now.",
       });
     } finally {

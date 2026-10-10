@@ -130,9 +130,25 @@ test("an oversized case write is refused before it reaches the database", async 
   const { handler } = handlerWith();
   const res = fakeRes();
   const body = { caseId: "case-1", operation: "SAVE_RESEARCH", payload: { blob: "x".repeat(route.MAX_BODY_BYTES) } };
-  await handler({ method: "POST", body, headers: {} }, res);
+  await handler({ method: "POST", body, headers: { "x-correlation-id": "ubo-case:oversized-test" } }, res);
   assert.strictEqual(res.statusCode, 413);
+  assert.strictEqual(res.headers["x-correlation-id"], "ubo-case:oversized-test");
+  assert.strictEqual(res.body.reasonCode, "CASE_SAVE_FAILED");
+  assert.strictEqual(res.body.correlationId, "ubo-case:oversized-test");
   assert.deepStrictEqual(factoryCalls, []);
+});
+
+test("database schema failures keep a correlation id and safe persistence reason", async () => {
+  const handler = route.createHandler(() => ({
+    service: { apply: async () => { throw Object.assign(new Error("relation detail stays in server logs"), { code: "42P01" }); } },
+    close: async () => {},
+  }), { applyCors: () => false, enforceRateLimit: async () => true, requireUboCaller: async () => ({ kind: "staff", tenantId: "acme", role: "analyst" }) });
+  const res = fakeRes();
+  await handler({ method: "POST", body: { caseId: "case-1", operation: "SAVE_RESEARCH", payload: {} }, headers: { "x-correlation-id": "ubo-case:schema-test" } }, res);
+  assert.strictEqual(res.statusCode, 500);
+  assert.strictEqual(res.body.reasonCode, "DATABASE_SCHEMA_MISMATCH");
+  assert.strictEqual(res.body.correlationId, "ubo-case:schema-test");
+  assert.strictEqual(res.body.message, "The case could not be saved or restored right now.");
 });
 
 test("the case store cannot be built without a workspace", () => {

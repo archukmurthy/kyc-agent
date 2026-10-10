@@ -13,6 +13,7 @@ const RELEASE_STATE = Object.freeze({
   PARTIAL_MATERIAL: "PARTIAL_MATERIAL",
   FAILED: "FAILED",
 });
+const MAX_DURABLE_PATHS_PER_BASIS = 256;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function json(value) { return JSON.stringify(value == null ? null : value); }
@@ -30,16 +31,12 @@ function compactPath(path = {}) {
     state: path.state,
     relationshipIds: path.relationshipIds || [],
     contribution: path.contribution || null,
-    majoritySteps: (path.majoritySteps || []).map((step) => ({
-      relationshipId: step.relationshipId,
-      relationshipType: step.relationshipType,
-      measurement: step.measurement || null,
-      fromEntityId: step.fromEntityId,
-      toEntityId: step.toEntityId,
-    })),
+    majorityStepRelationshipIds: (path.majoritySteps || []).map(({ relationshipId }) => relationshipId).filter(Boolean),
   };
 }
 function compactQualificationBasis(basis = {}) {
+  const orderedPaths = basis.orderedPathReferences || [];
+  const attributionChains = basis.attributionChains || [];
   return {
     basisId: basis.basisId,
     personEntityId: basis.personEntityId,
@@ -56,8 +53,15 @@ function compactQualificationBasis(basis = {}) {
       cycles: (basis.recordedCalculation.cycles || []).map(({ cycleId }) => ({ cycleId })),
     } : null,
     aggregatedTargetRightValue: basis.aggregatedTargetRightValue || null,
-    orderedPathReferences: (basis.orderedPathReferences || []).map(compactPath),
-    attributionChains: (basis.attributionChains || []).map(compactPath),
+    orderedPathReferences: orderedPaths.slice(0, MAX_DURABLE_PATHS_PER_BASIS).map(compactPath),
+    attributionChains: attributionChains.slice(0, MAX_DURABLE_PATHS_PER_BASIS).map(compactPath),
+    pathInventory: {
+      orderedPathCount: orderedPaths.length,
+      attributionChainCount: attributionChains.length,
+      persistedOrderedPathCount: Math.min(orderedPaths.length, MAX_DURABLE_PATHS_PER_BASIS),
+      persistedAttributionChainCount: Math.min(attributionChains.length, MAX_DURABLE_PATHS_PER_BASIS),
+      truncated: orderedPaths.length > MAX_DURABLE_PATHS_PER_BASIS || attributionChains.length > MAX_DURABLE_PATHS_PER_BASIS,
+    },
     reviewDependencies: basis.reviewDependencies || [],
     governance: basis.governance ? { requiredSignoffIds: basis.governance.requiredSignoffIds || [] } : null,
   };

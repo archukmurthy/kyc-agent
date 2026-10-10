@@ -9,6 +9,7 @@ import {
   hydrateBrowserFromPocCase,
   loadPocCase,
   loadPocCaseState,
+  MAX_CASE_REQUEST_BYTES,
   persistPocCase,
   shownCaseRound,
   useReloadWhenFinalizedChanges,
@@ -158,6 +159,36 @@ test("research persistence sends the bounded transfer projection instead of dupl
   expect(sent.payload.researchResult.view.graph.relationships).toEqual(researchResult.view.graph.relationships);
   expect(sent.payload.researchResult.view.graph.llpAttributionAssessments).toBeUndefined();
   expect(fetchImpl.mock.calls[0][1].body.length).toBeLessThan(10000);
+  expect(fetchImpl.mock.calls[0][1].headers["X-Correlation-Id"]).toMatch(/^ubo-case:/);
+});
+
+test("a future oversized projection is refused before the hosting platform can replace the structured error", async () => {
+  const fetchImpl = jest.fn();
+  await expect(persistPocCase("SAVE_RESEARCH", {
+    caseId: "case-too-large",
+    idempotencyKey: "research:too-large",
+    payload: { researchResult: { status: "COMPLETE", unboundedFutureField: "x".repeat(MAX_CASE_REQUEST_BYTES) } },
+  }, fetchImpl)).rejects.toMatchObject({
+    code: "case_payload_too_large",
+    reasonCode: "CASE_SAVE_FAILED",
+    status: 413,
+    correlationId: expect.stringMatching(/^ubo-case:/),
+  });
+  expect(fetchImpl).not.toHaveBeenCalled();
+});
+
+test("a hosting-level 413 is translated into an explicit case-persistence category", async () => {
+  const fetchImpl = jest.fn().mockResolvedValue({
+    ok: false,
+    status: 413,
+    headers: { get: () => null },
+    json: async () => { throw new Error("platform body was not JSON"); },
+  });
+  await expect(persistPocCase("SAVE_RESEARCH", {
+    caseId: "case-platform-limit",
+    idempotencyKey: "research:platform-limit",
+    payload: { researchResult: { status: "COMPLETE" } },
+  }, fetchImpl)).rejects.toMatchObject({ code: "case_payload_too_large", reasonCode: "CASE_SAVE_FAILED", status: 413 });
 });
 
 test("final assessment persistence bounds repeated research and recalculation analyses", async () => {

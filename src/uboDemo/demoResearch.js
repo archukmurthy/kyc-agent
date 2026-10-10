@@ -391,15 +391,18 @@ function basisPresentation(basis, relationshipById, entityName) {
     : [];
   const attributionChains = (basis.attributionChains || []).map((chain) => {
     const route = calculationRoute(chain, relationshipById, entityName);
+    const majoritySteps = (chain.majoritySteps || []).length
+      ? chain.majoritySteps
+      : (chain.majorityStepRelationshipIds || []).map((relationshipId) => relationshipById.get(relationshipId)).filter(Boolean);
     return {
       ...route,
       state: chain.state,
-      majoritySteps: (chain.majoritySteps || []).map((step) => ({
+      majoritySteps: majoritySteps.map((step) => ({
         relationshipId: step.relationshipId,
         relationshipType: step.relationshipType,
         measurement: formatMeasurement(step.measurement),
-        from: entityName(step.fromEntityId),
-        to: entityName(step.toEntityId),
+        from: entityName(step.fromEntityId || step.subjectEntityId),
+        to: entityName(step.toEntityId || step.objectEntityId),
       })),
     };
   });
@@ -415,7 +418,7 @@ function basisPresentation(basis, relationshipById, entityName) {
     effectivePaths,
     attributionChains,
     relationshipIds: unique([...(basis.orderedPathReferences || []).flatMap(({ relationshipIds }) => relationshipIds || []), ...(basis.attributionChains || []).flatMap(({ relationshipIds }) => relationshipIds || [])]),
-    limitations: unique([...(basis.reviewDependencies || []), ...(basis.governance?.requiredSignoffIds || []), ...((basis.recordedCalculation?.cycles || []).map(({ cycleId }) => cycleId || "Cycle recorded"))]),
+    limitations: unique([...(basis.reviewDependencies || []), ...(basis.governance?.requiredSignoffIds || []), ...((basis.recordedCalculation?.cycles || []).map(({ cycleId }) => cycleId || "Cycle recorded")), ...(basis.pathInventory?.truncated ? [`Showing ${basis.pathInventory.persistedOrderedPathCount + basis.pathInventory.persistedAttributionChainCount} of ${basis.pathInventory.orderedPathCount + basis.pathInventory.attributionChainCount} recorded route examples`] : [])]),
     method: basis.method,
   };
 }

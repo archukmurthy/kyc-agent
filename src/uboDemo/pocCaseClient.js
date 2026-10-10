@@ -11,6 +11,7 @@ import { expandSharedAnalyses, shareRepeatedAnalyses } from "./customer/recalcul
 import { casePointerStore, uboStore } from "./browserStore";
 
 export const ACTIVE_POC_CASE_KEY = "ubo-case-pointer.v1";
+export const MAX_CASE_REQUEST_BYTES = 2750000;
 const RESOLUTION_PREFIX = "ubo-demo.ownership-resolution.v1";
 const OWNERSHIP_RESOLUTION_SESSION_VERSION = "ubo-ownership-resolution-session-v1";
 
@@ -43,17 +44,23 @@ export function clearActivePocCase(storage = casePointerStore) {
   try { storage.removeItem(ACTIVE_POC_CASE_KEY); } catch (_) { /* No durable case is deleted. */ }
 }
 
-async function readPayload(response) {
+async function readPayload(response, offeredCorrelationId = null) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload.success) {
     noteCustomerRefusal(response.status, payload);
-    throw Object.assign(new Error(payload.message || "The case could not be saved or restored right now."), { code: payload.code || payload.error, status: response.status });
+    const correlationId = response.headers?.get?.("x-correlation-id") || payload.correlationId || offeredCorrelationId;
+    const code = payload.code || payload.error || (response.status === 413 ? "case_payload_too_large" : "poc_case_request_failed");
+    const reasonCode = payload.reasonCode || (response.status === 413 ? "CASE_SAVE_FAILED" : null);
+    const message = payload.message || (response.status === 413
+      ? "Case persistence is unavailable because this research result is too large to save safely."
+      : "The case could not be saved or restored right now.");
+    throw Object.assign(new Error(message), { code, reasonCode, correlationId, status: response.status });
   }
   return payload;
 }
 
-async function parse(response) {
-  return (await readPayload(response)).case;
+async function parse(response, offeredCorrelationId = null) {
+  return (await readPayload(response, offeredCorrelationId)).case;
 }
 
 /** Whether a customer may already be working on a case, from its audit
@@ -229,6 +236,9 @@ export function persistPocCase(operation, command, fetchImpl = window.fetch) {
 async function sendPocCase(operation, { caseId, payload, idempotencyKey, actorType = "SYSTEM" }, fetchImpl) {
   if (!caseId) throw new TypeError("A durable case ID is required.");
   const durablePayload = compactCasePayload(payload);
+  const correlationId = window.crypto?.randomUUID
+    ? `ubo-case:${window.crypto.randomUUID()}`
+    : `ubo-case:${Date.now()}:${smallStableHash([operation, idempotencyKey])}`;
   // Writes to a case go one at a time, so one that never answers would hold up
   // every later one in this tab: it is given up on after a while. The same
   // idempotency key makes sending it again safe.
@@ -238,12 +248,22 @@ async function sendPocCase(operation, { caseId, payload, idempotencyKey, actorTy
   // queued before it): the server refuses it once that round has ended.
   const round = ROUND_CHECKED.has(operation) ? shownRounds.get(caseId) : undefined;
   try {
+    const requestBody = JSON.stringify({ operation, caseId, payload: durablePayload, idempotencyKey, actorType, ...(round !== undefined ? { round } : {}) });
+    const requestBytes = typeof TextEncoder === "function" ? new TextEncoder().encode(requestBody).byteLength : new Blob([requestBody]).size;
+    if (requestBytes > MAX_CASE_REQUEST_BYTES) {
+      throw Object.assign(new Error("Case persistence is unavailable because this research result is too large to save safely."), {
+        code: "case_payload_too_large",
+        reasonCode: "CASE_SAVE_FAILED",
+        correlationId,
+        status: 413,
+      });
+    }
     const record = await parse(await fetchImpl("/api/ubo-poc-case", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json", ...(await clerkAuthHeaders()) },
-      body: JSON.stringify({ operation, caseId, payload: durablePayload, idempotencyKey, actorType, ...(round !== undefined ? { round } : {}) }),
+      headers: { "Content-Type": "application/json", Accept: "application/json", "X-Correlation-Id": correlationId, ...(await clerkAuthHeaders()) },
+      body: requestBody,
       ...(controller ? { signal: controller.signal } : {}),
-    }));
+    }), correlationId);
     noteSavedRound(caseId, record);
     rememberActivePocCase(caseId);
     return record;
