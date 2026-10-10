@@ -341,6 +341,10 @@ function normalizedGraphName(value) {
   return String(value || "Unknown party").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+function visiblyTruncatedGraphName(value) {
+  return /(?:\.\.\.|…)/.test(String(value || ""));
+}
+
 function graphCategory(party) {
   const entityType = String(party?.entityType || party?.partyType || "").trim().toUpperCase();
   if (entityType === "NATURAL_PERSON") return "NATURAL_PERSON";
@@ -465,10 +469,21 @@ function canonicalizeLegalEntityEndpoints(relationships, company, subjectEntityI
     if (index > 0 && normalizedPartyName(endpoint.party?.name) === subjectNameKey) union(0, index);
   });
 
+  // Evidence source-party identity is stronger than a display label. It lets
+  // the same endpoint survive across several relationships without treating
+  // two separately inventoried, visually truncated boxes as the same entity.
+  const indexBySourcePartyId = new Map();
+  endpoints.forEach((endpoint, index) => {
+    const sourcePartyId = String(endpoint.party?.sourcePartyId || "").trim();
+    if (!sourcePartyId) return;
+    if (indexBySourcePartyId.has(sourcePartyId)) union(indexBySourcePartyId.get(sourcePartyId), index);
+    else indexBySourcePartyId.set(sourcePartyId, index);
+  });
+
   const indexByCanonicalName = new Map();
   endpoints.forEach((endpoint, index) => {
     const nameKey = normalizedPartyName(endpoint.party?.name);
-    if (!nameKey) return;
+    if (!nameKey || visiblyTruncatedGraphName(endpoint.party?.name)) return;
     if (indexByCanonicalName.has(nameKey)) union(indexByCanonicalName.get(nameKey), index);
     else indexByCanonicalName.set(nameKey, index);
   });
@@ -493,8 +508,12 @@ function canonicalizeLegalEntityEndpoints(relationships, company, subjectEntityI
       ? companyParty
       : (sourceEndpoints.find(({ party }) => trustedEntityIdentifiers(party).length)?.party || sourceEndpoints[0]?.party || group[0].party);
     const canonicalNameKey = normalizedPartyName(representative?.name);
+    const sourcePartyIds = [...new Set(sourceEndpoints.map(({ party }) => party?.sourcePartyId).filter(Boolean))].sort();
+    const useSourceScopedIdentity = visiblyTruncatedGraphName(representative?.name) && sourcePartyIds.length === 1;
     const identitySeed = identifiers[0]?.key
-      || (containsSubject ? `ONBOARDING_SUBJECT:${String(company.countryCode || "").toUpperCase()}:${subjectNameKey}` : `LEGAL_NAME:${canonicalNameKey}`);
+      || (containsSubject
+        ? `ONBOARDING_SUBJECT:${String(company.countryCode || "").toUpperCase()}:${subjectNameKey}`
+        : (useSourceScopedIdentity ? `SOURCE_PARTY:${sourcePartyIds[0]}` : `LEGAL_NAME:${canonicalNameKey}`));
     const entityId = containsSubject && subjectEntityIdOverride
       ? subjectEntityIdOverride
       : `source-entity:${createHash("sha256").update(`LEGAL_ENTITY|${identitySeed}`).digest("hex").slice(0, 20)}`;
@@ -516,9 +535,14 @@ function canonicalizeLegalEntityEndpoints(relationships, company, subjectEntityI
       semantics: containsSubject ? ["SUBJECT"] : [],
       sourceAliases,
       canonicalResolution: {
-        priority: identifiers.length ? "TRUSTED_ENTITY_IDENTIFIER" : (containsSubject ? "ONBOARDING_ENTITY" : (sourceEndpoints.length > 1 ? "EXACT_CANONICAL_LEGAL_NAME" : "DISTINCT_ENTITY")),
+        priority: identifiers.length
+          ? "TRUSTED_ENTITY_IDENTIFIER"
+          : (containsSubject
+            ? "ONBOARDING_ENTITY"
+            : (useSourceScopedIdentity ? "SOURCE_SCOPED_PARTY" : (sourceEndpoints.length > 1 ? "EXACT_CANONICAL_LEGAL_NAME" : "DISTINCT_ENTITY"))),
         canonicalNameKey,
         trustedIdentifierKeys: identifiers.map(({ key }) => key),
+        sourcePartyIds,
       },
     };
     records.push(record);
@@ -600,6 +624,83 @@ function buildSourceGraph(candidateFacts, company, artifact, requestId) {
       unresolvedBranches: 0,
       conflicts: 0,
       reviewRequirements: 0,
+    },
+  };
+}
+
+function unresolvedRelationshipReason(item) {
+  if (item?.providerDisposition === "UNRESOLVED") return "PROVIDER_DIRECTION_UNRESOLVED";
+  if (/unclear/i.test(String(item?.subjectInventoryId || "")) || /unclear/i.test(String(item?.objectInventoryId || ""))) return "RELATIONSHIP_ENDPOINT_UNRESOLVED";
+  if (!item?.percentageText) return "RELATIONSHIP_MEASUREMENT_NOT_ESTABLISHED";
+  return "TYPED_RELATIONSHIP_NOT_VALIDATED";
+}
+
+// Evidence owns inventory and relationship validation. UBO may project only
+// validated CandidateFacts as graph edges, but it must carry every remaining
+// material inventory item explicitly so a rejected relationship cannot vanish
+// between the Evidence result and the source reconstruction.
+function reconcileSourceGraphInventory(sourceGraph, diagram) {
+  if (!diagram?.inventory) return sourceGraph;
+  const materialParties = (diagram.inventory.parties || []).filter(({ providerDisposition }) => providerDisposition !== "INTENTIONALLY_NON_OWNERSHIP");
+  const materialConnectors = (diagram.inventory.connectors || []).filter(({ providerDisposition }) => providerDisposition !== "INTENTIONALLY_NON_OWNERSHIP");
+  const unresolvedParties = diagram.unresolvedParties || [];
+  const unresolvedRelationships = diagram.unresolvedRelationships || [];
+  const mappedPartyCount = materialParties.length - unresolvedParties.length;
+  const mappedConnectorCount = materialConnectors.length - unresolvedRelationships.length;
+  const relationshipEndpointCount = new Set((sourceGraph.relationships || []).flatMap(({ sourceEntityId, targetEntityId }) => [sourceEntityId, targetEntityId]).filter(Boolean)).size;
+  const mappedCandidateFactCount = (sourceGraph.relationships || []).length;
+  const accountedPartyCount = mappedPartyCount + unresolvedParties.length;
+  const accountedConnectorCount = mappedCandidateFactCount + unresolvedRelationships.length;
+  const silentPartyLossCount = Math.max(0, mappedPartyCount - relationshipEndpointCount);
+  const silentConnectorLossCount = Math.max(0, mappedConnectorCount - mappedCandidateFactCount);
+  if (silentPartyLossCount || silentConnectorLossCount || accountedPartyCount < materialParties.length || accountedConnectorCount < materialConnectors.length) {
+    throw demoError("SOURCE_GRAPH_INCOMPLETE", "The UBO source projection did not account for every material Evidence inventory item.", 422);
+  }
+  const unresolved = [
+    ...unresolvedParties.map((item) => ({
+      kind: "PARTY",
+      unresolvedId: `unresolved-party:${item.sourcePartyId || item.inventoryId}`,
+      inventoryPartyId: item.inventoryId,
+      sourcePartyId: item.sourcePartyId,
+      displayName: item.visibleLabel,
+      partyType: item.partyType,
+      reasonCode: "NO_VALIDATED_RELATIONSHIP_ENDPOINT",
+      resolutionStatus: "EXPLICIT_UNRESOLVED",
+    })),
+    ...unresolvedRelationships.map((item) => ({
+      kind: "RELATIONSHIP",
+      unresolvedId: `unresolved-relationship:${item.sourceConnectorId || item.connectorId}`,
+      connectorInventoryId: item.connectorId,
+      sourceConnectorId: item.sourceConnectorId,
+      subjectInventoryId: item.subjectInventoryId,
+      objectInventoryId: item.objectInventoryId,
+      sourceLabel: item.visibleLabel || null,
+      percentageText: item.percentageText || null,
+      reasonCode: unresolvedRelationshipReason(item),
+      resolutionStatus: "EXPLICIT_UNRESOLVED",
+    })),
+  ];
+  return {
+    ...sourceGraph,
+    unresolved,
+    inventoryReconciliation: {
+      contractVersion: "ubo-source-inventory-reconciliation-v1",
+      evidencePartyCount: materialParties.length,
+      evidenceConnectorCount: materialConnectors.length,
+      mappedPartyCount,
+      mappedCandidateFactCount,
+      sourceGraphNodeCount: sourceGraph.nodes?.length || 0,
+      sourceGraphEdgeCount: sourceGraph.relationships?.length || 0,
+      unresolvedPartyCount: unresolvedParties.length,
+      unresolvedRelationshipCount: unresolvedRelationships.length,
+      accountedPartyCount,
+      accountedConnectorCount,
+      silentPartyLossCount,
+      silentConnectorLossCount,
+    },
+    summary: {
+      ...(sourceGraph.summary || {}),
+      unresolvedBranches: unresolvedRelationships.length,
     },
   };
 }
@@ -862,7 +963,10 @@ function reevaluateSavedCustomerOwnershipChart(rawInput) {
   const issues = savedResult.ubo?.issues || [];
   const requestId = `saved-chart-analysis:${artifact.artifactId}`;
   const candidateFacts = deduplicateChartCandidateFacts(structuredClone(savedResult.candidateFacts));
-  const sourceGraph = buildSourceGraph(candidateFacts, company, artifact, requestId);
+  const sourceGraph = reconcileSourceGraphInventory(
+    buildSourceGraph(candidateFacts, company, artifact, requestId),
+    savedResult.evidence?.ownershipDiagramCompleteness,
+  );
   return {
     ...structuredClone(savedResult),
     company: structuredClone(company),
@@ -964,6 +1068,12 @@ function extractionQualityFor({ interpretation, capabilityResult, sourceGraph, s
       relationshipIncompleteCount: diagram?.metrics?.incompleteRelationshipCount || 0,
       relationshipInventoryMismatchCount: diagram?.metrics?.inventoryMismatchRelationshipCount || 0,
       unmappedFactCount: issues.filter((item) => item.code === "EVIDENCE_FACT_NOT_TYPED").length,
+      inventoryPartyCount: sourceGraph?.inventoryReconciliation?.evidencePartyCount || diagram?.metrics?.inventoryPartyCount || 0,
+      inventoryConnectorCount: sourceGraph?.inventoryReconciliation?.evidenceConnectorCount || diagram?.inventory?.connectors?.length || 0,
+      accountedPartyCount: sourceGraph?.inventoryReconciliation?.accountedPartyCount || 0,
+      accountedConnectorCount: sourceGraph?.inventoryReconciliation?.accountedConnectorCount || 0,
+      silentPartyLossCount: sourceGraph?.inventoryReconciliation?.silentPartyLossCount || 0,
+      silentConnectorLossCount: sourceGraph?.inventoryReconciliation?.silentConnectorLossCount || 0,
       unresolvedPartyCount: diagram?.metrics?.unresolvedPartyCount || 0,
       unresolvedConnectorCount: diagram?.metrics?.unresolvedConnectorCount || 0,
     },
@@ -1124,11 +1234,11 @@ async function analyseIngestedCustomerOwnershipChart({ input, ingestion, artifac
   const candidateFacts = deduplicateChartCandidateFacts(capabilityResult.candidateFacts);
   const normalizedCapabilityResult = { ...capabilityResult, candidateFacts };
   const displayed = presentation(candidateFacts, capabilityResult.issues);
-  const sourceGraph = buildSourceGraph(candidateFacts, input.demoContext.company, {
+  const sourceGraph = reconcileSourceGraphInventory(buildSourceGraph(candidateFacts, input.demoContext.company, {
     artifactId: ingestion.artifactId,
     digest: ingestion.fingerprintValue,
     capturedAt: ingestion.capturedAt,
-  }, requestId);
+  }, requestId), interpretationEnvelope.result.ownershipDiagramCompleteness);
   const sourceCoverage = sourceGraphCoverage(sourceGraph);
   const extractionQuality = extractionQualityFor({
     interpretation: interpretationEnvelope.result,
@@ -1200,6 +1310,7 @@ module.exports = Object.freeze({
   analyseIngestedCustomerOwnershipChart,
   buildChartAnalysis,
   buildSourceGraph,
+  reconcileSourceGraphInventory,
   deduplicateChartCandidateFacts,
   chartRequestedConcepts,
   certificationFrom,

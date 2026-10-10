@@ -53,6 +53,7 @@ const analysis = {
       { entityId: "company-1", displayName: "Better Comms VOIP Ltd", category: "LEGAL_ENTITY", semantics: ["SUBJECT"] },
     ],
     relationships: [{ relationshipId: "fact-1", sourceEntityId: "person-1", targetEntityId: "company-1", relationshipType: "ECONOMIC_OWNERSHIP", dimension: "ECONOMIC", measurement: { type: "EXACT", value: 75 }, indicators: [], qualifiers: {}, support: { claimCount: 1, claimIds: ["fact-1"], evidenceReferences: [] } }],
+    inventoryReconciliation: { contractVersion: "ubo-source-inventory-reconciliation-v1", evidencePartyCount: 2, evidenceConnectorCount: 1, mappedPartyCount: 2, mappedCandidateFactCount: 1, sourceGraphNodeCount: 2, sourceGraphEdgeCount: 1, unresolvedPartyCount: 0, unresolvedRelationshipCount: 0, accountedPartyCount: 2, accountedConnectorCount: 1, silentPartyLossCount: 0, silentConnectorLossCount: 0 },
     calculations: [], qualifications: [], unresolved: [], conflicts: [], reviews: [],
     decision: { snapshotId: "source-1", snapshotHash: "sha256:abc", checkpoint: { type: "SOURCE_INTERPRETATION" }, orchestrationState: "SOURCE_INTERPRETATION_ONLY" },
     summary: { totalEntities: 2, totalRelationships: 1, qualifyingPeople: 0, unresolvedBranches: 0, conflicts: 0, reviewRequirements: 0 },
@@ -157,6 +158,31 @@ test("the top ownership-analysis link opens a restored analysis directly", () =>
   render(<CustomerOwnershipChartPage />);
   expect(screen.getByRole("heading", { name: "Calculation view" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /View ownership analysis/i })).toHaveAttribute("aria-current", "page");
+});
+
+test("the source reconstruction visibly retains every unresolved Evidence inventory item", () => {
+  seed();
+  const context = readCustomerDemoContext();
+  const unresolved = {
+    ...analysis,
+    extractionQuality: { state: "EXTRACTION_SUCCESS_PARTIAL", canContinueToQuestions: true, metrics: { ownershipEdgeCount: 1, unresolvedPartyCount: 1, unresolvedConnectorCount: 1 } },
+    sourceGraph: {
+      ...analysis.sourceGraph,
+      unresolved: [
+        { kind: "PARTY", unresolvedId: "unresolved-party:p2", inventoryPartyId: "P2", displayName: "Mr Thomas Andrew Mitc...", reasonCode: "NO_VALIDATED_RELATIONSHIP_ENDPOINT" },
+        { kind: "RELATIONSHIP", unresolvedId: "unresolved-relationship:c2", connectorInventoryId: "C2", subjectInventoryId: "P2", objectInventoryId: "P4", percentageText: "33.33%", reasonCode: "TYPED_RELATIONSHIP_NOT_VALIDATED" },
+      ],
+    },
+  };
+  writeCustomerOwnershipChartSession({ context, result: unresolved });
+  window.history.replaceState({}, "", `${CUSTOMER_OWNERSHIP_CHART_PATH}?view=analysis`);
+  render(<CustomerOwnershipChartPage />);
+  const inventory = screen.getByRole("region", { name: "Unresolved source inventory" });
+  expect(within(inventory).getByText(/1 parties · 1 connectors/)).toBeInTheDocument();
+  fireEvent.click(within(inventory).getByText(/Unresolved parties/));
+  fireEvent.click(within(inventory).getByText(/Unresolved connectors/));
+  expect(within(inventory).getByText(/Mr Thomas Andrew Mitc/)).toBeInTheDocument();
+  expect(within(inventory).getByText("C2").closest("li")).toHaveTextContent(/C2.*P2.*P4.*33.33%/);
 });
 
 test("the customer ownership step can inspect every registry assertion handed over by the analyst demo", () => {
@@ -411,15 +437,16 @@ test("while the chart is read, what has been found so far is shown as an uncheck
     fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [new File([Uint8Array.from([137, 80, 78, 71])], "ownership-chart.png", { type: "image/png" })] } });
     fireEvent.click(screen.getByRole("button", { name: /Upload and analyse/i }));
     // Reading the file is real work; then the draft is asked for every few seconds.
-    for (let tick = 0; tick < 20 && !screen.queryByText("Not checked yet"); tick += 1) {
+    for (let tick = 0; tick < 20 && !screen.queryByText("Not validated yet"); tick += 1) {
       await act(async () => { await new Promise((resolve) => jest.requireActual("timers").setImmediate(resolve)); jest.advanceTimersByTime(PROGRESS_POLL_MS); });
     }
-    expect(screen.getByText("Not checked yet")).toBeInTheDocument();
+    expect(screen.getByText("Not validated yet")).toBeInTheDocument();
+    expect(screen.getByText(/provider inventory observations, not accepted Evidence facts/i)).toBeInTheDocument();
     expect(screen.getByText("Alice Morgan")).toBeInTheDocument();
     expect(screen.getByText(/· 60%/)).toBeInTheDocument();
     await act(async () => { finish(); });
     await screen.findByRole("heading", { name: /Continue to questions/i });
-    expect(screen.queryByText("Not checked yet")).toBeNull();
+    expect(screen.queryByText("Not validated yet")).toBeNull();
   } finally {
     jest.useRealTimers();
   }
@@ -527,6 +554,26 @@ test("a saved graph from the previous verification strategy is re-evaluated even
     const body = JSON.parse(request.body);
     expect(body.operation).toBe("REEVALUATE_SAVED_EXTRACTION");
     expect(body.savedResult.sourceGraph.relationships).toHaveLength(2);
+    return { ok: true, json: async () => ({ success: true, result: analysis }) };
+  });
+
+  render(<CustomerOwnershipChartPage />);
+
+  await waitFor(() => expect(window.fetch).toHaveBeenCalledTimes(1));
+  expect(await screen.findByRole("status")).toHaveTextContent(/re-evaluated through the current UBO engine/i);
+});
+
+test("a saved graph without source-inventory reconciliation is re-evaluated without another provider call", async () => {
+  seed();
+  const stale = {
+    ...analysis,
+    sourceGraph: { ...analysis.sourceGraph, inventoryReconciliation: undefined },
+  };
+  writeCustomerOwnershipChartSession({ context: readCustomerDemoContext(), result: stale });
+  window.fetch = jest.fn(async (_url, request) => {
+    const body = JSON.parse(request.body);
+    expect(body.operation).toBe("REEVALUATE_SAVED_EXTRACTION");
+    expect(JSON.stringify(body)).not.toContain("contentBase64");
     return { ok: true, json: async () => ({ success: true, result: analysis }) };
   });
 

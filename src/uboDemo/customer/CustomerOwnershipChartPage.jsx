@@ -135,7 +135,8 @@ function FoundSoFar({ progress }) {
   const connections = progress?.connections || [];
   if (!parties.length) return null;
   return <div className="ubo-customer-found-so-far" aria-live="polite">
-    <strong>Found so far <span>Not checked yet</span></strong>
+    <strong>Preliminary scan <span>Not validated yet</span></strong>
+    <small>These are provider inventory observations, not accepted Evidence facts or graph relationships. The checked result may retain an item as unresolved.</small>
     <ul className="ubo-customer-found-parties">{parties.map((party, index) => <li key={`${party.label}:${index}`}><span aria-hidden="true">{PARTY_GLYPH[party.type] || "○"}</span>{party.label}<small>{party.type === "natural_person" ? "Person" : party.type === "legal_entity" ? "Company" : party.type === "trust_or_legal_arrangement" ? "Trust or arrangement" : "Unclear"}</small></li>)}</ul>
     {connections.length > 0 && <ul className="ubo-customer-found-connections">{connections.map((connection, index) => <li key={`${connection.from}:${connection.to}:${index}`}>{connection.from} <span aria-hidden="true">→</span><span className="ubo-customer-visually-hidden"> owns part of </span> {connection.to}{connection.percentage ? <b> · {connection.percentage}</b> : null}</li>)}</ul>}
   </div>;
@@ -504,7 +505,9 @@ export default function CustomerOwnershipChartPage() {
     const hasCurrentCalculationSemantics = result?.chartAnalysis?.calculationSemanticsVersion === CHART_CALCULATION_SEMANTICS_VERSION;
     const hasCurrentExtractionSemantics = result?.evidence?.ownershipDiagramCompleteness?.verificationStrategyVersion
       === CURRENT_OWNERSHIP_EXTRACTION_PROFILE.verificationStrategyVersion;
-    if (!artifactId || !hasStructuredFacts || (hasCalculationRecords && hasCurrentCalculationSemantics && hasCurrentExtractionSemantics) || reevaluationAttempts.current.has(artifactId)) return;
+    const hasSourceInventoryReconciliation = result?.sourceGraph?.inventoryReconciliation?.contractVersion
+      === "ubo-source-inventory-reconciliation-v1";
+    if (!artifactId || !hasStructuredFacts || (hasCalculationRecords && hasCurrentCalculationSemantics && hasCurrentExtractionSemantics && hasSourceInventoryReconciliation) || reevaluationAttempts.current.has(artifactId)) return;
     reevaluationAttempts.current.add(artifactId);
     let active = true;
     (async () => {

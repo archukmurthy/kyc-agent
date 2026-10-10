@@ -101,6 +101,19 @@ function provisionalUboLabel(state, method) {
   return "Provisional UBO · review required";
 }
 
+function UnresolvedSourceInventory({ projection }) {
+  const unresolved = projection?.unresolved || [];
+  if (!unresolved.length) return null;
+  const parties = unresolved.filter(({ kind }) => kind === "PARTY");
+  const relationships = unresolved.filter(({ kind }) => kind === "RELATIONSHIP");
+  return <section className="ubo-customer-card ubo-customer-result-card" aria-label="Unresolved source inventory">
+    <header><div><small>Evidence inventory retained</small><h2>Items that could not become validated graph facts</h2></div><span>{parties.length} parties · {relationships.length} connectors</span></header>
+    <p className="ubo-customer-muted">These items were visible during the preliminary scan but did not pass canonical relationship validation. They remain explicit here and are not used for ownership calculations.</p>
+    {parties.length > 0 && <details><summary>Unresolved parties ({parties.length})</summary><ul>{parties.map((item) => <li key={item.unresolvedId}><strong>{item.displayName || item.inventoryPartyId}</strong> · {item.inventoryPartyId} · {item.reasonCode}</li>)}</ul></details>}
+    {relationships.length > 0 && <details><summary>Unresolved connectors ({relationships.length})</summary><ul>{relationships.map((item) => <li key={item.unresolvedId}><strong>{item.connectorInventoryId}</strong> · {item.subjectInventoryId || "unknown source"} → {item.objectInventoryId || "unknown target"}{item.percentageText ? ` · ${item.percentageText}` : ""} · {item.reasonCode}</li>)}</ul></details>}
+  </section>;
+}
+
 export default function ChartAnalysisPanel({ analysis, method, onMethodChange, legacyProjection = null, sourceProjection = null, coverage = null, extractionQuality = null, companyName = "the customer under review", afterGraph = null }) {
   const view = analysis?.view;
   const [scope, setScope] = useState("FULL");
@@ -109,7 +122,7 @@ export default function ChartAnalysisPanel({ analysis, method, onMethodChange, l
   const people = useMemo(() => calculationPeople(view, method, analysis?.entityLabels), [view, method, analysis?.entityLabels]);
   const ownershipSteps = useMemo(() => sourceOwnershipSteps(sourceProjection), [sourceProjection]);
   const graph = useMemo(() => projectGraph(graphForChartPresentation(view?.graph, sourceProjection, companyName), scope, dimension), [view?.graph, sourceProjection, companyName, scope, dimension]);
-  if (!view) return <section className="ubo-customer-chart-analysis"><section className="ubo-customer-card ubo-customer-result-card"><header><div><small>Chart-only assessment</small><h2>Review is still required</h2></div></header><p className="ubo-customer-muted">The supported chart facts remain visible below, but the existing engine could not yet create an operative graph safely.</p></section>{legacyProjection && <><p className="ubo-customer-source-notice">This older browser cache contains only the previous source visualization; it does not contain a recorded engine assessment.</p><CustomerOwnershipGraph projection={legacyProjection} /></>}{afterGraph}</section>;
+  if (!view) return <section className="ubo-customer-chart-analysis"><section className="ubo-customer-card ubo-customer-result-card"><header><div><small>Chart-only assessment</small><h2>Review is still required</h2></div></header><p className="ubo-customer-muted">The supported chart facts remain visible below, but the existing engine could not yet create an operative graph safely.</p></section>{legacyProjection && <><p className="ubo-customer-source-notice">This older browser cache contains only the previous source visualization; it does not contain a recorded engine assessment.</p><CustomerOwnershipGraph projection={legacyProjection} /></>}<UnresolvedSourceInventory projection={sourceProjection || legacyProjection} />{afterGraph}</section>;
   const qualityState = extractionQuality?.state || null;
   const incomplete = coverage?.state === "REVIEW_REQUIRED" || ["EXTRACTION_INCOMPLETE", "NO_OWNERSHIP_DATA_CONFIRMED"].includes(qualityState);
   const partial = qualityState === "EXTRACTION_SUCCESS_PARTIAL";
@@ -118,6 +131,7 @@ export default function ChartAnalysisPanel({ analysis, method, onMethodChange, l
     <div className={`ubo-customer-analysis-status ${warning ? "warning" : ""}`} role={warning ? "alert" : undefined}><div><small>Chart analysis status</small><strong>{incomplete ? "Incomplete ownership map" : partial ? "Partial ownership map - review required" : "Provisional chart assessment"}</strong></div><p>{incomplete ? <>The extracted relationship chain does not reach {companyName} with sufficient confidence. Every supported fact and unresolved inventory item remains available below; this is not a complete chart.</> : partial ? <>Most of the ownership structure was reconstructed, but unresolved parties, connectors or rejected relationship mappings still require review. The mapped facts remain provisional.</> : <>This is a separate assessment of the uploaded chart. Filters change the presentation only; effective ownership uses the source-backed ownership chain. The chart has not been independently verified as current.</>}</p></div>
     <div className="ubo-customer-graph-controls"><fieldset><legend>Graph scope</legend><label><input type="radio" name="chart-graph-scope" checked={scope === "RELEVANT"} onChange={() => setScope("RELEVANT")} />Relevant to customer</label><label><input type="radio" name="chart-graph-scope" checked={scope === "FULL"} onChange={() => setScope("FULL")} />Full source graph</label></fieldset><fieldset><legend>Relationships</legend>{["ALL", "OWNERSHIP", "VOTING", "CONTROL"].map((value) => <label key={value}><input type="radio" name="chart-graph-dimension" checked={dimension === value} onChange={() => setDimension(value)} />{value === "ALL" ? "All" : value[0] + value.slice(1).toLowerCase()}</label>)}</fieldset></div>
     <CustomerOwnershipGraph projection={graph} entityLabels={analysis.entityLabels} />
+    <UnresolvedSourceInventory projection={sourceProjection} />
     {afterGraph}
     <section className="ubo-customer-card ubo-customer-method-card"><header><div><small>Recorded engine output</small><h2>Calculation view</h2></div><button className="ubo-customer-collapse-button" type="button" aria-expanded={calculationExpanded} aria-controls="ubo-customer-calculation-content" onClick={() => setCalculationExpanded((value) => !value)}>{calculationExpanded ? "Collapse" : "Expand"}</button></header>
       {calculationExpanded && <div id="ubo-customer-calculation-content"><fieldset><legend>Calculation method</legend>{CALCULATION_METHODS.map((option) => <label key={option.value}><input type="radio" name="chart-calculation-method" value={option.value} checked={method === option.value} onChange={() => onMethodChange(option.value)} />{option.label}</label>)}</fieldset>
@@ -135,4 +149,4 @@ export default function ChartAnalysisPanel({ analysis, method, onMethodChange, l
   </section>;
 }
 
-export { graphForChartPresentation, normalizedLegalName, projectGraph, provisionalUboLabel, reconcileSubjectIdentity, sourceOwnershipSteps };
+export { graphForChartPresentation, normalizedLegalName, projectGraph, provisionalUboLabel, reconcileSubjectIdentity, sourceOwnershipSteps, UnresolvedSourceInventory };

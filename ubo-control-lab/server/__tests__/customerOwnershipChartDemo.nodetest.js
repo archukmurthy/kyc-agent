@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, buildChartAnalysis, buildSourceGraph, deduplicateChartCandidateFacts, presentation, reevaluateSavedCustomerOwnershipChart, selectSemanticProvider, sourceGraphCoverage, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
+const { CUSTOMER_PROVIDER_TIMEOUT_MS, analyseCustomerOwnershipChart, buildChartAnalysis, buildSourceGraph, deduplicateChartCandidateFacts, presentation, reconcileSourceGraphInventory, reevaluateSavedCustomerOwnershipChart, selectSemanticProvider, sourceGraphCoverage, statusForEvidenceFailure, validateRequest } = require("../customerOwnershipChartDemo.js");
 const { DIGEST: REVIEWED_BETTERCOMMS_DIGEST } = require("../../fixtures/bettercomms-source-reviewed.js");
 const api = require("../../../api/ubo-demo-customer-ownership-chart.js");
 
@@ -442,8 +442,8 @@ test("Bettercomms subject punctuation variant maps to one customer node in sourc
   assert.equal(analysis.view.graph.relationships[0].objectEntityId, analysis.view.graph.subjectEntityId);
 });
 
-function canonicalParty(name, externalIdentifiers = []) {
-  return { name, entityType: "LEGAL_ENTITY", jurisdiction: "GB", externalIdentifiers, sourcePartySnapshot: { description: name } };
+function canonicalParty(name, externalIdentifiers = [], sourcePartyId = null) {
+  return { name, entityType: "LEGAL_ENTITY", jurisdiction: "GB", externalIdentifiers, ...(sourcePartyId ? { sourcePartyId } : {}), sourcePartySnapshot: { description: name } };
 }
 
 function canonicalRelationship(factId, subject, object) {
@@ -554,6 +554,21 @@ test("canonicalization does not remove the meaningful Holdings token from ABC Ho
   assert.notEqual(graph.relationships[0].sourceEntityId, graph.relationships[1].sourceEntityId);
 });
 
+test("visibly truncated legal-entity labels remain distinct unless Evidence supplies the same source-party identity", () => {
+  const graph = canonicalGraph([
+    canonicalRelationship("left-truncated", canonicalParty("Tdr Capital General P...", [], "party-level-4-left"), canonicalParty("Subsidiary One Ltd")),
+    canonicalRelationship("middle-truncated", canonicalParty("Tdr Capital General P...", [], "party-level-4-middle"), canonicalParty("Subsidiary Two Ltd")),
+    canonicalRelationship("middle-reused", canonicalParty("Tdr Capital General P...", [], "party-level-4-middle"), canonicalParty("Subsidiary Three Ltd")),
+  ]);
+
+  assert.notEqual(graph.relationships[0].sourceEntityId, graph.relationships[1].sourceEntityId);
+  assert.equal(graph.relationships[1].sourceEntityId, graph.relationships[2].sourceEntityId);
+  assert.equal(graph.nodes.filter(({ displayName }) => displayName === "Tdr Capital General P...").length, 2);
+  assert.deepEqual(graph.nodes
+    .filter(({ displayName }) => displayName === "Tdr Capital General P...")
+    .map(({ canonicalResolution }) => canonicalResolution.priority), ["SOURCE_SCOPED_PARTY", "SOURCE_SCOPED_PARTY"]);
+});
+
 test("canonical nodes retain literal Evidence labels and endpoint provenance without mutating source facts", () => {
   const facts = [
     canonicalRelationship("parent-to-holdco", canonicalParty("Parent Ltd"), canonicalParty("Evidence HoldCo Ltd")),
@@ -613,6 +628,102 @@ test("same-name natural people remain distinct when Evidence supplies separate s
   const alexNodes = graph.nodes.filter(({ displayName }) => displayName === "Alex Morgan");
   assert.equal(alexNodes.length, 2);
   assert.notEqual(graph.relationships[0].sourceEntityId, graph.relationships[1].sourceEntityId);
+});
+
+test("ASDA-style dense inventory is losslessly split between source graph facts and explicit unresolved items", () => {
+  const labels = [
+    ["P1", "Mr Gary Lindsay", "natural_person"],
+    ["P2", "Mr Thomas Andrew Mitc...", "natural_person"],
+    ["P3", "Manjit Dale", "natural_person"],
+    ["P4", "Tdr Capital Llp", "legal_entity"],
+    ["P5", "Tdr Capital General P... (Level 3 left)", "legal_entity"],
+    ["P6", "Tdr Capital Nominees...", "legal_entity"],
+    ["P7", "TDR CAPITAL GENERAL P... (Level 4 left)", "legal_entity"],
+    ["P8", "Tdr Capital General P... (Level 4 middle)", "legal_entity"],
+    ["P9", "Tdr Capital General P... (Level 4 right)", "legal_entity"],
+    ["P10", "Bella Finco Plc", "legal_entity"],
+    ["P11", "Bella Acquisition Co...", "legal_entity"],
+    ["P12", "Asda Group Limited", "legal_entity"],
+    ["P13", "Asda Storm Limited", "legal_entity"],
+    ["P14", "Alice Morgan", "natural_person"],
+    ["P15", "Sophia Patel", "natural_person"],
+    ["P16", "Asda Delivery Limited", "legal_entity"],
+  ];
+  const parties = labels.map(([inventoryId, visibleLabel, partyType]) => ({ inventoryId, visibleLabel, partyType, sourcePartyId: `artifact-asda:${inventoryId}`, providerDisposition: "RESOLVED" }));
+  const connectorPairs = [
+    ["P1", "P4", "33.33%"], ["P2", "P4", null], ["P3", "P4", null], ["P4", "P5", "100%"], ["P4", "P6", null],
+    ["P5 or P6 (unclear)", "P7", "100%"], ["P5 or P6 (unclear)", "P8", null], ["P6 (unclear)", "P9", "100%"],
+    ["P8", "P10", null], ["P10", "P11", "100%"], ["P11", "P12", null], ["P12", "P13", null], ["P13", "P16", null],
+    ["P14", "P16", "90%"], ["P15", "P16", "5%"],
+  ];
+  const connectors = connectorPairs.map(([subjectInventoryId, objectInventoryId, percentageText], index) => ({
+    connectorId: `C${index + 1}`,
+    sourceConnectorId: `artifact-asda:C${index + 1}`,
+    subjectInventoryId,
+    objectInventoryId,
+    visibleLabel: percentageText || "",
+    percentageText,
+    providerDisposition: index === 6 ? "UNRESOLVED" : "RESOLVED",
+  }));
+  const unresolvedParties = parties.filter(({ inventoryId }) => !["P1", "P4"].includes(inventoryId)).map((item) => ({ ...item, resolution: "UNRESOLVED_RELATIONSHIP" }));
+  const unresolvedRelationships = connectors.slice(1).map((item) => ({ ...item, resolution: "UNRESOLVED_RELATIONSHIP" }));
+  const diagram = {
+    inventory: { parties, connectors },
+    unresolvedParties,
+    unresolvedRelationships,
+    metrics: { inventoryPartyCount: 16, extractedTypedRelationshipCount: 1, unresolvedPartyCount: 14, unresolvedConnectorCount: 14 },
+  };
+  const candidateFacts = [{
+    factId: "asda-c1",
+    type: "RELATIONSHIP",
+    subject: { name: "Mr Gary Lindsay", entityType: "NATURAL_PERSON", sourcePartyId: "artifact-asda:P1" },
+    relationship: "ECONOMIC_OWNERSHIP",
+    object: { name: "Tdr Capital Llp", entityType: "LEGAL_ENTITY", sourcePartyId: "artifact-asda:P4" },
+    measurement: { type: "EXACT", value: 33.33 },
+    qualifiers: { currentState: "UNKNOWN", evidenceSourceSpecificMetadata: { connectorInventoryId: "C1", subjectInventoryId: "P1", objectInventoryId: "P4" } },
+    evidenceReferences: [{ referenceId: "artifact-asda" }],
+  }];
+  const graph = reconcileSourceGraphInventory(buildSourceGraph(candidateFacts, {
+    legalName: "Asda Delivery Limited", registrationNumber: "03873501", countryCode: "GB",
+  }, { artifactId: "artifact-asda", digest: "asda-digest", capturedAt: "2026-09-16T00:00:00.000Z" }, "asda-regression"), diagram);
+
+  assert.equal(parties.length, 16);
+  assert.equal(connectors.length, 15);
+  assert.equal(diagram.metrics.extractedTypedRelationshipCount, 1);
+  assert.equal(candidateFacts.length, 1);
+  assert.equal(graph.nodes.length, 3);
+  assert.equal(graph.relationships.length, 1);
+  assert.equal(graph.unresolved.length, 28);
+  assert.deepEqual(graph.inventoryReconciliation, {
+    contractVersion: "ubo-source-inventory-reconciliation-v1",
+    evidencePartyCount: 16,
+    evidenceConnectorCount: 15,
+    mappedPartyCount: 2,
+    mappedCandidateFactCount: 1,
+    sourceGraphNodeCount: 3,
+    sourceGraphEdgeCount: 1,
+    unresolvedPartyCount: 14,
+    unresolvedRelationshipCount: 14,
+    accountedPartyCount: 16,
+    accountedConnectorCount: 15,
+    silentPartyLossCount: 0,
+    silentConnectorLossCount: 0,
+  });
+  assert.equal(graph.unresolved.find(({ connectorInventoryId }) => connectorInventoryId === "C7").reasonCode, "PROVIDER_DIRECTION_UNRESOLVED");
+  assert.equal(graph.unresolved.filter(({ displayName }) => /Level 4/.test(displayName)).length, 3, "visually similar truncated entities stay explicit and distinct");
+});
+
+test("source graph reconciliation fails closed when a validated Evidence relationship is lost downstream", () => {
+  const graph = buildSourceGraph([], { legalName: "Target Limited", countryCode: "GB" }, { artifactId: "artifact-loss", digest: "loss", capturedAt: "2026-09-16T00:00:00.000Z" }, "loss");
+  const diagram = {
+    inventory: {
+      parties: [{ inventoryId: "P1", providerDisposition: "RESOLVED" }, { inventoryId: "P2", providerDisposition: "RESOLVED" }],
+      connectors: [{ connectorId: "C1", providerDisposition: "RESOLVED" }],
+    },
+    unresolvedParties: [],
+    unresolvedRelationships: [],
+  };
+  assert.throws(() => reconcileSourceGraphInventory(graph, diagram), (error) => error.code === "SOURCE_GRAPH_INCOMPLETE" && error.statusCode === 422);
 });
 
 test("a sibling subsidiary does not make a customer-connected Bettercomms chart incomplete", () => {
