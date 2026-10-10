@@ -758,7 +758,34 @@ function reconcileSourceGraphInventory(sourceGraph, diagram) {
   const edgeByConnectorId = new Map();
   relationships.forEach((edge) => {
     const connectorId = edge.qualifiers?.evidenceSourceSpecificMetadata?.connectorInventoryId;
-    if (connectorId) edgeByConnectorId.set(String(connectorId), edge);
+    const explicit = connectorId
+      ? materialConnectors.find((item) => String(item.connectorId) === String(connectorId))
+      : null;
+    if (explicit) {
+      edgeByConnectorId.set(String(explicit.connectorId), edge);
+      return;
+    }
+    // Evidence may reconcile a validated relationship to a connector by its
+    // unique inventory endpoints even when the provider did not echo the
+    // connector ID into the typed relationship. Use the same deterministic
+    // join here; never choose between multiple matching connectors.
+    const endpointMatches = materialConnectors.filter((item) =>
+      partyEntityIds.get(String(item.subjectInventoryId || "")) === edge.sourceEntityId
+      && partyEntityIds.get(String(item.objectInventoryId || "")) === edge.targetEntityId);
+    if (endpointMatches.length === 1) {
+      const matched = endpointMatches[0];
+      edge.qualifiers = {
+        ...(edge.qualifiers || {}),
+        evidenceSourceSpecificMetadata: {
+          ...(edge.qualifiers?.evidenceSourceSpecificMetadata || {}),
+          connectorInventoryId: matched.connectorId,
+          subjectInventoryId: matched.subjectInventoryId,
+          objectInventoryId: matched.objectInventoryId,
+          connectorIdentityReconciledFromInventoryEndpoints: true,
+        },
+      };
+      edgeByConnectorId.set(String(matched.connectorId), edge);
+    }
   });
   const unresolvedConnectorIds = new Set(unresolvedRelationships.map(({ connectorId }) => String(connectorId)));
   const renderedConnectorIds = new Set(edgeByConnectorId.keys());

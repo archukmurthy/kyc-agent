@@ -676,11 +676,11 @@ test("ASDA-style dense inventory is losslessly split between source graph facts 
   const candidateFacts = [{
     factId: "asda-c1",
     type: "RELATIONSHIP",
-    subject: { name: "Mr Gary Lindsay", entityType: "NATURAL_PERSON", sourcePartyId: "artifact-asda:P1" },
+    subject: { name: "Mr Gary Lindsay", entityType: "NATURAL_PERSON" },
     relationship: "ECONOMIC_OWNERSHIP",
-    object: { name: "Tdr Capital Llp", entityType: "LEGAL_ENTITY", sourcePartyId: "artifact-asda:P4" },
+    object: { name: "Tdr Capital Llp", entityType: "LEGAL_ENTITY" },
     measurement: { type: "EXACT", value: 33.33 },
-    qualifiers: { currentState: "UNKNOWN", evidenceSourceSpecificMetadata: { connectorInventoryId: "C1", subjectInventoryId: "P1", objectInventoryId: "P4" } },
+    qualifiers: { currentState: "UNKNOWN", evidenceSourceSpecificMetadata: {} },
     evidenceReferences: [{ system: "evidence-platform-v1", referenceType: "ARTIFACT", referenceId: "artifact-asda" }],
   }];
   const graph = reconcileSourceGraphInventory(buildSourceGraph(candidateFacts, {
