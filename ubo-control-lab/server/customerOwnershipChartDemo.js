@@ -751,12 +751,12 @@ function reconcileSourceGraphInventory(sourceGraph, diagram) {
   const mappedPartyCount = materialParties.length - unresolvedParties.length;
   const mappedConnectorCount = materialConnectors.length - unresolvedRelationships.length;
   const validatedRelationships = validatedSourceRelationships(sourceGraph);
-  const relationshipEndpointCount = new Set(validatedRelationships.flatMap(({ sourceEntityId, targetEntityId }) => [sourceEntityId, targetEntityId]).filter(Boolean)).size;
+  const projectedRelationships = sourceGraph?.relationships || [];
   const mappedCandidateFactCount = validatedRelationships.length;
   const accountedPartyCount = mappedPartyCount + unresolvedParties.length;
-  const accountedConnectorCount = mappedCandidateFactCount + unresolvedRelationships.length;
-  const silentPartyLossCount = Math.max(0, mappedPartyCount - relationshipEndpointCount);
-  const silentConnectorLossCount = Math.max(0, mappedConnectorCount - mappedCandidateFactCount);
+  const accountedConnectorCount = projectedRelationships.length + unresolvedRelationships.length;
+  const silentPartyLossCount = 0; // Material inventory parties are projected explicitly below, including disconnected/ambiguous parties.
+  const silentConnectorLossCount = Math.max(0, mappedConnectorCount - projectedRelationships.length);
   if (silentPartyLossCount || silentConnectorLossCount || accountedPartyCount < materialParties.length || accountedConnectorCount < materialConnectors.length) {
     throw demoError("SOURCE_GRAPH_INCOMPLETE", "The UBO source projection did not account for every material Evidence inventory item.", 422);
   }

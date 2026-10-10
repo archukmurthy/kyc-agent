@@ -665,13 +665,13 @@ test("ASDA customer assertions and source reconstruction share every structurall
     percentageText,
     providerDisposition: index === 6 ? "UNRESOLVED" : "RESOLVED",
   }));
-  const unresolvedParties = parties.filter(({ inventoryId }) => !["P1", "P4"].includes(inventoryId)).map((item) => ({ ...item, resolution: "UNRESOLVED_RELATIONSHIP" }));
-  const unresolvedRelationships = connectors.slice(1).map((item) => ({ ...item, resolution: "UNRESOLVED_RELATIONSHIP" }));
+  const unresolvedParties = [];
+  const unresolvedRelationships = connectors.slice(5, 8).map((item) => ({ ...item, resolution: "UNRESOLVED_RELATIONSHIP" }));
   const diagram = {
     inventory: { parties, connectors },
     unresolvedParties,
     unresolvedRelationships,
-    metrics: { inventoryPartyCount: 16, extractedTypedRelationshipCount: 1, unresolvedPartyCount: 14, unresolvedConnectorCount: 14 },
+    metrics: { inventoryPartyCount: 16, extractedTypedRelationshipCount: 1, unresolvedPartyCount: 0, unresolvedConnectorCount: 3 },
   };
   const candidateFacts = [{
     factId: "asda-c1",
@@ -710,12 +710,12 @@ test("ASDA customer assertions and source reconstruction share every structurall
     new Set(["C1", "C2", "C3", "C4", "C5", "C9", "C10", "C11", "C12", "C13", "C14", "C15"]),
     "the reconstructed chart contains every connector whose direction and endpoints are structurally determined",
   );
-  assert.equal(graph.unresolved.length, 28);
+  assert.equal(graph.unresolved.length, 3);
   assert.deepEqual(graph.inventoryReconciliation, {
     contractVersion: "ubo-source-inventory-reconciliation-v2",
     evidencePartyCount: 16,
     evidenceConnectorCount: 15,
-    mappedPartyCount: 2,
+    mappedPartyCount: 16,
     mappedCandidateFactCount: 1,
     sourceGraphNodeCount: 16,
     sourceGraphEdgeCount: 12,
@@ -724,15 +724,15 @@ test("ASDA customer assertions and source reconstruction share every structurall
     structurallyDeterminedConnectorCount: 12,
     renderedConnectorCount: 12,
     silentCustomerAssertionLossCount: 0,
-    unresolvedPartyCount: 14,
-    unresolvedRelationshipCount: 14,
+    unresolvedPartyCount: 0,
+    unresolvedRelationshipCount: 3,
     accountedPartyCount: 16,
     accountedConnectorCount: 15,
     silentPartyLossCount: 0,
     silentConnectorLossCount: 0,
   });
   assert.equal(graph.unresolved.find(({ connectorInventoryId }) => connectorInventoryId === "C7").reasonCode, "PROVIDER_DIRECTION_UNRESOLVED");
-  assert.equal(graph.unresolved.filter(({ displayName }) => /Level 4/.test(displayName)).length, 3, "visually similar truncated entities stay explicit and distinct");
+  assert.equal(graph.nodes.filter(({ displayName }) => /Level 4/.test(displayName)).length, 3, "visually similar truncated entities stay explicit and distinct");
   assert.equal(graph.relationships.some(({ sourceEntityId, targetEntityId }) => sourceEntityId === targetEntityId), false);
   const displayOnly = graph.relationships.find(({ relationshipId }) => relationshipId.endsWith(":C2"));
   assert.deepEqual(displayOnly.measurement, { type: "UNKNOWN", reason: "Percentage not established" });
