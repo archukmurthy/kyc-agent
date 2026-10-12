@@ -8,7 +8,8 @@
 
 const { test, beforeEach, afterEach } = require("node:test");
 const assert = require("node:assert");
-const { PocCaseService } = require("../pocCaseState");
+const { PocCaseService, projectCommand } = require("../pocCaseState");
+const { completeIdentityVerification } = require("../../../src/uboDemo/customer/verificationAssessment");
 
 const STORED_TRACE = {
   contractVersion: "ubo-investigation-trace-v2",
@@ -56,6 +57,16 @@ function completeIdv(service, personId) {
     idempotencyKey: `idv:${personId}`,
     actorType: "CUSTOMER",
     payload: { personId, trace: FORGED, assessment: { trace: FORGED }, researchResult: { ownershipResolutionTrace: FORGED } },
+  });
+}
+
+function submitApplication(service) {
+  return service.apply({
+    caseId: "case-1",
+    operation: "SUBMIT_APPLICATION",
+    idempotencyKey: "application:complete",
+    actorType: "CUSTOMER",
+    payload: { submittedAt: "2000-01-01T00:00:00.000Z" },
   });
 }
 
@@ -130,4 +141,27 @@ test("a person id is matched the way the engine matches it", async () => {
   const repository = repositoryWith();
   await completeIdv(new PocCaseService(repository), "  ALICE ");
   assert.strictEqual(repository.applied[0].payload.personId, "alice");
+});
+
+test("the application can be submitted only after every current subject is complete", async () => {
+  process.env.UBO_POC_IDV_MODE = "DEMO";
+  const aliceDone = completeIdentityVerification(STORED_TRACE, "alice", "2026-09-30T10:01:00.000Z");
+  await assert.rejects(submitApplication(new PocCaseService(repositoryWith(aliceDone))), (error) => error.code === "idv_not_complete");
+
+  const allDone = completeIdentityVerification(aliceDone, "bob", "2026-09-30T10:02:00.000Z");
+  const repository = repositoryWith(allDone);
+  await submitApplication(new PocCaseService(repository));
+  assert.strictEqual(repository.applied.length, 1);
+  assert.strictEqual(repository.applied[0].operation, "SUBMIT_APPLICATION");
+  assert.notStrictEqual(repository.applied[0].payload.submittedAt, "2000-01-01T00:00:00.000Z", "the server supplies the submission time");
+  assert.strictEqual(repository.applied[0].payload.assessmentVersionId, "assessment-1");
+});
+
+test("IDV completion and customer submission are separate durable journey stages", () => {
+  const allDone = completeIdentityVerification(completeIdentityVerification(STORED_TRACE, "alice"), "bob");
+  const afterIdv = projectCommand({ assessment: { trace: STORED_TRACE } }, "COMPLETE_IDV", { trace: allDone, assessment: { trace: allDone } });
+  assert.strictEqual(afterIdv.currentStage, "IDV_COMPLETE");
+  const afterSubmit = projectCommand(afterIdv, "SUBMIT_APPLICATION", { submittedAt: "2026-09-30T10:03:00.000Z", assessmentVersionId: "assessment-1" });
+  assert.strictEqual(afterSubmit.currentStage, "COMPLETE");
+  assert.strictEqual(afterSubmit.customerSubmission.assessmentVersionId, "assessment-1");
 });

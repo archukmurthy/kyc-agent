@@ -258,7 +258,7 @@ function nextRound(base) { return (Number(base?.round) || 0) + 1; }
 
 // The customer's steps that act on what the customer saw: refused when the
 // round they were made in has passed (see apply).
-const ROUND_BOUND = new Set(["SUBMIT_ANSWER", "FINALIZE_ASSESSMENT", "SYNC_RESOLUTION", "COMPLETE_IDV"]);
+const ROUND_BOUND = new Set(["SUBMIT_ANSWER", "FINALIZE_ASSESSMENT", "SYNC_RESOLUTION", "COMPLETE_IDV", "SUBMIT_APPLICATION"]);
 
 /**
  * The key a step is recorded under, or null when the case already reflects it.
@@ -359,7 +359,12 @@ function projectCommand(current, operation, payload, release) {
     resolution: payload.resolution || base.resolution,
     assessment: payload.assessment || base.assessment,
     researchResult: durableResearchResult || base.researchResult,
-    currentStage: stageFromTrace(payload.trace, "IDENTITY_VERIFICATION"),
+    currentStage: payload.trace?.discoveryState === "IDV_COMPLETE" ? "IDV_COMPLETE" : stageFromTrace(payload.trace, "IDENTITY_VERIFICATION"),
+  };
+  if (operation === "SUBMIT_APPLICATION") return {
+    ...base,
+    customerSubmission: payload,
+    currentStage: "COMPLETE",
   };
   if (operation === "SAVE_ANALYST_STATE") return { ...base, researchResult: durableResearchResult || base.researchResult };
   throw Object.assign(new Error(`Unsupported POC case operation: ${operation}`), { statusCode: 400, code: "unsupported_case_operation" });
@@ -676,6 +681,17 @@ function demoIdentityVerificationPayload(record, payload) {
   return { personId: completed.personId, trace, assessment: { ...(record.projection?.assessment || {}), trace } };
 }
 
+function customerSubmissionPayload(record) {
+  const stored = serverTraceOf(record?.projection);
+  if (!stored?.verificationAssessment?.finalized || stored.discoveryState !== "IDV_COMPLETE") {
+    throw Object.assign(new Error("Complete identity verification for every required person before submitting the application information."), { statusCode: 409, code: "idv_not_complete" });
+  }
+  return {
+    submittedAt: new Date().toISOString(),
+    assessmentVersionId: stored.verificationAssessment.assessmentVersionId,
+  };
+}
+
 /** The chart a case records: the extraction job's own result, re-evaluated
  *  on the server with the company stored on the job so it carries the current
  *  calculation semantics - what the browser used to do and send back. */
@@ -801,13 +817,15 @@ class PocCaseService {
       incoming = { resolution: computed.resolution, assessment: computed.assessment };
     }
     let payload;
-    if (operation === "COMPLETE_IDV") {
+    if (operation === "COMPLETE_IDV" || operation === "SUBMIT_APPLICATION") {
       // Read and written at one version, as the computed steps are: read
       // unchecked, a completion racing a reopen re-finalised the case, and
       // two completions from two tabs lost one (review, 2026-10-09).
       const record = await this.repository.get(caseId);
       expectedVersion = record?.version || null;
-      payload = demoIdentityVerificationPayload(record, incoming);
+      payload = operation === "COMPLETE_IDV"
+        ? demoIdentityVerificationPayload(record, incoming)
+        : customerSubmissionPayload(record);
     } else payload = compactCasePayload(incoming);
     const release = command.operation === "SAVE_RESEARCH" ? evaluateResearchRelease(payload?.researchResult) : null;
     if (operation === "SAVE_RESEARCH" || operation === "UPSERT_CASE") {

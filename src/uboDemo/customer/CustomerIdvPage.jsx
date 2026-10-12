@@ -37,6 +37,7 @@ export default function CustomerIdvPage() {
   const context = useMemo(() => readCustomerDemoContext(), []);
   const [trace, setTrace] = useState(() => readTrace(context));
   const [pendingPersonId, setPendingPersonId] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const [saveError, setSaveError] = useState("");
   const subjects = useMemo(() => idvSubjectsFromTrace(trace), [trace]);
   // An analyst reopening the review while this page is open: it reloads and
@@ -68,10 +69,31 @@ export default function CustomerIdvPage() {
     }
     finally { setPendingPersonId(null); }
   };
+  const submitApplication = async (event) => {
+    event.preventDefault();
+    if (submitting) return;
+    const form = event.currentTarget;
+    setSubmitting(true); setSaveError("");
+    try {
+      const assessmentId = trace?.verificationAssessment?.assessmentVersionId;
+      const record = await persistPocCase("SUBMIT_APPLICATION", {
+        caseId: context.demoCaseId,
+        actorType: "CUSTOMER",
+        idempotencyKey: `application:${smallStableHash([assessmentId, "COMPLETE"])}`,
+        payload: {},
+      });
+      if (record?.projection?.currentStage !== "COMPLETE") throw new Error("The application information could not be submitted.");
+      form.submit();
+    } catch (cause) {
+      setSaveError(cause.message || "The application information could not be submitted.");
+      if (cause.code === "not_finalized" || cause.code === "idv_not_complete" || caseMovedOn(cause.code)) recheckCase();
+      setSubmitting(false);
+    }
+  };
   if (!context) return <div className="ubo-customer-page"><CustomerJourneyHeader currentStep={4} /><main className="ubo-customer-empty"><span>Identity verification</span><h1>Start with a demo company</h1><a href={CUSTOMER_DEMO_START_PATH}>Enter company details</a></main></div>;
   if (!traceReadyForIdv(trace)) return <div className="ubo-customer-page"><CustomerJourneyHeader currentStep={4} /><main className="ubo-customer-empty"><span>Identity verification</span><h1>Finish the questions first</h1><p>Ownership, control or fallback work is still pending. We will not complete onboarding until the final natural-person verification population is ready.</p><a href={CUSTOMER_QUESTIONS_PATH}>Return to questions</a></main></div>;
   const allComplete = trace.discoveryState === DISCOVERY_STATE.IDV_COMPLETE;
-  return <div className="ubo-customer-page"><CustomerJourneyHeader currentStep={4} /><main className="ubo-customer-main"><div className="ubo-customer-intro"><span>Step 4 · Identity verification</span><h1>Complete identity verification</h1><p>The following people need to complete identity verification before we can complete your application.</p>{saveError && <p className="ubo-customer-error" role="alert">{saveError}</p>}</div><section className="ubo-customer-card ubo-resolution-ubo-results"><h2>People requiring identity verification</h2>{subjects.map((subject) => <article key={subject.personId} className={subject.verificationStatus === "COMPLETED" ? "completed" : ""}><div><strong>{subject.personName}</strong><span>{subject.role}</span><small>{customerReason(subject)}</small></div>{subject.verificationStatus === "COMPLETED" ? <strong className="ubo-idv-completed">✓ Demo check recorded - not verified</strong> : <button type="button" disabled={Boolean(pendingPersonId)} onClick={() => complete(subject.personId)}>{pendingPersonId === subject.personId ? "Saving demo completion…" : "Complete identity verification"}</button>}</article>)}</section><section className="ubo-customer-next-step"><div><small>Identity verification demo</small><h2>{allComplete ? "Application information complete" : "Complete identity verification to continue"}</h2><p>This records demo completion only (verification mode: DEMO). It does not represent final compliance approval.</p></div>{allComplete ? <a className="ubo-customer-primary" href={CUSTOMER_COMPLETE_PATH}>Application information complete <span>→</span></a> : <button className="ubo-customer-primary" type="button" disabled>Application information complete <span>→</span></button>}</section></main></div>;
+  return <div className="ubo-customer-page"><CustomerJourneyHeader currentStep={4} /><main className="ubo-customer-main"><div className="ubo-customer-intro"><span>Step 4 · Identity verification</span><h1>Complete identity verification</h1><p>The following people need to complete identity verification before we can complete your application.</p>{saveError && <p className="ubo-customer-error" role="alert">{saveError}</p>}</div><section className="ubo-customer-card ubo-resolution-ubo-results"><h2>People requiring identity verification</h2>{subjects.map((subject) => <article key={subject.personId} className={subject.verificationStatus === "COMPLETED" ? "completed" : ""}><div><strong>{subject.personName}</strong><span>{subject.role}</span><small>{customerReason(subject)}</small></div>{subject.verificationStatus === "COMPLETED" ? <strong className="ubo-idv-completed">✓ Identity verification completed (demo - not verified)</strong> : <button type="button" disabled={Boolean(pendingPersonId)} onClick={() => complete(subject.personId)}>{pendingPersonId === subject.personId ? "Saving demo completion…" : "Complete identity verification"}</button>}</article>)}</section><section className="ubo-customer-next-step"><div><small>Identity verification demo</small><h2>{allComplete ? "Application information complete" : "Complete identity verification to continue"}</h2><p>This records demo completion only (verification mode: DEMO). It does not represent final compliance approval.</p></div>{allComplete ? <form action={CUSTOMER_COMPLETE_PATH} method="get" onSubmit={submitApplication}><button className="ubo-customer-primary" type="submit" disabled={submitting}>{submitting ? "Submitting application information…" : <>Application information complete <span>→</span></>}</button></form> : <button className="ubo-customer-primary" type="button" disabled>Application information complete <span>→</span></button>}</section></main></div>;
 }
 
 export { customerReason, readTrace, writeTrace };

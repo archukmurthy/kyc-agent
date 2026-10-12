@@ -31,6 +31,7 @@ const EVENT_TYPES = Object.freeze([
   "EVIDENCE_DECIDED",
   "UBO_ASSESSMENT_COMPLETED",
   "IDV_COMPLETED",
+  "APPLICATION_SUBMITTED",
   "ANALYST_OVERRIDE",
   "DOCUMENT_UPLOADED",
   "DOCUMENT_EXTRACTED",
@@ -135,6 +136,12 @@ function eventsForCommand({ caseId, operation, before, after, payload = {}, oper
       subject: String(payload.personId || ""),
       reasonCode: payload.mode || null,
       detail: { personId: payload.personId || null },
+    });
+  }
+  if (operation === "SUBMIT_APPLICATION") {
+    add("APPLICATION_SUBMITTED", {
+      relatedAssessmentId: payload.assessmentVersionId || after?.assessment?.assessmentId,
+      occurredAt: payload.submittedAt,
     });
   }
   return out;

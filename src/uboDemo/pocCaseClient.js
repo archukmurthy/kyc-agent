@@ -219,7 +219,7 @@ export function useReloadWhenFinalizedChanges(caseId, shownFinalized, { loadStat
 const caseWrites = new Map();
 // The steps the server checks against the round they were made in: one made
 // in a round a reset or reopen has since ended is refused (case_round_changed).
-const ROUND_CHECKED = new Set(["SUBMIT_ANSWER", "FINALIZE_ASSESSMENT", "SYNC_RESOLUTION", "COMPLETE_IDV"]);
+const ROUND_CHECKED = new Set(["SUBMIT_ANSWER", "FINALIZE_ASSESSMENT", "SYNC_RESOLUTION", "COMPLETE_IDV", "SUBMIT_APPLICATION"]);
 // ponytail: one fixed ceiling, well above a normal case write (a few seconds).
 const WRITE_TIMEOUT_MS = 60 * 1000;
 

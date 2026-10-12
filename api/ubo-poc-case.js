@@ -29,7 +29,7 @@ function dependencies(tenantId) {
 // What a customer (a session for ONE case) may do to that case. Research and
 // the analyst's own state are the analyst's; anything new is refused until it
 // is deliberately added here.
-const CUSTOMER_OPERATIONS = new Set(["UPSERT_CASE", "ASSOCIATE_CHART", "SYNC_RESOLUTION", "SUBMIT_ANSWER", "RESET_ANSWERS", "FINALIZE_ASSESSMENT", "COMPLETE_IDV"]);
+const CUSTOMER_OPERATIONS = new Set(["UPSERT_CASE", "ASSOCIATE_CHART", "SYNC_RESOLUTION", "SUBMIT_ANSWER", "RESET_ANSWERS", "FINALIZE_ASSESSMENT", "COMPLETE_IDV", "SUBMIT_APPLICATION"]);
 
 // What a save answers with: what the screens read after one (the research
 // release, the server's assessment), not the whole case. The whole case - its

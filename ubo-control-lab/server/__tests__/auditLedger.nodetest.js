@@ -54,12 +54,15 @@ test("the calculation's own history is mirrored as it appears, and only its asse
   assert.strictEqual(events[0].relatedAssessmentId, "ubo-assessment:1");
 });
 
-test("finalising, verification, a reset and a reopen are recorded", () => {
+test("finalising, verification, application submission, a reset and a reopen are recorded", () => {
   const assessment = { assessmentId: "ubo-assessment:9", trace: { verificationAssessment: { assessmentVersionId: "ubo-assessment:9" } } };
   assert.deepStrictEqual(types(eventsForCommand({ ...base, operation: "FINALIZE_ASSESSMENT", before: {}, after: { assessment } })), ["UBO_ASSESSMENT_COMPLETED"]);
   const idv = eventsForCommand({ ...base, operation: "COMPLETE_IDV", before: { assessment }, after: { assessment }, payload: { personId: "alice", mode: "DEMO" } });
   assert.deepStrictEqual(types(idv), ["IDV_COMPLETED"]);
   assert.strictEqual(idv[0].reasonCode, "DEMO");
+  const submitted = eventsForCommand({ ...base, operation: "SUBMIT_APPLICATION", before: { assessment }, after: { assessment }, payload: { assessmentVersionId: "ubo-assessment:9", submittedAt: RECEIVED } });
+  assert.deepStrictEqual(types(submitted), ["APPLICATION_SUBMITTED"]);
+  assert.strictEqual(submitted[0].relatedAssessmentId, "ubo-assessment:9");
   assert.deepStrictEqual(types(eventsForCommand({ ...base, operation: "RESET_ANSWERS", before: {}, after: {} })), ["CUSTOMER_ANSWERS_RESET"]);
   const reopen = eventsForCommand({ ...base, actor: { type: "ANALYST", id: "user_a" }, operation: "REOPEN_CASE", before: { assessment }, after: {} });
   assert.deepStrictEqual(types(reopen), ["ANALYST_OVERRIDE"]);
