@@ -75,14 +75,42 @@ Also in the **Didit console**: set the webhook address to
 - `PG*` and `POSTGRES_*` - set by the Neon integration if connected; the app
   reads `DATABASE_URL`.
 
-## 3. Then merge
+## 3. Test on a preview first
+
+1. Save the same settings for **Preview** too (Vercel keeps Production and
+   Preview settings separately).
+2. Vercel builds the pushed branch `manas/kyc-work` as a preview (not live).
+   Open its link and walk the flow: `/admin?tenant=<id>`,
+   `/preboarding?tenant=<id>`, the customer flow `/?tenant=<id>`.
+3. A preview uses the same database as production (the `DATABASE_URL` set
+   for Preview), so what you create there is real data.
+
+## 4. Then merge
 
 1. Settings above saved for Production.
 2. Merge `manas/kyc-work` into `main`; Vercel deploys.
-3. Expected change: customer links emailed before this deploy stop working
-   (they were unsigned). Analysts re-send invites.
+3. If anything is wrong: Vercel > Deployments > previous one > **Instant
+   Rollback**. The database changes only added things, so the previous
+   version keeps working with them.
 
-## 4. Afterwards
+## 5. What changes for people using the site
+
+- **Every address must name its tenant** (`?tenant=<id>`). An address
+  without one is refused, by design; old bookmarks without it stop working.
+- **Customer links emailed before this deploy stop working** (they were
+  unsigned). Analysts re-send invites.
+- **First research per company runs fresh**: saved research is now filed per
+  tenant, so the first lookup of each company after the deploy is a live,
+  paid AI call.
+- **Submission retries run once a day** (02:00 UTC). A submission is saved
+  at submit time as before; only one that failed to save waits for the retry.
+  The Hobby plan allows scheduled jobs at most daily - a more frequent one
+  makes the deploy fail.
+- **Identity verification stays in test mode** (synthetic data, Didit
+  sandbox). Fine for demos; real customers' identity documents need the
+  production-hardening items in `docs/BACKLOG.md` (IDV-1 onward) first.
+
+## 6. Afterwards
 
 - The `neondb_owner` password was pasted into a chat on 2026-10-14. Consider
   resetting it in Neon (Roles); if you do, update `DATABASE_URL` and
