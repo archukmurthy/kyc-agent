@@ -10,7 +10,7 @@
     "api/finalize-submissions.js": { "maxDuration": 60 }
   },
   "crons": [
-    { "path": "/api/finalize-submissions", "schedule": "* * * * *" }
+    { "path": "/api/finalize-submissions", "schedule": "0 2 * * *" }
   ],
   "routes": [
     { "src": "/api/evidence(/.*)?", "status": 404 },
